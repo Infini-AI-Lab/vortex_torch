@@ -1,0 +1,731 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+        <title>vortex_torch.flow.flow - Vortex Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">Vortex Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">Vortex Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/vortex_torch.indexer.html">vortex_torch.indexer</a><input aria-label="Toggle navigation of vortex_torch.indexer" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.context.html">vortex_torch.indexer.context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.elementwise.html">vortex_torch.indexer.elementwise</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.elementwise_binary.html">vortex_torch.indexer.elementwise_binary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.matmul.html">vortex_torch.indexer.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.output_func.html">vortex_torch.indexer.output_func</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.reduce.html">vortex_torch.indexer.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.save_load.html">vortex_torch.indexer.save_load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.scan.html">vortex_torch.indexer.scan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.transpose.html">vortex_torch.indexer.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.indexer.utils_sglang.html">vortex_torch.indexer.utils_sglang</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/vortex_torch.cache.html">vortex_torch.cache</a><input aria-label="Toggle navigation of vortex_torch.cache" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.context.html">vortex_torch.cache.context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.elementwise.html">vortex_torch.cache.elementwise</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.elementwise_binary.html">vortex_torch.cache.elementwise_binary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.fill.html">vortex_torch.cache.fill</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.matmul.html">vortex_torch.cache.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.cache.reduce.html">vortex_torch.cache.reduce</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../api/vortex_torch.flow.html">vortex_torch.flow</a><input aria-label="Toggle navigation of vortex_torch.flow" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.flow.algorithms.html">vortex_torch.flow.algorithms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.flow.flow.html">vortex_torch.flow.flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.flow.loader.html">vortex_torch.flow.loader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../api/vortex_torch.flow.registry.html">vortex_torch.flow.registry</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for vortex_torch.flow.flow</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
+
+<div class="viewcode-block" id="vFlow">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">vFlow</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Base class for flow-style sparse attention modules.</span>
+
+<span class="sd">    This abstraction is conceptually similar to :class:`torch.nn.Module`,</span>
+<span class="sd">    but specialized for **sparse attention flows** that:</span>
+
+<span class="sd">    - maintain a structured key/value cache,</span>
+<span class="sd">    - define how to **index** into sparse pages (top-k style routing), and</span>
+<span class="sd">    - define how to **update** / **summarize** that cache as new pages arrive.</span>
+
+<span class="sd">    Query tensor</span>
+<span class="sd">    ------------</span>
+<span class="sd">    The query tensor ``q`` passed to :meth:`forward_indexer` has logical</span>
+<span class="sd">    shape</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        q \in \mathbb{R}^{B \times H_q \times D},</span>
+
+<span class="sd">    where</span>
+
+<span class="sd">    - :math:`B` is a batch-like axis (commonly ``batch_size * num_heads``),</span>
+<span class="sd">    - :math:`H_q` is the number of query positions per batch/head, and</span>
+<span class="sd">    - :math:`D` is the head dimension.</span>
+
+<span class="sd">    In practice ``q`` is typically stored in :class:`torch.bfloat16`.</span>
+
+<span class="sd">    Sparse index tensor</span>
+<span class="sd">    -------------------</span>
+<span class="sd">    The sparse index tensor ``o`` produced by :meth:`forward_indexer` has</span>
+<span class="sd">    logical shape</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        o \in \mathbb{R}^{S_{\text{sparse}} \times 1 \times 1},</span>
+
+<span class="sd">    and stores integer page indices. The packed sparse length is</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        S_{\text{sparse}}</span>
+<span class="sd">        = \sum_{i=0}^{B-1} S_{\text{sparse}, i},</span>
+
+<span class="sd">    where for each request :math:`i` with :math:`S_i` candidate pages,</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        S_{\text{sparse}, i}</span>
+<span class="sd">        = \min\Bigl(</span>
+<span class="sd">            S_i,\;</span>
+<span class="sd">            \text{topk_val}</span>
+<span class="sd">            + \text{page_reserved_bos}</span>
+<span class="sd">            + \text{page_reserved_eos}</span>
+<span class="sd">        \Bigr).</span>
+
+<span class="sd">    Here:</span>
+
+<span class="sd">    - ``topk_val`` is the number of pages selected by the indexer,</span>
+<span class="sd">    - ``page_reserved_bos`` is the number of always-kept pages at the</span>
+<span class="sd">      beginning (BOS region),</span>
+<span class="sd">    - ``page_reserved_eos`` is the number of always-kept pages at the</span>
+<span class="sd">      end (EOS region),</span>
+
+<span class="sd">    and these values are typically provided by the runtime context.</span>
+
+<span class="sd">    Cache tensors: two logical views</span>
+<span class="sd">    --------------------------------</span>
+<span class="sd">    Each cache entry ``cache[key]`` (including the standard keys</span>
+<span class="sd">    ``&quot;k&quot;`` and ``&quot;v&quot;`` plus any extra entries declared by</span>
+<span class="sd">    :meth:`create_cache`) is a rank-3 tensor that is **viewed in two</span>
+<span class="sd">    different logical layouts**:</span>
+
+<span class="sd">    1. **Indexer view (page-packed)** — used in :meth:`forward_indexer`:</span>
+
+<span class="sd">       .. math::</span>
+
+<span class="sd">           \text{cache[key]} \sim</span>
+<span class="sd">           \mathbb{R}^{S_{\text{pack}} \times r \times c},</span>
+
+<span class="sd">       where</span>
+
+<span class="sd">       .. math::</span>
+
+<span class="sd">           S_{\text{pack}} = \sum_{i=0}^{B-1} S_i</span>
+
+<span class="sd">       is the total number of pages packed across all requests, and</span>
+<span class="sd">       :math:`(r, c)` is the per-key inner shape declared via</span>
+<span class="sd">       :meth:`create_cache` or implicitly for ``&quot;k&quot;``/``&quot;v&quot;``.</span>
+
+<span class="sd">    2. **Cache-update view (batch-major)** — used in :meth:`forward_cache`:</span>
+
+<span class="sd">       .. math::</span>
+
+<span class="sd">           \text{cache[key]} \sim</span>
+<span class="sd">           \mathbb{R}^{B \times r \times c}.</span>
+
+<span class="sd">       The leading axis is the request/batch index :math:`B`, while</span>
+<span class="sd">       the inner shape :math:`(r, c)` is the same as in the indexer view.</span>
+
+<span class="sd">    The runtime (via :class:`ContextBase`) is responsible for mapping</span>
+<span class="sd">    between these two views using indptr arrays and layout metadata.</span>
+
+<span class="sd">    Cache metadata</span>
+<span class="sd">    --------------</span>
+<span class="sd">    Subclasses declare only **extra** cache tensors via</span>
+<span class="sd">    :meth:`create_cache`, e.g.::</span>
+
+<span class="sd">        {</span>
+<span class="sd">            &quot;centroids&quot;: (1, head_dim),</span>
+<span class="sd">            &quot;my_aux_tensor&quot;: (page_size, head_dim),</span>
+<span class="sd">            ...</span>
+<span class="sd">        }</span>
+
+<span class="sd">    The helper :meth:`get_cache_meta_info` then injects the standard</span>
+<span class="sd">    entries:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \text{k} &amp;: (\text{page_size}, \text{head_dim}), \\</span>
+<span class="sd">        \text{v} &amp;: (\text{page_size}, \text{head_dim}),</span>
+
+<span class="sd">    so subclasses must not add ``&quot;k&quot;`` or ``&quot;v&quot;`` themselves.</span>
+
+<span class="sd">    Token ratio</span>
+<span class="sd">    -----------</span>
+<span class="sd">    :meth:`get_token_ratio` computes a simple proxy for how much cache</span>
+<span class="sd">    storage is used (per head) relative to one ``k``/``v`` page:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \text{token_ratio}</span>
+<span class="sd">        = \sum_{\text{key}}</span>
+<span class="sd">          \frac{r_{\text{key}} \cdot c_{\text{key}}}</span>
+<span class="sd">               {\text{page_size} \cdot \text{head_dim}}.</span>
+
+<span class="sd">    This ignores the leading dimension (whether :math:`B` or</span>
+<span class="sd">    :math:`S_{\text{pack}}`) and compares only inner shapes to the</span>
+<span class="sd">    baseline ``(page_size, head_dim)``.</span>
+
+<span class="sd">    Subclass responsibilities</span>
+<span class="sd">    -------------------------</span>
+<span class="sd">    Concrete flows must implement:</span>
+
+<span class="sd">    - :meth:`forward_indexer(q, o, cache, ctx)`:</span>
+<span class="sd">      compute sparse page indices (or routing scores) from queries,</span>
+<span class="sd">      using cache in the :math:`S_{\text{pack}}` view.</span>
+
+<span class="sd">    - :meth:`forward_cache(cache, loc, ctx)`:</span>
+<span class="sd">      update cache tensors using the :math:`B`-major view and positional</span>
+<span class="sd">      metadata.</span>
+
+<span class="sd">    - :meth:`create_cache(page_size, head_dim)`:</span>
+<span class="sd">      declare inner shapes :math:`(r, c)` for all extra cache tensors</span>
+<span class="sd">      (excluding ``&quot;k&quot;`` and ``&quot;v&quot;``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+    <span class="c1"># abstract API to be implemented by concrete flows</span>
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+<div class="viewcode-block" id="vFlow.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.forward_indexer">[docs]</a>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;ContextBase&quot;</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute sparse page indices (or equivalent routing information)</span>
+<span class="sd">        from queries and cache.</span>
+
+<span class="sd">        Canonical shapes</span>
+<span class="sd">        ----------------</span>
+<span class="sd">        - ``q`` (queries):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">              q \in \mathbb{R}^{B \times H_q \times D},</span>
+
+<span class="sd">          typically stored in :class:`torch.bfloat16`.</span>
+
+<span class="sd">        - ``o`` (sparse indices):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">              o \in \mathbb{R}^{S_{\text{sparse}} \times 1 \times 1},</span>
+
+<span class="sd">          integer dtype (e.g. :class:`torch.int32` or</span>
+<span class="sd">          :class:`torch.int64`). The packed length</span>
+<span class="sd">          :math:`S_{\text{sparse}}` is defined in the class docstring.</span>
+
+<span class="sd">        - ``cache[key]`` (indexer view):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">              \text{cache[key]}</span>
+<span class="sd">              \sim \mathbb{R}^{S_{\text{pack}} \times r \times c},</span>
+
+<span class="sd">          where :math:`S_{\text{pack}} = \sum_i S_i` and</span>
+<span class="sd">          :math:`(r, c)` are the per-key inner dimensions obtained from</span>
+<span class="sd">          :meth:`get_cache_meta_info`.</span>
+
+<span class="sd">        - ``ctx``:</span>
+
+<span class="sd">          An instance of :class:`ContextBase` carrying page layout,</span>
+<span class="sd">          indptr arrays, and configuration such as ``topk_val``,</span>
+<span class="sd">          ``page_reserved_bos``, and ``page_reserved_eos``.</span>
+
+<span class="sd">        Contract</span>
+<span class="sd">        --------</span>
+<span class="sd">        Implementations should:</span>
+
+<span class="sd">        - interpret ``cache`` in the :math:`S_{\text{pack}}` view,</span>
+<span class="sd">        - use ``q`` and relevant cache tensors to score/select pages,</span>
+<span class="sd">        - respect per-request bounds derived from ``ctx``,</span>
+<span class="sd">        - write the resulting sparse indices (or routing representation)</span>
+<span class="sd">          into ``o`` in-place.</span>
+
+<span class="sd">        The exact semantics of the integers stored in ``o`` (e.g.</span>
+<span class="sd">        absolute page indices vs. offsets) are defined by the runtime</span>
+<span class="sd">        convention and must be consistent with downstream kernels.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="vFlow.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.forward_cache">[docs]</a>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;ContextBase&quot;</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update or recompute cache tensors in the batch-major view.</span>
+
+<span class="sd">        Canonical shapes</span>
+<span class="sd">        ----------------</span>
+<span class="sd">        - ``cache[key]`` (cache-update view):</span>
+
+<span class="sd">          .. math::</span>
+
+<span class="sd">              \text{cache[key]}</span>
+<span class="sd">              \sim \mathbb{R}^{B \times r \times c},</span>
+
+<span class="sd">          where :math:`B` is the number of requests and :math:`(r, c)`</span>
+<span class="sd">          are the same inner dimensions as in the indexer view.</span>
+
+<span class="sd">        - ``loc``:</span>
+
+<span class="sd">          Positional / layout metadata (for example, page indices or</span>
+<span class="sd">          token positions) used to decide how to aggregate over pages or</span>
+<span class="sd">          tokens when producing per-request summaries.</span>
+
+<span class="sd">        - ``ctx``:</span>
+
+<span class="sd">          Execution context (same instance type as in</span>
+<span class="sd">          :meth:`forward_indexer`), carrying runtime parameters and</span>
+<span class="sd">          layout information.</span>
+
+<span class="sd">        Contract</span>
+<span class="sd">        --------</span>
+<span class="sd">        Typical operations include recomputing per-request summaries</span>
+<span class="sd">        such as:</span>
+
+<span class="sd">        - averaging or pooling ``cache[&quot;k&quot;]`` into a tensor</span>
+<span class="sd">          ``cache[&quot;centroids&quot;]`` of shape ``[B, r, c]``,</span>
+<span class="sd">        - maintaining auxiliary statistics needed by the indexer stage.</span>
+
+<span class="sd">        Implementations may update any entries in ``cache`` in-place, as</span>
+<span class="sd">        long as they respect the shapes announced by</span>
+<span class="sd">        :meth:`get_cache_meta_info`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="vFlow.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.create_cache">[docs]</a>
+    <span class="nd">@abstractmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Declare inner shapes for non-``&quot;k&quot;`` / non-``&quot;v&quot;`` cache tensors.</span>
+
+<span class="sd">        This method **does not allocate** tensors. It only declares the</span>
+<span class="sd">        per-key inner dimensions :math:`(r, c)`; the runtime will attach</span>
+<span class="sd">        the appropriate leading axis (:math:`B` or :math:`S_{\text{pack}}`)</span>
+<span class="sd">        depending on whether the cache is used in :meth:`forward_cache`</span>
+<span class="sd">        or :meth:`forward_indexer`.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        page_size : int</span>
+<span class="sd">            Number of tokens per page. For the standard ``&quot;k&quot;`` and</span>
+<span class="sd">            ``&quot;v&quot;`` entries, this will be the first dimension.</span>
+
+<span class="sd">        head_dim : int</span>
+<span class="sd">            Head dimension. For the standard ``&quot;k&quot;`` and ``&quot;v&quot;`` entries,</span>
+<span class="sd">            this will be the second dimension.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict[str, Tuple[int, int]]</span>
+<span class="sd">            A mapping from cache tensor names (excluding ``&quot;k&quot;`` and</span>
+<span class="sd">            ``&quot;v&quot;``) to inner shapes ``(r, c)``. For example::</span>
+
+<span class="sd">                {</span>
+<span class="sd">                    &quot;centroids&quot;: (1, head_dim),</span>
+<span class="sd">                }</span>
+
+<span class="sd">        Notes</span>
+<span class="sd">        -----</span>
+<span class="sd">        The keys ``&quot;k&quot;`` and ``&quot;v&quot;`` are reserved and **must not** be</span>
+<span class="sd">        present in the returned dictionary. They are added automatically</span>
+<span class="sd">        by :meth:`get_cache_meta_info` with inner shape</span>
+<span class="sd">        ``(page_size, head_dim)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+    <span class="c1"># helper API used by the runtime to allocate / account cache</span>
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+<div class="viewcode-block" id="vFlow.get_cache_meta_info">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_cache_meta_info">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_cache_meta_info</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get full cache inner-shape metadata, including ``&quot;k&quot;`` and ``&quot;v&quot;``.</span>
+
+<span class="sd">        This wraps :meth:`create_cache` and injects standard inner shapes</span>
+<span class="sd">        for key/value tensors. The resulting dictionary includes:</span>
+
+<span class="sd">        - all user-defined entries from :meth:`create_cache`, and</span>
+<span class="sd">        - two additional entries:</span>
+
+<span class="sd">          - ``&quot;k&quot;`` : ``(page_size, head_dim)``</span>
+<span class="sd">          - ``&quot;v&quot;`` : ``(page_size, head_dim)``</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        page_size : int</span>
+<span class="sd">            Number of tokens per page.</span>
+
+<span class="sd">        head_dim : int</span>
+<span class="sd">            Head dimension.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict[str, Tuple[int, int]]</span>
+<span class="sd">            Mapping from cache tensor names to inner shapes ``(r, c)``.</span>
+<span class="sd">            The runtime will later prepend either a batch axis ``B`` or a</span>
+<span class="sd">            packed-page axis ``S_pack`` when materializing the tensors.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        AssertionError</span>
+<span class="sd">            If :meth:`create_cache` tries to define entries for the</span>
+<span class="sd">            reserved keys ``&quot;k&quot;`` or ``&quot;v&quot;``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cache_meta_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_cache</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="s2">&quot;k&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="s2">&quot;v&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+        <span class="n">cache_meta_info</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="n">cache_meta_info</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cache_meta_info</span></div>
+
+
+<div class="viewcode-block" id="vFlow.get_token_ratio">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_token_ratio">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_token_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute the relative cache size in &quot;tokens&quot; compared to a k/v page.</span>
+
+<span class="sd">        Using :meth:`get_cache_meta_info`, this computes a simple ratio</span>
+<span class="sd">        that measures how many *equivalent tokens* the entire cache</span>
+<span class="sd">        consumes per head, relative to a baseline page of shape</span>
+<span class="sd">        ``(page_size, head_dim)``.</span>
+
+<span class="sd">        Let :math:`\mathcal{C}` be the set of cache tensors with inner</span>
+<span class="sd">        shapes :math:`(r_{\text{key}}, c_{\text{key}})`. This method</span>
+<span class="sd">        returns</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            \text{token_ratio}</span>
+<span class="sd">            = \sum_{\text{key} \in \mathcal{C}}</span>
+<span class="sd">              \frac{r_{\text{key}} \cdot c_{\text{key}}}</span>
+<span class="sd">                   {\text{page_size} \cdot \text{head_dim}}.</span>
+
+<span class="sd">        The leading dimension (:math:`B` or :math:`S_{\text{pack}}`) is</span>
+<span class="sd">        not included in this ratio on purpose; it is a per-page</span>
+<span class="sd">        normalization.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        page_size : int</span>
+<span class="sd">            Number of tokens per page.</span>
+
+<span class="sd">        head_dim : int</span>
+<span class="sd">            Head dimension.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            Total cache size expressed in units of</span>
+<span class="sd">            ``page_size * head_dim`` (including the standard ``&quot;k&quot;`` and</span>
+<span class="sd">            ``&quot;v&quot;`` entries).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">token_ratio</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_meta_info</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">token_ratio</span> <span class="o">+=</span> <span class="p">(</span><span class="n">cache_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">page_size</span> <span class="o">*</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">token_ratio</span></div>
+</div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Zhuoming Chen
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    </body>
+</html>

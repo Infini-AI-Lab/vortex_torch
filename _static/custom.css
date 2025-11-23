@@ -1,0 +1,23 @@
+dl.py.class > dt.sig {
+    font-size: 1.4em;             /* 放大字体 */   /* 淡蓝/灰底色，自行改颜色值 */
+    padding: 0.4.rem 0.8rem;       /* 给一点内边距，让块更像卡片 */
+    border-radius: 0.4rem;        /* 圆角 */
+}
+
+
+dl.py.class .sig-name {
+    font-weight: 900;
+    font-size: 1.2em;
+}
+
+/* 调整类方法标题（def xxx）的整体字体大小 */
+dl.py.method > dt.sig {
+    font-size: 1.2em !important;    /* 改成你想要的大小 */
+}
+
+/* 进一步单独放大方法名 def xxx  */
+dl.py.method > dt.sig .sig-name {
+    font-size: 1.1em !important;
+    font-weight: 700;               /* 让方法名更突出，可选 */
+}
+

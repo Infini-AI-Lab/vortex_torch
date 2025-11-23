@@ -1,0 +1,1600 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="./">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="#"><link rel="search" title="Search" href="search.html">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 --><title>Index - Vortex Documentation</title>
+<link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="index.html"><div class="brand">Vortex Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="index.html">
+  
+  <span class="sidebar-brand-text">Vortex Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/vortex_torch.indexer.html">vortex_torch.indexer</a><input aria-label="Toggle navigation of vortex_torch.indexer" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.context.html">vortex_torch.indexer.context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.elementwise.html">vortex_torch.indexer.elementwise</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.elementwise_binary.html">vortex_torch.indexer.elementwise_binary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.matmul.html">vortex_torch.indexer.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.output_func.html">vortex_torch.indexer.output_func</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.reduce.html">vortex_torch.indexer.reduce</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.save_load.html">vortex_torch.indexer.save_load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.scan.html">vortex_torch.indexer.scan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.transpose.html">vortex_torch.indexer.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.indexer.utils_sglang.html">vortex_torch.indexer.utils_sglang</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/vortex_torch.cache.html">vortex_torch.cache</a><input aria-label="Toggle navigation of vortex_torch.cache" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.context.html">vortex_torch.cache.context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.elementwise.html">vortex_torch.cache.elementwise</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.elementwise_binary.html">vortex_torch.cache.elementwise_binary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.fill.html">vortex_torch.cache.fill</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.matmul.html">vortex_torch.cache.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.cache.reduce.html">vortex_torch.cache.reduce</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="api/vortex_torch.flow.html">vortex_torch.flow</a><input aria-label="Toggle navigation of vortex_torch.flow" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.flow.algorithms.html">vortex_torch.flow.algorithms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.flow.flow.html">vortex_torch.flow.flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.flow.loader.html">vortex_torch.flow.loader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/vortex_torch.flow.registry.html">vortex_torch.flow.registry</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          
+<section class="genindex-section">
+  <h1 id="index">Index</h1>
+  <div class="genindex-jumpbox"><a href="#_"><strong>_</strong></a> | <a href="#A"><strong>A</strong></a> | <a href="#B"><strong>B</strong></a> | <a href="#C"><strong>C</strong></a> | <a href="#D"><strong>D</strong></a> | <a href="#E"><strong>E</strong></a> | <a href="#F"><strong>F</strong></a> | <a href="#G"><strong>G</strong></a> | <a href="#H"><strong>H</strong></a> | <a href="#I"><strong>I</strong></a> | <a href="#K"><strong>K</strong></a> | <a href="#L"><strong>L</strong></a> | <a href="#M"><strong>M</strong></a> | <a href="#N"><strong>N</strong></a> | <a href="#O"><strong>O</strong></a> | <a href="#P"><strong>P</strong></a> | <a href="#R"><strong>R</strong></a> | <a href="#S"><strong>S</strong></a> | <a href="#T"><strong>T</strong></a> | <a href="#V"><strong>V</strong></a> | <a href="#W"><strong>W</strong></a></div>
+</section>
+<section id="_" class="genindex-section">
+  <h2>_</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise._impl_map">_impl_map (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary._impl_map">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill._impl_map">(vortex_torch.cache.fill.Fill attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM._impl_map">(vortex_torch.cache.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce._impl_map">(vortex_torch.cache.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise._impl_map">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary._impl_map">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM._impl_map">(vortex_torch.indexer.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV._impl_map">(vortex_torch.indexer.matmul.GeMV attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK._impl_map">(vortex_torch.indexer.output_func.topK attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce._impl_map">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize._impl_map">(vortex_torch.indexer.scan.Normalize attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax._impl_map">(vortex_torch.indexer.scan.Softmax attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose._impl_map">(vortex_torch.indexer.transpose.Transpose attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="A" class="genindex-section">
+  <h2>A</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Abs">Abs (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Abs">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType.Abs">(vortex_torch.utils.ElementwiseOpType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Add">Add (class in vortex_torch.cache.elementwise_binary)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Add">(class in vortex_torch.indexer.elementwise_binary)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType.Add">(vortex_torch.utils.ElementwiseBinaryOpType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.add_aux_memory">add_aux_memory() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.add_aux_memory">(vortex_torch.abs.ContextBase method)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Add_Mul">Add_Mul (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Add_Mul">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType.Add_Mul">(vortex_torch.utils.ElementwiseOpType attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.alpha">alpha (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.alpha">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.alpha">(vortex_torch.cache.fill.Fill attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.alpha">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.alpha">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.as_vtensor">as_vtensor() (in module vortex_torch.abs)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.as_vtensor">(in module vortex_torch.abs.tensor)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.assert_created">assert_created() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.assert_created">(vortex_torch.abs.ContextBase method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="B" class="genindex-section">
+  <h2>B</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.batch_size">batch_size (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.html#id0">BATCHED (vortex_torch.abs.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.html#vortex_torch.abs.FORMAT.BATCHED">[1]</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#id0">(vortex_torch.abs.tensor.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT.BATCHED">[1]</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.beta">beta (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.beta">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.beta">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.beta">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention">BlockSparseAttention (class in vortex_torch.flow.algorithms)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.loader.html#vortex_torch.flow.loader.build_vflow">build_vflow() (in module vortex_torch.flow.loader)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="C" class="genindex-section">
+  <h2>C</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose">chunkwise_hn2nh_transpose() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3">chunkwise_hn2nh_transpose_fa3() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose">chunkwise_nh2hn_transpose() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.clear_aux_memory">clear_aux_memory() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.clear_aux_memory">(vortex_torch.abs.ContextBase method)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context">Context (class in vortex_torch.cache.context)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context">(class in vortex_torch.indexer.context)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase">ContextBase (class in vortex_torch.abs)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase">(class in vortex_torch.abs.context_base)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.create">create() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.create">(vortex_torch.abs.ContextBase method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.create">(vortex_torch.cache.context.Context method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.create">(vortex_torch.indexer.context.Context method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention.create_cache">create_cache() (vortex_torch.flow.algorithms.BlockSparseAttention method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQABlockSparseAttention.create_cache">(vortex_torch.flow.algorithms.GQABlockSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.create_cache">(vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQAQuestSparseAttention.create_cache">(vortex_torch.flow.algorithms.GQAQuestSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.create_cache">(vortex_torch.flow.flow.vFlow method)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.created">created (vortex_torch.abs.context_base.ContextBase property)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.created">(vortex_torch.abs.ContextBase property)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="D" class="genindex-section">
+  <h2>D</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.dense_kv_indices">dense_kv_indices (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.dense_kv_indptr">dense_kv_indptr (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.dim">dim (vortex_torch.cache.reduce.Reduce attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.dim">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.dim">(vortex_torch.indexer.scan.Normalize attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.dim">(vortex_torch.indexer.scan.Softmax attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="E" class="genindex-section">
+  <h2>E</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise">Elementwise (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary">Elementwise_Binary (class in vortex_torch.cache.elementwise_binary)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary">(class in vortex_torch.indexer.elementwise_binary)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType">ElementwiseBinaryOpType (class in vortex_torch.utils)</a>
+</li>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType">ElementwiseOpType (class in vortex_torch.utils)</a>
+</li>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.Mode.execute">execute (vortex_torch.utils.Mode attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.execute">execute() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.execute">(vortex_torch.abs.ContextBase method)</a>
+</li>
+          <li><a href="api/vortex_torch.abs.op.html#vortex_torch.abs.op.vOp.execute">(vortex_torch.abs.op.vOp method)</a>
+</li>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.vOp.execute">(vortex_torch.abs.vOp method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.execute">(vortex_torch.cache.elementwise.Elementwise method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.execute">(vortex_torch.cache.elementwise_binary.Elementwise_Binary method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.execute">(vortex_torch.cache.fill.Fill method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM.execute">(vortex_torch.cache.matmul.GeMM method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.execute">(vortex_torch.cache.reduce.Reduce method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.execute">(vortex_torch.indexer.elementwise.Elementwise method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.execute">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.execute">(vortex_torch.indexer.matmul.GeMM method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.execute">(vortex_torch.indexer.matmul.GeMV method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK.execute">(vortex_torch.indexer.output_func.topK method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.execute">(vortex_torch.indexer.reduce.Reduce method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.execute">(vortex_torch.indexer.scan.Normalize method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.execute">(vortex_torch.indexer.scan.Softmax method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.execute">(vortex_torch.indexer.transpose.Transpose method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="F" class="genindex-section">
+  <h2>F</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill">Fill (class in vortex_torch.cache.fill)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.loader.html#vortex_torch.flow.loader.FlowInitError">FlowInitError</a>
+</li>
+        <li><a href="api/vortex_torch.flow.loader.html#vortex_torch.flow.loader.FlowLoadError">FlowLoadError</a>
+</li>
+        <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.FORMAT">FORMAT (class in vortex_torch.abs)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT">(class in vortex_torch.abs.tensor)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention.forward_cache">forward_cache() (vortex_torch.flow.algorithms.BlockSparseAttention method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_cache">(vortex_torch.flow.algorithms.GQABlockSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_cache">(vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_cache">(vortex_torch.flow.algorithms.GQAQuestSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.forward_cache">(vortex_torch.flow.flow.vFlow method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention.forward_indexer">forward_indexer() (vortex_torch.flow.algorithms.BlockSparseAttention method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_indexer">(vortex_torch.flow.algorithms.GQABlockSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_indexer">(vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer">(vortex_torch.flow.algorithms.GQAQuestSparseAttention method)</a>
+</li>
+          <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.forward_indexer">(vortex_torch.flow.flow.vFlow method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="G" class="genindex-section">
+  <h2>G</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM">GeMM (class in vortex_torch.cache.matmul)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM">(class in vortex_torch.indexer.matmul)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV">GeMV (class in vortex_torch.indexer.matmul)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.get">get() (in module vortex_torch.flow.registry)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_cache_meta_info">get_cache_meta_info() (vortex_torch.flow.flow.vFlow method)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.get_ctx">get_ctx() (in module vortex_torch.indexer.context)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_token_ratio">get_token_ratio() (vortex_torch.flow.flow.vFlow method)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQABlockSparseAttention">GQABlockSparseAttention (class in vortex_torch.flow.algorithms)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention">GQADynamicHybridSparseAttention (class in vortex_torch.flow.algorithms)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQAQuestSparseAttention">GQAQuestSparseAttention (class in vortex_torch.flow.algorithms)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.group_size">group_size (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="H" class="genindex-section">
+  <h2>H</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.has">has() (in module vortex_torch.flow.registry)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.head_dim">head_dim (vortex_torch.cache.context.Context attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.head_dim">(vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.head_num">head_num (vortex_torch.cache.context.Context attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="I" class="genindex-section">
+  <h2>I</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.impl">impl (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.impl">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.impl">(vortex_torch.cache.fill.Fill attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM.impl">(vortex_torch.cache.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.impl">(vortex_torch.cache.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.impl">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.impl">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.impl">(vortex_torch.indexer.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.impl">(vortex_torch.indexer.matmul.GeMV attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK.impl">(vortex_torch.indexer.output_func.topK attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.impl">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.impl">(vortex_torch.indexer.scan.Normalize attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.impl">(vortex_torch.indexer.scan.Softmax attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.impl">(vortex_torch.indexer.transpose.Transpose attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.indexer_dtype">indexer_dtype (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.indices_to_page_table">indices_to_page_table() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="K" class="genindex-section">
+  <h2>K</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.kv_last_page_len">kv_last_page_len (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="L" class="genindex-section">
+  <h2>L</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.L2Norm">L2Norm (class in vortex_torch.cache.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.L2Norm">(class in vortex_torch.indexer.reduce)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType.L2Norm">(vortex_torch.utils.ReduceType attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.list_keys">list_keys() (in module vortex_torch.flow.registry)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="M" class="genindex-section">
+  <h2>M</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Max">Max (class in vortex_torch.cache.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Max">(class in vortex_torch.indexer.reduce)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType.Max">(vortex_torch.utils.ReduceType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.max_chunk_size">max_chunk_size (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.max_new_tokens_per_batch">max_new_tokens_per_batch (vortex_torch.cache.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.max_num_pages">max_num_pages (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.max_num_pages_per_request">max_num_pages_per_request (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.max_num_workloads">max_num_workloads (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Maximum">Maximum (class in vortex_torch.cache.elementwise_binary)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Maximum">(class in vortex_torch.indexer.elementwise_binary)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType.Maximum">(vortex_torch.utils.ElementwiseBinaryOpType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Mean">Mean (class in vortex_torch.cache.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Mean">(class in vortex_torch.indexer.reduce)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType.Mean">(vortex_torch.utils.ReduceType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Min">Min (class in vortex_torch.cache.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Min">(class in vortex_torch.indexer.reduce)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType.Min">(vortex_torch.utils.ReduceType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.min_chunk_size">min_chunk_size (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Minimum">Minimum (class in vortex_torch.cache.elementwise_binary)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Minimum">(class in vortex_torch.indexer.elementwise_binary)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType.Minimum">(vortex_torch.utils.ElementwiseBinaryOpType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.missing">missing() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.missing">(vortex_torch.abs.ContextBase method)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.Mode">Mode (class in vortex_torch.utils)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.mode">mode (vortex_torch.abs.context_base.ContextBase attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.mode">(vortex_torch.abs.ContextBase attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.mode">(vortex_torch.cache.context.Context attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.mode">(vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        </ul></li>
+        <li>
+    module
+
+        <ul>
+          <li><a href="api/vortex_torch.html#module-vortex_torch">vortex_torch</a>
+</li>
+          <li><a href="api/vortex_torch.abs.html#module-vortex_torch.abs">vortex_torch.abs</a>
+</li>
+          <li><a href="api/vortex_torch.abs.context_base.html#module-vortex_torch.abs.context_base">vortex_torch.abs.context_base</a>
+</li>
+          <li><a href="api/vortex_torch.abs.op.html#module-vortex_torch.abs.op">vortex_torch.abs.op</a>
+</li>
+          <li><a href="api/vortex_torch.abs.tensor.html#module-vortex_torch.abs.tensor">vortex_torch.abs.tensor</a>
+</li>
+          <li><a href="api/vortex_torch.cache.html#module-vortex_torch.cache">vortex_torch.cache</a>
+</li>
+          <li><a href="api/vortex_torch.cache.context.html#module-vortex_torch.cache.context">vortex_torch.cache.context</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise.html#module-vortex_torch.cache.elementwise">vortex_torch.cache.elementwise</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#module-vortex_torch.cache.elementwise_binary">vortex_torch.cache.elementwise_binary</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#module-vortex_torch.cache.fill">vortex_torch.cache.fill</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#module-vortex_torch.cache.matmul">vortex_torch.cache.matmul</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#module-vortex_torch.cache.reduce">vortex_torch.cache.reduce</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.html#module-vortex_torch.cache.triton_kernels">vortex_torch.cache.triton_kernels</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_binary_impl">vortex_torch.cache.triton_kernels.elementwise_binary_impl</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.elementwise_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_impl">vortex_torch.cache.triton_kernels.elementwise_impl</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.fill_impl.html#module-vortex_torch.cache.triton_kernels.fill_impl">vortex_torch.cache.triton_kernels.fill_impl</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.matmul_impl.html#module-vortex_torch.cache.triton_kernels.matmul_impl">vortex_torch.cache.triton_kernels.matmul_impl</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.reduce_impl.html#module-vortex_torch.cache.triton_kernels.reduce_impl">vortex_torch.cache.triton_kernels.reduce_impl</a>
+</li>
+          <li><a href="api/vortex_torch.cache.triton_kernels.set_kv.html#module-vortex_torch.cache.triton_kernels.set_kv">vortex_torch.cache.triton_kernels.set_kv</a>
+</li>
+          <li><a href="api/vortex_torch.flow.html#module-vortex_torch.flow">vortex_torch.flow</a>
+</li>
+          <li><a href="api/vortex_torch.flow.algorithms.html#module-vortex_torch.flow.algorithms">vortex_torch.flow.algorithms</a>
+</li>
+          <li><a href="api/vortex_torch.flow.flow.html#module-vortex_torch.flow.flow">vortex_torch.flow.flow</a>
+</li>
+          <li><a href="api/vortex_torch.flow.loader.html#module-vortex_torch.flow.loader">vortex_torch.flow.loader</a>
+</li>
+          <li><a href="api/vortex_torch.flow.registry.html#module-vortex_torch.flow.registry">vortex_torch.flow.registry</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.html#module-vortex_torch.indexer">vortex_torch.indexer</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.context.html#module-vortex_torch.indexer.context">vortex_torch.indexer.context</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#module-vortex_torch.indexer.elementwise">vortex_torch.indexer.elementwise</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#module-vortex_torch.indexer.elementwise_binary">vortex_torch.indexer.elementwise_binary</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#module-vortex_torch.indexer.matmul">vortex_torch.indexer.matmul</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.output_func.html#module-vortex_torch.indexer.output_func">vortex_torch.indexer.output_func</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#module-vortex_torch.indexer.reduce">vortex_torch.indexer.reduce</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.save_load.html#module-vortex_torch.indexer.save_load">vortex_torch.indexer.save_load</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#module-vortex_torch.indexer.scan">vortex_torch.indexer.scan</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#module-vortex_torch.indexer.transpose">vortex_torch.indexer.transpose</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.html#module-vortex_torch.indexer.triton_kernels">vortex_torch.indexer.triton_kernels</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_binary_impl">vortex_torch.indexer.triton_kernels.elementwise_binary_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.elementwise_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_impl">vortex_torch.indexer.triton_kernels.elementwise_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.matmul_impl.html#module-vortex_torch.indexer.triton_kernels.matmul_impl">vortex_torch.indexer.triton_kernels.matmul_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.mv_impl.html#module-vortex_torch.indexer.triton_kernels.mv_impl">vortex_torch.indexer.triton_kernels.mv_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.normalize_impl.html#module-vortex_torch.indexer.triton_kernels.normalize_impl">vortex_torch.indexer.triton_kernels.normalize_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.reduce_impl.html#module-vortex_torch.indexer.triton_kernels.reduce_impl">vortex_torch.indexer.triton_kernels.reduce_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.save_load_impl.html#module-vortex_torch.indexer.triton_kernels.save_load_impl">vortex_torch.indexer.triton_kernels.save_load_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.softmax_impl.html#module-vortex_torch.indexer.triton_kernels.softmax_impl">vortex_torch.indexer.triton_kernels.softmax_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.transpose_impl.html#module-vortex_torch.indexer.triton_kernels.transpose_impl">vortex_torch.indexer.triton_kernels.transpose_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.utils_impl.html#module-vortex_torch.indexer.triton_kernels.utils_impl">vortex_torch.indexer.triton_kernels.utils_impl</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.utils_sglang.html#module-vortex_torch.indexer.utils_sglang">vortex_torch.indexer.utils_sglang</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#module-vortex_torch.utils">vortex_torch.utils</a>
+</li>
+          <li><a href="api/vortex_torch.version.html#module-vortex_torch.version">vortex_torch.version</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType.Mul">Mul (vortex_torch.utils.ElementwiseBinaryOpType attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Multiply">Multiply (class in vortex_torch.cache.elementwise_binary)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Multiply">(class in vortex_torch.indexer.elementwise_binary)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="N" class="genindex-section">
+  <h2>N</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.name">name (vortex_torch.abs.context_base.ContextBase attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.name">(vortex_torch.abs.ContextBase attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.name">(vortex_torch.cache.context.Context attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.name">(vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize">Normalize (class in vortex_torch.indexer.scan)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.num_kv_heads">num_kv_heads (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.num_qo_heads">num_qo_heads (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.num_sms">num_sms (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="O" class="genindex-section">
+  <h2>O</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.op_type">op_type (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.op_type">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.op_type">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.op_type">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.output_buffer">output_buffer (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.output_buffer">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM.output_buffer">(vortex_torch.cache.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.output_buffer">(vortex_torch.cache.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.output_buffer">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_buffer">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.output_buffer">(vortex_torch.indexer.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.output_buffer">(vortex_torch.indexer.matmul.GeMV attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.output_buffer">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.output_buffer">(vortex_torch.indexer.transpose.Transpose attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.output_format">output_format (vortex_torch.cache.elementwise.Elementwise attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.output_format">(vortex_torch.cache.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM.output_format">(vortex_torch.cache.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.output_format">(vortex_torch.cache.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.output_format">(vortex_torch.indexer.elementwise.Elementwise attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_format">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.output_format">(vortex_torch.indexer.matmul.GeMM attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.output_format">(vortex_torch.indexer.matmul.GeMV attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.output_format">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.output_format">(vortex_torch.indexer.scan.Normalize attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.output_format">(vortex_torch.indexer.scan.Softmax attribute)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.output_format">(vortex_torch.indexer.transpose.Transpose attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="P" class="genindex-section">
+  <h2>P</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.page_reserved_bos">page_reserved_bos (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.page_reserved_eos">page_reserved_eos (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.page_size">page_size (vortex_torch.cache.context.Context attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.page_size">(vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.html#id2">PAGED (vortex_torch.abs.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.html#vortex_torch.abs.FORMAT.PAGED">[1]</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#id2">(vortex_torch.abs.tensor.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT.PAGED">[1]</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_decode">plan_decode() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_decode_fa3">plan_decode_fa3() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_prefill">plan_prefill() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_prefill_fa3">plan_prefill_fa3() (in module vortex_torch.indexer.utils_sglang)</a>
+</li>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.Mode.profile">profile (vortex_torch.utils.Mode attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.profile">profile() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.profile">(vortex_torch.abs.ContextBase method)</a>
+</li>
+          <li><a href="api/vortex_torch.abs.op.html#vortex_torch.abs.op.vOp.profile">(vortex_torch.abs.op.vOp method)</a>
+</li>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.vOp.profile">(vortex_torch.abs.vOp method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.profile">(vortex_torch.cache.elementwise.Elementwise method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#vortex_torch.cache.elementwise_binary.Elementwise_Binary.profile">(vortex_torch.cache.elementwise_binary.Elementwise_Binary method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.profile">(vortex_torch.cache.fill.Fill method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM.profile">(vortex_torch.cache.matmul.GeMM method)</a>
+</li>
+          <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.profile">(vortex_torch.cache.reduce.Reduce method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.profile">(vortex_torch.indexer.elementwise.Elementwise method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile">(vortex_torch.indexer.elementwise_binary.Elementwise_Binary method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.profile">(vortex_torch.indexer.matmul.GeMM method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.profile">(vortex_torch.indexer.matmul.GeMV method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK.profile">(vortex_torch.indexer.output_func.topK method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.profile">(vortex_torch.indexer.reduce.Reduce method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.profile">(vortex_torch.indexer.scan.Normalize method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.profile">(vortex_torch.indexer.scan.Softmax method)</a>
+</li>
+          <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.profile">(vortex_torch.indexer.transpose.Transpose method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="R" class="genindex-section">
+  <h2>R</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.abs.html#id1">RAGGED (vortex_torch.abs.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.html#vortex_torch.abs.FORMAT.RAGGED">[1]</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#id1">(vortex_torch.abs.tensor.FORMAT attribute)</a>, <a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT.RAGGED">[1]</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce">Reduce (class in vortex_torch.cache.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce">(class in vortex_torch.indexer.reduce)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.reduce.html#vortex_torch.cache.reduce.Reduce.reduce_type">reduce_type (vortex_torch.cache.reduce.Reduce attribute)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.reduce_type">(vortex_torch.indexer.reduce.Reduce attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType">ReduceType (class in vortex_torch.utils)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.register">register() (in module vortex_torch.flow.registry)</a>
+</li>
+        <li><a href="api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.RegistryError">RegistryError</a>
+</li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Relu">Relu (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Relu">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType.Relu">(vortex_torch.utils.ElementwiseOpType attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="S" class="genindex-section">
+  <h2>S</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.scale">scale (vortex_torch.indexer.scan.Softmax attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.set_batch_size">set_batch_size() (vortex_torch.indexer.context.Context method)</a>
+</li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Sigmoid">Sigmoid (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Sigmoid">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType.Sigmoid">(vortex_torch.utils.ElementwiseOpType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Silu">Silu (class in vortex_torch.cache.elementwise)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Silu">(class in vortex_torch.indexer.elementwise)</a>
+</li>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType.Silu">(vortex_torch.utils.ElementwiseOpType attribute)</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax">Softmax (class in vortex_torch.indexer.scan)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.sparse_kv_indices">sparse_kv_indices (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.sparse_kv_indptr">sparse_kv_indptr (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Sum">Sum (class in vortex_torch.indexer.reduce)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.utils.html#vortex_torch.utils.ReduceType.Sum">(vortex_torch.utils.ReduceType attribute)</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.summary">summary() (vortex_torch.abs.context_base.ContextBase method)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.ContextBase.summary">(vortex_torch.abs.ContextBase method)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="T" class="genindex-section">
+  <h2>T</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK">topK (class in vortex_torch.indexer.output_func)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.topk_val">topk_val (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.total_num_pages">total_num_pages (vortex_torch.cache.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose">Transpose (class in vortex_torch.indexer.transpose)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="V" class="genindex-section">
+  <h2>V</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow">vFlow (class in vortex_torch.flow.flow)</a>
+</li>
+        <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.vOp">vOp (class in vortex_torch.abs)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.op.html#vortex_torch.abs.op.vOp">(class in vortex_torch.abs.op)</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch
+
+        <ul>
+          <li><a href="api/vortex_torch.html#module-vortex_torch">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.abs
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.html#module-vortex_torch.abs">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.abs.context_base
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.context_base.html#module-vortex_torch.abs.context_base">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.abs.op
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.op.html#module-vortex_torch.abs.op">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.abs.tensor
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#module-vortex_torch.abs.tensor">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.html#module-vortex_torch.cache">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.context
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.context.html#module-vortex_torch.cache.context">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.elementwise
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise.html#module-vortex_torch.cache.elementwise">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.elementwise_binary
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.elementwise_binary.html#module-vortex_torch.cache.elementwise_binary">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.fill
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.fill.html#module-vortex_torch.cache.fill">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.matmul
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.matmul.html#module-vortex_torch.cache.matmul">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.reduce
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.reduce.html#module-vortex_torch.cache.reduce">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.html#module-vortex_torch.cache.triton_kernels">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.elementwise_binary_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_binary_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.elementwise_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.elementwise_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.fill_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.fill_impl.html#module-vortex_torch.cache.triton_kernels.fill_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.matmul_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.matmul_impl.html#module-vortex_torch.cache.triton_kernels.matmul_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.reduce_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.reduce_impl.html#module-vortex_torch.cache.triton_kernels.reduce_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.cache.triton_kernels.set_kv
+
+        <ul>
+          <li><a href="api/vortex_torch.cache.triton_kernels.set_kv.html#module-vortex_torch.cache.triton_kernels.set_kv">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.flow
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.html#module-vortex_torch.flow">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.flow.algorithms
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.algorithms.html#module-vortex_torch.flow.algorithms">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.flow.flow
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.flow.html#module-vortex_torch.flow.flow">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.flow.loader
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.loader.html#module-vortex_torch.flow.loader">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.flow.registry
+
+        <ul>
+          <li><a href="api/vortex_torch.flow.registry.html#module-vortex_torch.flow.registry">module</a>
+</li>
+        </ul></li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li>
+    vortex_torch.indexer
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.html#module-vortex_torch.indexer">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.context
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.context.html#module-vortex_torch.indexer.context">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.elementwise
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise.html#module-vortex_torch.indexer.elementwise">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.elementwise_binary
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.elementwise_binary.html#module-vortex_torch.indexer.elementwise_binary">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.matmul
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.matmul.html#module-vortex_torch.indexer.matmul">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.output_func
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.output_func.html#module-vortex_torch.indexer.output_func">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.reduce
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.reduce.html#module-vortex_torch.indexer.reduce">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.save_load
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.save_load.html#module-vortex_torch.indexer.save_load">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.scan
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.scan.html#module-vortex_torch.indexer.scan">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.transpose
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.transpose.html#module-vortex_torch.indexer.transpose">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.html#module-vortex_torch.indexer.triton_kernels">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.elementwise_binary_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_binary_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.elementwise_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.elementwise_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.matmul_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.matmul_impl.html#module-vortex_torch.indexer.triton_kernels.matmul_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.mv_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.mv_impl.html#module-vortex_torch.indexer.triton_kernels.mv_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.normalize_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.normalize_impl.html#module-vortex_torch.indexer.triton_kernels.normalize_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.reduce_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.reduce_impl.html#module-vortex_torch.indexer.triton_kernels.reduce_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.save_load_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.save_load_impl.html#module-vortex_torch.indexer.triton_kernels.save_load_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.softmax_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.softmax_impl.html#module-vortex_torch.indexer.triton_kernels.softmax_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.transpose_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.transpose_impl.html#module-vortex_torch.indexer.triton_kernels.transpose_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.triton_kernels.utils_impl
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.triton_kernels.utils_impl.html#module-vortex_torch.indexer.triton_kernels.utils_impl">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.indexer.utils_sglang
+
+        <ul>
+          <li><a href="api/vortex_torch.indexer.utils_sglang.html#module-vortex_torch.indexer.utils_sglang">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.utils
+
+        <ul>
+          <li><a href="api/vortex_torch.utils.html#module-vortex_torch.utils">module</a>
+</li>
+        </ul></li>
+        <li>
+    vortex_torch.version
+
+        <ul>
+          <li><a href="api/vortex_torch.version.html#module-vortex_torch.version">module</a>
+</li>
+        </ul></li>
+        <li><a href="api/vortex_torch.abs.html#vortex_torch.abs.vTensor">vTensor (class in vortex_torch.abs)</a>
+
+        <ul>
+          <li><a href="api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor">(class in vortex_torch.abs.tensor)</a>
+</li>
+        </ul></li>
+    </ul></td>
+  </tr></table>
+</section>
+
+<section id="W" class="genindex-section">
+  <h2>W</h2>
+  <table style="width: 100%" class="indextable genindextable"><tr>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.winfo_chunk_size">winfo_chunk_size (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.winfo_kv_lens">winfo_kv_lens (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+    <td style="width: 33%; vertical-align: top;"><ul>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.winfo_kv_offsets">winfo_kv_offsets (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.winfo_num_workloads">winfo_num_workloads (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+        <li><a href="api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.winfo_q_indices">winfo_q_indices (vortex_torch.indexer.context.Context attribute)</a>
+</li>
+    </ul></td>
+  </tr></table>
+</section>
+
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, Zhuoming Chen
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="_static/documentation_options.js?v=8d563738"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="_static/copybutton.js?v=f281be69"></script>
+    </body>
+</html>
