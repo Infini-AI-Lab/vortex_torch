@@ -272,10 +272,7 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.flow.algorithms.GQABlockSparseAttention" title="vortex_torch.flow.algorithms.GQABlockSparseAttention"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GQABlockSparseAttention</span></code></a>()</p></td>
 <td><p>Grouped-query block-sparse attention flow.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention" title="vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GQADynamicHybridSparseAttention</span></code></a>()</p></td>
-<td><p>Dynamic hybrid sparse attention:</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GQAQuestSparseAttention</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GQAQuestSparseAttention</span></code></a>()</p></td>
 <td><p>GQA-style QUEST sparse attention flow.</p></td>
 </tr>
 </tbody>
@@ -315,10 +312,14 @@ centroids to obtain a scalar <strong>score</strong> for each (request, page),</p
 indices <code class="docutils literal notranslate"><span class="pre">o</span></code> of shape</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[o \in \mathbb{R}^{S_{\mathrm{sparse}} \times 1 \times 1},\]</div>
+\[o \in \mathbb{R}^{S} \times 1 \times 1},\]</div>
 </div>
-<p>where <span class="math notranslate nohighlight">\(S_{\mathrm{sparse}}\)</span> is a packed sparse page axis
-as described in <code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code>.</p>
+<p>Here <span class="math notranslate nohighlight">\(S\)</span> is the leading page axis. Internally it is a packed
+axis (often denoted <span class="math notranslate nohighlight">\(S_{\mathrm{pack}}\)</span>), obtained by
+concatenating the pages from all requests. As a user, you can simply
+think of <span class="math notranslate nohighlight">\(S\)</span> as “the number of pages for this request”; the
+vFlow kernels and <code class="xref py py-class docutils literal notranslate"><span class="pre">ContextBase</span></code> will take care of mapping
+between per-request page counts and the packed layout automatically.</p>
 </li>
 </ol>
 </li>
@@ -341,7 +342,7 @@ each cache tensor has two logical views:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\text{cache[&quot;centroids&quot;]} \sim
-\mathbb{R}^{S_{\mathrm{pack}} \times 1 \times D},\]</div>
+\mathbb{R}^{S} \times 1 \times D},\]</div>
 </div>
 </li>
 <li><p>In <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention.forward_cache" title="vortex_torch.flow.algorithms.BlockSparseAttention.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a> (batch-major view):</p>
@@ -383,8 +384,7 @@ by <code class="xref py py-class docutils literal notranslate"><span class="pre"
 <li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;k&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">cache[&quot;v&quot;]</span></code> are page-packed key/value
 tensors,</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> is interpreted as
-<code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> (page-packed centroids), with
-<span class="math notranslate nohighlight">\(S_{\mathrm{pack}} = \sum_i S_i\)</span>.</p></li>
+<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> (page-packed centroids).</p></li>
 </ul>
 </p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.ContextBase" title="vortex_torch.abs.ContextBase"><em>ContextBase</em></a>) – Runtime context carrying page layout, top-k configuration
@@ -459,7 +459,7 @@ This flow defines a single extra tensor:</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;centroids&quot;</span></code> with inner shape <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">head_dim)</span></code>, which
 becomes</p>
 <ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">head_dim]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.BlockSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">head_dim]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.BlockSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">head_dim]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention.forward_cache" title="vortex_torch.flow.algorithms.BlockSparseAttention.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a>.</p></li>
 </ul>
 </li>
@@ -483,14 +483,20 @@ becomes</p>
 <p>This flow uses a GQA-style block-sparse routing: queries are grouped,
 scored against per-request centroids, normalized with a softmax, then
 aggregated across groups before a top-k over pages is applied.</p>
-<ul class="simple">
+<ul>
 <li><p>Queries <code class="docutils literal notranslate"><span class="pre">q</span></code> have shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code>.</p></li>
 <li><p>Centroids cache <code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> has inner shape
 <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">head_dim)</span></code> and is viewed as:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_cache" title="vortex_torch.flow.algorithms.GQABlockSparseAttention.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a>.</p></li>
 </ul>
+<p>Here <span class="math notranslate nohighlight">\(S\)</span> is the leading page axis. Internally it is a packed
+axis (often denoted <span class="math notranslate nohighlight">\(S_{\mathrm{pack}}\)</span>), obtained by
+concatenating the pages from all requests. As a user, you can simply
+think of <span class="math notranslate nohighlight">\(S\)</span> as “the number of pages for this request”; the
+vFlow kernels and <code class="xref py py-class docutils literal notranslate"><span class="pre">ContextBase</span></code> will take care of mapping
+between per-request page counts and the packed layout automatically.</p>
 </li>
 </ul>
 <p>For a design similar in spirit to grouped-query block sparsity, see
@@ -508,8 +514,8 @@ the GQA sparse attention formulation in:</p>
 <li><p>Apply <code class="xref py py-class docutils literal notranslate"><span class="pre">GeMM</span></code> between queries and centroids:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">q</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> (indexer view): <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">score</span></code>: <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">H_q,</span> <span class="pre">1]</span></code> (logical <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">Ny,</span> <span class="pre">Nx]</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> (indexer view): <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">score</span></code>: <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">H_q,</span> <span class="pre">1]</span></code> (logical <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">Ny,</span> <span class="pre">Nx]</span></code>)</p></li>
 </ul>
 </li>
 <li><p>Apply in-place softmax over the leading (page) axis with a
@@ -597,20 +603,26 @@ it maintains per-page <strong>max</strong> and <strong>min</strong> envelopes of
 them to compute a conservative upper bound on query–key similarity.</p>
 <section id="shapes">
 <h2>Shapes<a class="headerlink" href="#shapes" title="Link to this heading">¶</a></h2>
-<ul class="simple">
+<ul>
 <li><p>Queries <code class="docutils literal notranslate"><span class="pre">q</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code> (typically bfloat16).</p></li>
 <li><p>Cache entries (inner shapes as declared in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.create_cache" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a>):</p>
-<ul>
+<ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;max&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">cache[&quot;min&quot;]</span></code>: <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">head_dim)</span></code>
 → viewed as</p>
 <ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>,</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> in <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_cache" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a>.</p></li>
 </ul>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;k&quot;]</span></code>: standard key cache with inner shape
 <code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code>.</p></li>
 </ul>
+<p>Here <span class="math notranslate nohighlight">\(S\)</span> is the leading page axis. Internally it is a packed
+axis (often denoted <span class="math notranslate nohighlight">\(S_{\mathrm{pack}}\)</span>), obtained by
+concatenating the pages from all requests. As a user, you can simply
+think of <span class="math notranslate nohighlight">\(S\)</span> as “the number of pages for this request”; the
+vFlow kernels and <code class="xref py py-class docutils literal notranslate"><span class="pre">ContextBase</span></code> will take care of mapping
+between per-request page counts and the packed layout automatically.</p>
 </li>
 </ul>
 </section>
@@ -635,15 +647,15 @@ sparse page indices.</p></li>
 <p>Let:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">q</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;max&quot;]</span></code>: <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;min&quot;]</span></code>: <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;max&quot;]</span></code>: <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;min&quot;]</span></code>: <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
 </ul>
 <p>Steps:</p>
 <ol class="arabic simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">s_max</span> <span class="pre">=</span> <span class="pre">q</span> <span class="pre">*</span> <span class="pre">max_envelope</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">s_min</span> <span class="pre">=</span> <span class="pre">q</span> <span class="pre">*</span> <span class="pre">min_envelope</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">s</span> <span class="pre">=</span> <span class="pre">max(s_max,</span> <span class="pre">s_min)</span></code> (elementwise)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">sum(s,</span> <span class="pre">dim=D)</span></code> → <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">H_q,</span> <span class="pre">1]</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">score</span> <span class="pre">=</span> <span class="pre">sum(s,</span> <span class="pre">dim=D)</span></code> → <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">H_q,</span> <span class="pre">1]</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">aggr_score</span> <span class="pre">=</span> <span class="pre">max(score,</span> <span class="pre">dim=H_q)</span></code> → per-page scalar</p></li>
 <li><p><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code> converts <code class="docutils literal notranslate"><span class="pre">aggr_score</span></code> into sparse page
 indices <code class="docutils literal notranslate"><span class="pre">o</span></code> of shape <code class="docutils literal notranslate"><span class="pre">[S_sparse,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>.</p></li>
@@ -714,74 +726,6 @@ via <code class="docutils literal notranslate"><span class="pre">loc</span></cod
 </dd></dl>
 
 </section>
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">GQADynamicHybridSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#GQADynamicHybridSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
-<dl class="simple">
-<dt>Dynamic hybrid sparse attention:</dt><dd><ul class="simple">
-<li><p>Maintains mean, max, and min statistics per block.</p></li>
-<li><p>Uses a block-sparse (centroid-based) score path.</p></li>
-<li><p>Uses a Quest-style (max/min) score path.</p></li>
-<li><p>Combines them via element-wise max as a dynamic gating signal.</p></li>
-</ul>
-</dd>
-</dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_indexer">
-<span class="sig-name descname"><span class="pre">forward_indexer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#GQADynamicHybridSparseAttention.forward_indexer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_indexer" title="Link to this definition">¶</a></dt>
-<dd><p>q: query tensor (GQA-packed)
-o: indexer output tensor (indices / scores buffer for topK)
-cache: contains “centroids”, “max”, “min”</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cache</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>torch.Tensor</em><em>]</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><em>ContextBase</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_cache">
-<span class="sig-name descname"><span class="pre">forward_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#GQADynamicHybridSparseAttention.forward_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_cache" title="Link to this definition">¶</a></dt>
-<dd><p>cache[“k”]: full key buffer for the page
-loc: index of the page / block being updated</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cache</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>torch.Tensor</em><em>]</em>)</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><em>ContextBase</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.create_cache">
-<span class="sig-name descname"><span class="pre">create_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#GQADynamicHybridSparseAttention.create_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.create_cache" title="Link to this definition">¶</a></dt>
-<dd><dl class="simple">
-<dt>For each block/page we maintain:</dt><dd><ul class="simple">
-<li><p>centroids: mean key per dimension</p></li>
-<li><p>max: max key per dimension</p></li>
-<li><p>min: min key per dimension</p></li>
-</ul>
-</dd>
-</dl>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -858,12 +802,6 @@ loc: index of the page / block being updated</p>
 <li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_indexer"><code class="docutils literal notranslate"><span class="pre">GQAQuestSparseAttention.forward_indexer()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.forward_cache"><code class="docutils literal notranslate"><span class="pre">GQAQuestSparseAttention.forward_cache()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention.create_cache"><code class="docutils literal notranslate"><span class="pre">GQAQuestSparseAttention.create_cache()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention"><code class="docutils literal notranslate"><span class="pre">GQADynamicHybridSparseAttention</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_indexer"><code class="docutils literal notranslate"><span class="pre">GQADynamicHybridSparseAttention.forward_indexer()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.forward_cache"><code class="docutils literal notranslate"><span class="pre">GQADynamicHybridSparseAttention.forward_cache()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.flow.algorithms.GQADynamicHybridSparseAttention.create_cache"><code class="docutils literal notranslate"><span class="pre">GQADynamicHybridSparseAttention.create_cache()</span></code></a></li>
 </ul>
 </li>
 </ul>

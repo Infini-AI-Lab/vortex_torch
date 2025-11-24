@@ -265,16 +265,32 @@
 <p>A concise description of what your package does and why it exists.</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>vortex-torch
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Infini-AI-Lab/vortex_torch.git
+<span class="nb">cd</span><span class="w"> </span>vortex_torch
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
 </div>
 </section>
 <section id="quick-example">
 <h2>Quick Example<a class="headerlink" href="#quick-example" title="Link to this heading">¶</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">vortex_torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vt</span>
-
-<span class="n">model</span> <span class="o">=</span> <span class="n">vt</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
-<span class="n">out</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">llm</span> <span class="o">=</span> <span class="n">sgl</span><span class="o">.</span><span class="n">Engine</span><span class="p">(</span><span class="n">model_path</span><span class="o">=</span><span class="s2">&quot;Qwen/Qwen3-0.6B&quot;</span><span class="p">,</span>
+                 <span class="n">disable_cuda_graph</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                 <span class="n">page_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+                 <span class="n">vortex_topk_val</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+                 <span class="n">disable_overlap_schedule</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                 <span class="n">attention_backend</span><span class="o">=</span><span class="s2">&quot;flashinfer&quot;</span><span class="p">,</span>
+                 <span class="n">enable_vortex_sparsity</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                 <span class="n">vortex_page_reserved_bos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                 <span class="n">vortex_page_reserved_eos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                 <span class="n">vortex_layers_skip</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)),</span>
+                 <span class="n">vortex_module_path</span><span class="o">=</span><span class="s2">&quot;path/to/custom_sparse_attention.py&quot;</span>
+                 <span class="n">vortex_module_name</span><span class="o">=</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">,</span>
+                 <span class="n">vortex_max_seq_lens</span><span class="o">=</span><span class="mi">8192</span><span class="p">,</span>
+                 <span class="n">mem_fraction_static</span><span class="o">=</span><span class="mf">0.6</span>
+                 <span class="p">)</span>
 </pre></div>
 </div>
 </section>

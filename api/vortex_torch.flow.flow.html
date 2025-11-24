@@ -346,16 +346,18 @@ different logical layouts</strong>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\text{cache[key]} \sim
-\mathbb{R}^{S_{\text{pack}} \times r \times c},\]</div>
+\mathbb{R}^{S \times r \times c},\]</div>
 </div>
-<p>where</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[S_{\text{pack}} = \sum_{i=0}^{B-1} S_i\]</div>
-</div>
-<p>is the total number of pages packed across all requests, and
-<span class="math notranslate nohighlight">\((r, c)\)</span> is the per-key inner shape declared via
+<p><span class="math notranslate nohighlight">\((r, c)\)</span> is the per-key inner shape declared via
 <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache" title="vortex_torch.flow.flow.vFlow.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a> or implicitly for <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code>/<code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code>.</p>
+<blockquote>
+<div><p>Here <span class="math notranslate nohighlight">\(S\)</span> is the leading page axis. Internally it is a packed
+axis (often denoted <span class="math notranslate nohighlight">\(S_{\mathrm{pack}}\)</span>), obtained by
+concatenating the pages from all requests. As a user, you can simply
+think of <span class="math notranslate nohighlight">\(S\)</span> as “the number of pages for this request”; the
+vFlow kernels and <code class="xref py py-class docutils literal notranslate"><span class="pre">ContextBase</span></code> will take care of mapping
+between per-request page counts and the packed layout automatically.</p>
+</div></blockquote>
 </li>
 <li><p><strong>Cache-update view (batch-major)</strong> — used in <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.forward_cache" title="vortex_torch.flow.flow.vFlow.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a>:</p>
 <div class="math-wrapper docutils container">
@@ -402,7 +404,7 @@ storage is used (per head) relative to one <code class="docutils literal notrans
        {\text{page_size} \cdot \text{head_dim}}.\]</div>
 </div>
 <p>This ignores the leading dimension (whether <span class="math notranslate nohighlight">\(B\)</span> or
-<span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span>) and compares only inner shapes to the
+<span class="math notranslate nohighlight">\(S\)</span>) and compares only inner shapes to the
 baseline <code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code>.</p>
 </section>
 <section id="subclass-responsibilities">
@@ -411,7 +413,7 @@ baseline <code class="docutils literal notranslate"><span class="pre">(page_size
 <ul class="simple">
 <li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer(q,</span> <span class="pre">o,</span> <span class="pre">cache,</span> <span class="pre">ctx)()</span></code>:
 compute sparse page indices (or routing scores) from queries,
-using cache in the <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> view.</p></li>
+using cache in the <span class="math notranslate nohighlight">\(S\)</span> view.</p></li>
 <li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache(cache,</span> <span class="pre">loc,</span> <span class="pre">ctx)()</span></code>:
 update cache tensors using the <span class="math notranslate nohighlight">\(B\)</span>-major view and positional
 metadata.</p></li>
@@ -447,10 +449,9 @@ from queries and cache.</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
 \[\text{cache[key]}
-\sim \mathbb{R}^{S_{\text{pack}} \times r \times c},\]</div>
+\sim \mathbb{R}^{S \times r \times c},\]</div>
 </div>
-<p>where <span class="math notranslate nohighlight">\(S_{\text{pack}} = \sum_i S_i\)</span> and
-<span class="math notranslate nohighlight">\((r, c)\)</span> are the per-key inner dimensions obtained from
+<p><span class="math notranslate nohighlight">\((r, c)\)</span> are the per-key inner dimensions obtained from
 <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info" title="vortex_torch.flow.flow.vFlow.get_cache_meta_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_cache_meta_info()</span></code></a>.</p>
 </li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ctx</span></code>:</p>
@@ -464,7 +465,7 @@ indptr arrays, and configuration such as <code class="docutils literal notransla
 <h3>Contract<a class="headerlink" href="#contract" title="Link to this heading">¶</a></h3>
 <p>Implementations should:</p>
 <ul class="simple">
-<li><p>interpret <code class="docutils literal notranslate"><span class="pre">cache</span></code> in the <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> view,</p></li>
+<li><p>interpret <code class="docutils literal notranslate"><span class="pre">cache</span></code> in the <span class="math notranslate nohighlight">\(S\)</span> view,</p></li>
 <li><p>use <code class="docutils literal notranslate"><span class="pre">q</span></code> and relevant cache tensors to score/select pages,</p></li>
 <li><p>respect per-request bounds derived from <code class="docutils literal notranslate"><span class="pre">ctx</span></code>,</p></li>
 <li><p>write the resulting sparse indices (or routing representation)
@@ -544,7 +545,7 @@ long as they respect the shapes announced by
 <dd><p>Declare inner shapes for non-<code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> / non-<code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> cache tensors.</p>
 <p>This method <strong>does not allocate</strong> tensors. It only declares the
 per-key inner dimensions <span class="math notranslate nohighlight">\((r, c)\)</span>; the runtime will attach
-the appropriate leading axis (<span class="math notranslate nohighlight">\(B\)</span> or <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span>)
+the appropriate leading axis (<span class="math notranslate nohighlight">\(B\)</span> or <span class="math notranslate nohighlight">\(S\)</span>)
 depending on whether the cache is used in <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.forward_cache" title="vortex_torch.flow.flow.vFlow.forward_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code></a>
 or <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.forward_indexer" title="vortex_torch.flow.flow.vFlow.forward_indexer"><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code></a>.</p>
 <dl class="field-list simple">
@@ -602,7 +603,7 @@ for key/value tensors. The resulting dictionary includes:</p>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>Mapping from cache tensor names to inner shapes <code class="docutils literal notranslate"><span class="pre">(r,</span> <span class="pre">c)</span></code>.
 The runtime will later prepend either a batch axis <code class="docutils literal notranslate"><span class="pre">B</span></code> or a
-packed-page axis <code class="docutils literal notranslate"><span class="pre">S_pack</span></code> when materializing the tensors.</p>
+packed-page axis <code class="docutils literal notranslate"><span class="pre">S</span></code> when materializing the tensors.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Tuple[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]]</p>
@@ -632,7 +633,7 @@ returns</p>
   \frac{r_{\text{key}} \cdot c_{\text{key}}}
        {\text{page_size} \cdot \text{head_dim}}.\]</div>
 </div>
-<p>The leading dimension (<span class="math notranslate nohighlight">\(B\)</span> or <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span>) is
+<p>The leading dimension (<span class="math notranslate nohighlight">\(B\)</span> or <span class="math notranslate nohighlight">\(S\)</span>) is
 not included in this ratio on purpose; it is a per-page
 normalization.</p>
 <dl class="field-list simple">

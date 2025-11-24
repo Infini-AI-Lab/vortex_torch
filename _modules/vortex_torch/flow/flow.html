@@ -339,18 +339,20 @@
 <span class="sd">       .. math::</span>
 
 <span class="sd">           \text{cache[key]} \sim</span>
-<span class="sd">           \mathbb{R}^{S_{\text{pack}} \times r \times c},</span>
+<span class="sd">           \mathbb{R}^{S \times r \times c},</span>
 
-<span class="sd">       where</span>
+<span class="sd">       </span>
 
-<span class="sd">       .. math::</span>
-
-<span class="sd">           S_{\text{pack}} = \sum_{i=0}^{B-1} S_i</span>
-
-<span class="sd">       is the total number of pages packed across all requests, and</span>
 <span class="sd">       :math:`(r, c)` is the per-key inner shape declared via</span>
 <span class="sd">       :meth:`create_cache` or implicitly for ``&quot;k&quot;``/``&quot;v&quot;``.</span>
 
+<span class="sd">        Here :math:`S` is the leading page axis. Internally it is a packed</span>
+<span class="sd">        axis (often denoted :math:`S_{\mathrm{pack}}`), obtained by</span>
+<span class="sd">        concatenating the pages from all requests. As a user, you can simply</span>
+<span class="sd">        think of :math:`S` as &quot;the number of pages for this request&quot;; the</span>
+<span class="sd">        vFlow kernels and :class:`ContextBase` will take care of mapping</span>
+<span class="sd">        between per-request page counts and the packed layout automatically.</span>
+<span class="sd">    </span>
 <span class="sd">    2. **Cache-update view (batch-major)** — used in :meth:`forward_cache`:</span>
 
 <span class="sd">       .. math::</span>
@@ -398,7 +400,7 @@
 <span class="sd">               {\text{page_size} \cdot \text{head_dim}}.</span>
 
 <span class="sd">    This ignores the leading dimension (whether :math:`B` or</span>
-<span class="sd">    :math:`S_{\text{pack}}`) and compares only inner shapes to the</span>
+<span class="sd">    :math:`S`) and compares only inner shapes to the</span>
 <span class="sd">    baseline ``(page_size, head_dim)``.</span>
 
 <span class="sd">    Subclass responsibilities</span>
@@ -407,7 +409,7 @@
 
 <span class="sd">    - :meth:`forward_indexer(q, o, cache, ctx)`:</span>
 <span class="sd">      compute sparse page indices (or routing scores) from queries,</span>
-<span class="sd">      using cache in the :math:`S_{\text{pack}}` view.</span>
+<span class="sd">      using cache in the :math:`S` view.</span>
 
 <span class="sd">    - :meth:`forward_cache(cache, loc, ctx)`:</span>
 <span class="sd">      update cache tensors using the :math:`B`-major view and positional</span>
@@ -463,9 +465,8 @@
 <span class="sd">          .. math::</span>
 
 <span class="sd">              \text{cache[key]}</span>
-<span class="sd">              \sim \mathbb{R}^{S_{\text{pack}} \times r \times c},</span>
+<span class="sd">              \sim \mathbb{R}^{S \times r \times c},</span>
 
-<span class="sd">          where :math:`S_{\text{pack}} = \sum_i S_i` and</span>
 <span class="sd">          :math:`(r, c)` are the per-key inner dimensions obtained from</span>
 <span class="sd">          :meth:`get_cache_meta_info`.</span>
 
@@ -479,7 +480,7 @@
 <span class="sd">        --------</span>
 <span class="sd">        Implementations should:</span>
 
-<span class="sd">        - interpret ``cache`` in the :math:`S_{\text{pack}}` view,</span>
+<span class="sd">        - interpret ``cache`` in the :math:`S` view,</span>
 <span class="sd">        - use ``q`` and relevant cache tensors to score/select pages,</span>
 <span class="sd">        - respect per-request bounds derived from ``ctx``,</span>
 <span class="sd">        - write the resulting sparse indices (or routing representation)</span>
@@ -557,7 +558,7 @@
 
 <span class="sd">        This method **does not allocate** tensors. It only declares the</span>
 <span class="sd">        per-key inner dimensions :math:`(r, c)`; the runtime will attach</span>
-<span class="sd">        the appropriate leading axis (:math:`B` or :math:`S_{\text{pack}}`)</span>
+<span class="sd">        the appropriate leading axis (:math:`B` or :math:`S`)</span>
 <span class="sd">        depending on whether the cache is used in :meth:`forward_cache`</span>
 <span class="sd">        or :meth:`forward_indexer`.</span>
 
@@ -626,7 +627,7 @@
 <span class="sd">        Dict[str, Tuple[int, int]]</span>
 <span class="sd">            Mapping from cache tensor names to inner shapes ``(r, c)``.</span>
 <span class="sd">            The runtime will later prepend either a batch axis ``B`` or a</span>
-<span class="sd">            packed-page axis ``S_pack`` when materializing the tensors.</span>
+<span class="sd">            packed-page axis ``S`` when materializing the tensors.</span>
 
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
@@ -664,7 +665,7 @@
 <span class="sd">              \frac{r_{\text{key}} \cdot c_{\text{key}}}</span>
 <span class="sd">                   {\text{page_size} \cdot \text{head_dim}}.</span>
 
-<span class="sd">        The leading dimension (:math:`B` or :math:`S_{\text{pack}}`) is</span>
+<span class="sd">        The leading dimension (:math:`B` or :math:`S`) is</span>
 <span class="sd">        not included in this ratio on purpose; it is a per-page</span>
 <span class="sd">        normalization.</span>
 
