@@ -258,10 +258,20 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">vFlow</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">topK</span><span class="p">,</span> <span class="n">GeMV</span><span class="p">,</span> <span class="n">Softmax</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">GeMM</span><span class="p">,</span> <span class="n">Maximum</span><span class="p">,</span> <span class="n">Multiply</span><span class="p">,</span> <span class="n">L2Norm</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mean</span> <span class="k">as</span> <span class="n">CMean</span><span class="p">,</span> <span class="n">Max</span> <span class="k">as</span> <span class="n">CMax</span><span class="p">,</span> <span class="n">Min</span> <span class="k">as</span> <span class="n">CMin</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">topK</span><span class="p">,</span> <span class="n">GeMV</span><span class="p">,</span> <span class="n">Softmax</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">GeMM</span><span class="p">,</span> <span class="n">Maximum</span><span class="p">,</span> <span class="n">Multiply</span><span class="p">,</span> <span class="n">Add</span><span class="p">,</span> <span class="n">L2Norm</span><span class="p">,</span> <span class="n">Save</span><span class="p">,</span> <span class="n">Load</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mean</span> <span class="k">as</span> <span class="n">CMean</span><span class="p">,</span> <span class="n">Max</span> <span class="k">as</span> <span class="n">CMax</span><span class="p">,</span> <span class="n">Min</span> <span class="k">as</span> <span class="n">CMin</span><span class="p">,</span> <span class="n">L2Norm</span> <span class="k">as</span> <span class="n">CL2Norm</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">register</span>
+
+<span class="c1"># The ops are not reusable, even if they have the same semantic meaning. Internally, they will initialize different memory buffer.</span>
+<span class="c1"># For example, in Quest attention, we need to define two multiply operators.</span>
+
+<span class="c1"># In forward indexer, q can be viewed as [1, H_q, D] or [B, H_q, D] (B=1) and cache[&quot;xxx&quot;] can be viewed as [S, r, c] (r, c defined in create_cache) logically.</span>
+<span class="c1"># In forward cache, the cache[&quot;xxx&quot;] is viewed as [B, r, c]  (r, c defined in create_cache) logically.</span>
+<span class="c1"># In forward cache, each page is computed only once if page_id appears in loc. During the entire computation, each page id will appear in loc only once.</span>
+<span class="c1"># Thus, all the tensors have 3 dimensions. Reduce operators (Mean, Max, Min, etc) will always keep the dims.</span>
+<span class="c1"># Tips 1: GeMM(x, y) = yx^t, which might be different from typical definitions.</span>
+<span class="c1"># Tips 2: Except cache[&quot;k&quot;], cache[&quot;v&quot;] can also be used in forward_cache to collect information.</span>
 
 <div class="viewcode-block" id="BlockSparseAttention">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention">[docs]</a>
@@ -548,11 +558,11 @@
 
 <span class="sd">        Pipeline</span>
 <span class="sd">        --------</span>
-<span class="sd">        1. Apply :class:`GeMM` between queries and centroids:</span>
+<span class="sd">        1. Apply :class:`GeMM` between queries and centroids (o = yx^t):</span>
 
 <span class="sd">           - ``q``: ``[B, H_q, D]``</span>
 <span class="sd">           - ``cache[&quot;centroids&quot;]`` (indexer view): ``[S, 1, D]``</span>
-<span class="sd">           - ``score``: ``[S, H_q, 1]`` (logical ``[S, Ny, Nx]``)</span>
+<span class="sd">           - ``score``: ``[S, 1, H_q]`` (logical ``[S, Ny, Nx]``)</span>
 
 <span class="sd">        2. Apply in-place softmax over the leading (page) axis with a</span>
 <span class="sd">           scaling factor ``scale``:</span>
@@ -776,6 +786,20 @@
         <span class="p">}</span></div>
 </div>
 
+
+
+<span class="c1"># For agent developers!</span>
+<span class="c1"># The ops are not reusable, even if they have the same semantic meaning. Internally, they will initialize different memory buffer.</span>
+<span class="c1"># For example, in Quest attention, we need to define two multiply operators.</span>
+<span class="c1"># In the entire flow (including forward_cache/forward_indexer), native torch Ops are only allowed to apply to q in forward_indexer. For other tensors, please use vortex_torch ops in indexer/ and cache/.</span>
+
+<span class="c1"># In forward indexer, q can be viewed as [1, H_q, D] or [B, H_q, D] (B=1) and cache[&quot;xxx&quot;] can be viewed as [S, r, c] (r, c defined in create_cache) logically.</span>
+<span class="c1"># In forward cache, the cache[&quot;xxx&quot;] is viewed as [B, r, c]  (r, c defined in create_cache) logically.</span>
+<span class="c1"># In forward cache, each page is computed only once if page_id appears in loc. During the entire computation, each page id will appear in loc only once. Thus, users cannot accumulate tensors through forward_cache.</span>
+<span class="c1"># Thus, all the tensors have 3 dimensions. Reduce operators (Mean, Max, Min, etc) will always keep the dims.</span>
+
+<span class="c1"># Tips 1: GeMM(x, y) = yx^t, which might be different from typical definitions.</span>
+<span class="c1"># Tips 2: Except cache[&quot;k&quot;], cache[&quot;v&quot;] can also be used in forward_cache to collect information.</span>
 </pre></div>
         </article>
       </div>

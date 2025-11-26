@@ -688,8 +688,54 @@
         <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_meta_info</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="n">token_ratio</span> <span class="o">+=</span> <span class="p">(</span><span class="n">cache_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">page_size</span> <span class="o">*</span> <span class="n">head_dim</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">token_ratio</span></div>
+
+
+<div class="viewcode-block" id="vFlow.run_indexer_virtual">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.run_indexer_virtual">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run_indexer_virtual</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span> <span class="k">as</span> <span class="n">IContext</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">as_vtensor</span><span class="p">,</span> <span class="n">FORMAT</span>
+        
+        <span class="n">ctx</span> <span class="o">=</span> <span class="n">IContext</span><span class="p">()</span>
+        
+        <span class="n">ctx</span><span class="o">.</span><span class="n">group_size</span> <span class="o">=</span> <span class="n">group_size</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">num_qo_heads</span> <span class="o">=</span> <span class="n">group_size</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">=</span> <span class="n">head_dim</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span> <span class="o">=</span> <span class="n">page_size</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages_per_request</span> <span class="o">=</span> <span class="mi">0</span>
+        
+        <span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
+        
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="c1"># Dummy placeholders: used only for kernel / graph warm-up</span>
+                <span class="n">q_dummy</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">group_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">)</span>
+                <span class="n">o_dummy</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
+                <span class="n">cache_meta_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_meta_info</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+                
+                <span class="n">cache_dummy</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="n">cache_name</span><span class="p">:</span>  <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
+                                <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                                <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+                                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+                            <span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">)</span>
+                        
+                        <span class="k">for</span> <span class="p">(</span><span class="n">cache_name</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                    <span class="p">}</span>
+                
+                <span class="bp">self</span><span class="o">.</span><span class="n">forward_indexer</span><span class="p">(</span><span class="n">q_dummy</span><span class="p">,</span> <span class="n">o_dummy</span><span class="p">,</span> <span class="n">cache_dummy</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+
+        <span class="k">del</span> <span class="n">q_dummy</span>
+        <span class="k">del</span> <span class="n">o_dummy</span>
+        <span class="k">del</span> <span class="n">cache_dummy</span>
+    
+        <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">_aux_total_flops</span></div>
 </div>
 
+    
 </pre></div>
         </article>
       </div>

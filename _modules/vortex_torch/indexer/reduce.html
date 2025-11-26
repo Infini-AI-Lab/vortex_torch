@@ -420,6 +420,12 @@
         <span class="c1"># Account auxiliary memory</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>
 
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">[</span><span class="n">x</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">:</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_flops</span><span class="p">(</span>
+                    <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+                <span class="p">)</span>
+                
         <span class="c1"># Return vTensor view carrying the dispatched output format</span>
         <span class="k">return</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">)</span></div>
 

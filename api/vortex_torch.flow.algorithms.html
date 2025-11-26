@@ -511,11 +511,11 @@ the GQA sparse attention formulation in:</p>
 <section id="pipeline">
 <h2>Pipeline<a class="headerlink" href="#pipeline" title="Link to this heading">¶</a></h2>
 <ol class="arabic">
-<li><p>Apply <code class="xref py py-class docutils literal notranslate"><span class="pre">GeMM</span></code> between queries and centroids:</p>
+<li><p>Apply <code class="xref py py-class docutils literal notranslate"><span class="pre">GeMM</span></code> between queries and centroids (o = yx^t):</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">q</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> (indexer view): <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">score</span></code>: <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">H_q,</span> <span class="pre">1]</span></code> (logical <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">Ny,</span> <span class="pre">Nx]</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">score</span></code>: <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">H_q]</span></code> (logical <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">Ny,</span> <span class="pre">Nx]</span></code>)</p></li>
 </ul>
 </li>
 <li><p>Apply in-place softmax over the leading (page) axis with a

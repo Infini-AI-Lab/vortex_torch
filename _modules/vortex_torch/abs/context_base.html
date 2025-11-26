@@ -368,7 +368,13 @@
         <span class="k">return</span> <span class="n">nbytes</span></div>
 
 
+<div class="viewcode-block" id="ContextBase.add_aux_flops">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.add_aux_flops">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_aux_flops</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nflops</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_flops</span> <span class="o">+=</span> <span class="n">nflops</span></div>
 
+    
 <div class="viewcode-block" id="ContextBase.clear_aux_memory">
 <a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.clear_aux_memory">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">clear_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -377,6 +383,13 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         
         <span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_bytes</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+    
+<div class="viewcode-block" id="ContextBase.clear_aux_flops">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.clear_aux_flops">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear_aux_flops</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_flops</span> <span class="o">=</span> <span class="mi">0</span></div>
 
         
     
@@ -387,6 +400,7 @@
 <span class="sd">        Print fields; tensor fields show shape/dtype/device, and append memory totals incl. auxiliary.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         
+        <span class="k">return</span> 
         <span class="k">def</span><span class="w"> </span><span class="nf">_fmt_bytes</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
             <span class="n">units</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;B&quot;</span><span class="p">,</span> <span class="s2">&quot;KB&quot;</span><span class="p">,</span> <span class="s2">&quot;MB&quot;</span><span class="p">,</span> <span class="s2">&quot;GB&quot;</span><span class="p">,</span> <span class="s2">&quot;TB&quot;</span><span class="p">,</span> <span class="s2">&quot;PB&quot;</span><span class="p">)</span>
             <span class="n">f</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
@@ -394,6 +408,14 @@
                 <span class="k">if</span> <span class="n">f</span> <span class="o">&lt;</span> <span class="mi">1024</span> <span class="ow">or</span> <span class="n">u</span> <span class="o">==</span> <span class="n">units</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
                     <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">f</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">u</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="n">f</span> <span class="o">/=</span> <span class="mf">1024.0</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_fmt_flops</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">units</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;FLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;KFLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;MFLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;GFLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;TFLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;PFLOPs&quot;</span><span class="p">,</span> <span class="s2">&quot;EFLOPs&quot;</span><span class="p">)</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">u</span> <span class="ow">in</span> <span class="n">units</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">f</span> <span class="o">&lt;</span> <span class="mi">1000</span> <span class="ow">or</span> <span class="n">u</span> <span class="o">==</span> <span class="n">units</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+                    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">f</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">u</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="n">f</span> <span class="o">/=</span> <span class="mf">1000.0</span>
 
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== Context Summary ===&quot;</span><span class="p">)</span>
 
@@ -425,14 +447,13 @@
                 <span class="k">continue</span>
             <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2">: Tensor(shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">val</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="n">val</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, device=</span><span class="si">{</span><span class="n">val</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
                 <span class="n">n</span> <span class="o">=</span> <span class="n">_acc_tensor</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">val</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
                     <span class="n">internal_cpu</span> <span class="o">+=</span> <span class="n">n</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">internal_gpu</span> <span class="o">+=</span> <span class="n">n</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">val</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">pass</span>
 
         <span class="c1"># auxiliary memory (single counter, no device split)</span>
         <span class="n">aux_total</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_bytes</span><span class="p">)</span>
@@ -445,7 +466,9 @@
         <span class="n">grand_total</span> <span class="o">=</span> <span class="n">internal_cpu</span> <span class="o">+</span> <span class="n">internal_gpu</span> <span class="o">+</span> <span class="n">aux_total</span>
         <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;GRAND TOTAL  : </span><span class="si">{</span><span class="n">grand_total</span><span class="si">}</span><span class="s2"> bytes (</span><span class="si">{</span><span class="n">_fmt_bytes</span><span class="p">(</span><span class="n">grand_total</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 
-
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;--- Flops Totals ---&quot;</span><span class="p">)</span>
+        <span class="n">aux_flops</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_flops</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Auxiliary ALL: </span><span class="si">{</span><span class="n">aux_flops</span><span class="si">}</span><span class="s2"> flops (</span><span class="si">{</span><span class="n">_fmt_flops</span><span class="p">(</span><span class="n">aux_flops</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;====================================&quot;</span><span class="p">)</span></div>
 </div>
 

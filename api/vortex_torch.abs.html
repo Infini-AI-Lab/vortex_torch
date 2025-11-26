@@ -289,6 +289,19 @@ minimal and consistent.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.ContextBase.add_aux_flops">
+<span class="sig-name descname"><span class="pre">add_aux_flops</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nflops</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.add_aux_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.ContextBase.add_aux_flops" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>nflops</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.abs.ContextBase.add_aux_memory">
 <span class="sig-name descname"><span class="pre">add_aux_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">obj</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.add_aux_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.ContextBase.add_aux_memory" title="Link to this definition">¶</a></dt>
 <dd><p>Accumulate auxiliary memory usage and return the number of bytes added.</p>
@@ -319,6 +332,16 @@ that share storage (or on the same tensor) will double-count.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.abs.ContextBase.assert_created">
 <span class="sig-name descname"><span class="pre">assert_created</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.assert_created"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.ContextBase.assert_created" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.ContextBase.clear_aux_flops">
+<span class="sig-name descname"><span class="pre">clear_aux_flops</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.clear_aux_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.ContextBase.clear_aux_flops" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>None</p>
@@ -628,8 +651,10 @@ Defaults to <code class="docutils literal notranslate"><span class="pre">FORMAT.
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase"><code class="docutils literal notranslate"><span class="pre">ContextBase</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.name"><code class="docutils literal notranslate"><span class="pre">ContextBase.name</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.mode"><code class="docutils literal notranslate"><span class="pre">ContextBase.mode</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.ContextBase.add_aux_flops"><code class="docutils literal notranslate"><span class="pre">ContextBase.add_aux_flops()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.add_aux_memory"><code class="docutils literal notranslate"><span class="pre">ContextBase.add_aux_memory()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.assert_created"><code class="docutils literal notranslate"><span class="pre">ContextBase.assert_created()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.ContextBase.clear_aux_flops"><code class="docutils literal notranslate"><span class="pre">ContextBase.clear_aux_flops()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.clear_aux_memory"><code class="docutils literal notranslate"><span class="pre">ContextBase.clear_aux_memory()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.create"><code class="docutils literal notranslate"><span class="pre">ContextBase.create()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.ContextBase.created"><code class="docutils literal notranslate"><span class="pre">ContextBase.created</span></code></a></li>
