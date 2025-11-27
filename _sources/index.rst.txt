@@ -1,7 +1,6 @@
 Vortex
 ============
 
-A concise description of what your package does and why it exists.
 
 Installation
 ------------
