@@ -219,8 +219,7 @@ const int page_reserved_eos
     for (int i = 0; i < ITEM_PER_THREAD; ++i){
 
         int16_t w = ((tx_offset + i) < eff_batch_size) ? 
-            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i] 
-            - page_reserved_bos - page_reserved_eos): 0;
+            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i] - page_reserved_eos): 0;
     
         page_count[i] = (w > topk_val) ? w : 0;
         chunked_page_count_prefix_sum[i + 1] =  int((page_count[i] + max_chunk_size - 1) / max_chunk_size);
@@ -244,7 +243,7 @@ const int page_reserved_eos
         for (int j = start; j < end; ++j){
                 winfo_q_indices[j] = tx_offset + i;
                 winfo_kv_lens[j] = (j!=end-1)?(max_chunk_size):(last_len);
-                winfo_kv_offsets[j] = dense_kv_indptr[tx_offset + i] + (j - start) * max_chunk_size + page_reserved_bos;
+                winfo_kv_offsets[j] = dense_kv_indptr[tx_offset + i] + (j - start) * max_chunk_size;
         }
 
         }
