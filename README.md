@@ -11,7 +11,7 @@ Vortex: A Flexible and Efficient Sparse Attention Framework
 </h3>
 
 <p align="center">
-  <a href="https://github.com/Infini-AI-Lab/vortex_torch"><b>Documentation</b></a>
+  <a href="https://infini-ai-lab.github.io/vortex_torch/"><b>Documentation</b></a>
 </p>
 
 
@@ -137,8 +137,7 @@ llm = sgl.Engine(
 )
 ```
 
-If `vortex_module_path` is not provided, Vortex will automatically search in  
-`vortex_torch.flow.algorithms`.
+If `vortex_module_path` is not provided, Vortex will automatically search in `vortex_torch.flow.algorithms`.
 
 ---
 
