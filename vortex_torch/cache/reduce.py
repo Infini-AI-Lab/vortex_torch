@@ -1,10 +1,12 @@
 import torch
+import warnings
 from ..abs import vOp
 from .context import Context
 from .triton_kernels.reduce_impl import reduce_pp, reduce_rp, reduce_pr, reduce_rr
 from ..abs import vTensor, FORMAT, as_vtensor
 from ..utils import ReduceType
-from typing import Tuple, Dict, Callable, Optional
+from typing import Tuple, Dict, Callable, Optional, Union
+from .unified_view import UnifiedCacheView
 
 
 class Reduce(vOp):
@@ -170,7 +172,7 @@ class Reduce(vOp):
     # profile: validate, pick impl/format, and return the provided vTensor
     # --------------------------------------------------------------------- #
     def profile(
-        self, x: vTensor, output: Optional[vTensor], loc: torch.Tensor, ctx: Context
+        self, x: Union[vTensor, UnifiedCacheView], output: Optional[vTensor], loc: torch.Tensor, ctx: Context
     ) -> vTensor:
         r"""
         Validate inputs, resolve the reduction implementation and output
@@ -189,8 +191,9 @@ class Reduce(vOp):
 
         Parameters
         ----------
-        x : vTensor
-            Input tensor with logical shape ``[B, N, D]``.
+        x : vTensor or UnifiedCacheView
+            Input tensor with logical shape ``[B, N, D]``. Can be a UnifiedCacheView
+            for CPU/GPU hybrid memory.
 
         output : Optional[vTensor]
             Optional preallocated output tensor. If ``None``, an internal
@@ -223,7 +226,45 @@ class Reduce(vOp):
         """
         prefix = self._prefix()
 
-        # --- type & rank checks ---
+        # --- NEW: Check if x is UnifiedCacheView ---
+        is_unified = isinstance(x, UnifiedCacheView)
+
+        if is_unified:
+            # Set unified execution mode
+            self.impl = self._unified_reduce
+            self.is_unified_execution = True
+            self.unified_view = x
+            self.output_format = x.format
+
+            # Compute expected output shape
+            exp_N = 1 if self.dim == 1 else x.shape[1]
+            exp_D = 1 if self.dim == 2 else x.shape[2]
+
+            if output is None:
+                # Allocate GPU output buffer
+                B = ctx.max_new_tokens_per_batch * ctx.head_num
+                self.output_buffer = torch.empty(
+                    (B, exp_N, exp_D),
+                    device=x.device,
+                    dtype=x.dtype,
+                )
+                ctx.add_aux_memory(self.output_buffer)
+                return as_vtensor(self.output_buffer, self.output_format)
+            else:
+                # Validate provided output - accept both vTensor and regular Tensor
+                if isinstance(output, vTensor):
+                    output_tensor = output
+                elif isinstance(output, torch.Tensor):
+                    # Wrap regular tensor as vTensor for unified mode
+                    output_tensor = as_vtensor(output, self.output_format)
+                else:
+                    raise TypeError(f"{prefix}output must be vTensor or torch.Tensor, got {type(output)}")
+
+                assert output_tensor.device == x.device, f"{prefix}output must be on same device as input"
+                self.output_buffer = output if isinstance(output, torch.Tensor) else output._t
+                return output_tensor
+
+        # --- EXISTING: type & rank checks for vTensor ---
         assert isinstance(x, vTensor), f"{prefix}x must be vTensor, got {type(x)}"
         assert isinstance(loc, torch.Tensor), f"{prefix}loc must be torch.Tensor, got {type(loc)}"
         assert x.dim() == 3, f"{prefix}x must be 3D, got ndim={x.dim()} shape={tuple(x.shape)}"
@@ -345,11 +386,87 @@ class Reduce(vOp):
             )
             output = self.output_buffer
 
-        # Launch the kernel/implementation: impl(x, output, loc, ctx, dim, reduce_type)
+        # --- NEW: Check for unified execution mode ---
+        if hasattr(self, 'is_unified_execution') and self.is_unified_execution:
+            return self._execute_unified(x, output, loc, ctx)
+
+        # --- EXISTING: Launch the kernel/implementation ---
         self.impl(x, output, loc, ctx, self.dim, self.reduce_type)
         return output
 
-    
+    # --------------------------------------------------------------------- #
+    # Unified CPU/GPU execution methods
+    # --------------------------------------------------------------------- #
+    def _execute_unified(
+        self,
+        x: UnifiedCacheView,
+        output: torch.Tensor,
+        loc: torch.Tensor,
+        ctx: Context
+    ) -> torch.Tensor:
+        """
+        Execute unified CPU/GPU reduction using CUDA kernel.
+
+        This method is called when the input is a UnifiedCacheView. It
+        dispatches to the custom CUDA kernel that can read from both CPU
+        pinned memory and GPU memory via Unified Virtual Addressing.
+
+        Parameters
+        ----------
+        x : UnifiedCacheView
+            Unified cache view with CPU and GPU buffers
+        output : torch.Tensor
+            Output tensor (always GPU memory)
+        loc : torch.Tensor
+            Token position metadata
+        ctx : Context
+            Execution context
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor with reduction results
+        """
+        import vortex_torch_C
+
+        cpu_base = x.get_cpu_base_ptr() if x.has_cpu_pages() else 0
+        gpu_base = x.get_gpu_base_ptr()
+
+        vortex_torch_C.unified_reduce(
+            output,
+            loc,
+            x.cpu_to_gpu_slot_map,
+            cpu_base,
+            gpu_base,
+            x.shape[1],  # x_D0 (page rows)
+            x.shape[2],  # x_D1 (page cols)
+            ctx.head_num,
+            ctx.page_size,
+            self.reduce_type.value,
+            self.dim,
+            x.num_cpu_slots
+        )
+
+        return output
+
+    def _unified_reduce(
+        self,
+        x: torch.Tensor,
+        output: torch.Tensor,
+        loc: torch.LongTensor,
+        ctx: Context,
+        dim: int,
+        reduce_type: ReduceType,
+    ):
+        """
+        Placeholder implementation function for unified path.
+
+        The actual execution happens in _execute_unified(). This method
+        exists to satisfy the impl attribute requirement.
+        """
+        pass  # Execution logic is in _execute_unified()
+
+
 
 class Mean(Reduce):
     r"""

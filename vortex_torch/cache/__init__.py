@@ -29,15 +29,19 @@ from .reduce import Mean, Max, Min, L2Norm
 from .matmul import GeMM
 from .elementwise import Relu, Silu, Sigmoid, Abs, Add_Mul
 from .elementwise_binary import Maximum, Minimum, Multiply, Add
-from .triton_kernels import set_kv_buffer_launcher
+from .triton_kernels import set_kv_buffer_launcher, store_kv_cpu_and_gpu
+from .store_kv import store_kv_unified
+from .copy_sparse_kv import copy_sparse_kv_to_gpu_with_indptr
 
 
 __all__ = [
     "set_kv_buffer_launcher",
+    "store_kv_cpu_and_gpu",
+    "store_kv_unified",
+    "copy_sparse_kv_to_gpu_with_indptr",
     "Mean", "Max", "Min", "L2Norm",
     "GeMM",
     "Relu", "Silu", "Sigmoid", "Abs", "Add_Mul",
     "Maximum", "Minimum", "Multiply", "Add",
     "Context"
 ]
-

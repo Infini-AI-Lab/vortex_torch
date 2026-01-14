@@ -16,7 +16,11 @@ setup(
             sources=[
                 'csrc/register.cc',
                 'csrc/utils_sglang.cu',
-                'csrc/topk.cu'
+                'csrc/topk.cu',
+                'csrc/unified_reduce.cu',
+                'csrc/store_kv_unified.cu',
+                'csrc/warp_lru_cache.cu',
+                'csrc/copy_sparse_kv.cu'
             ],
             include_dirs=['csrc'],
             extra_compile_args={
@@ -24,14 +28,11 @@ setup(
                 'nvcc': [
                     '-O3',
                     '-gencode=arch=compute_89,code=sm_89',
-                    '-gencode=arch=compute_90,code=sm_90'
+                    '-gencode=arch=compute_90,code=sm_90',
+                    '-gencode=arch=compute_80,code=sm_80'
                 ],
             },
         ),
     ],
     cmdclass={'build_ext': BuildExtension},
 )
-
-
-
-

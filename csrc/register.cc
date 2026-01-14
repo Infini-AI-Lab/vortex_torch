@@ -11,4 +11,7 @@ PYBIND11_MODULE(vortex_torch_C, m){
         m.def("sglang_plan_decode_fa3",         &sglang_plan_decode_fa3);
         m.def("sglang_plan_prefill_fa3",        &sglang_plan_prefill_fa3);
         m.def("Chunkwise_HN2NH_Transpose_FA3",  &Chunkwise_HN2NH_Transpose_FA3);
+        m.def("unified_reduce",                 &unified_reduce);
+        m.def("store_kv_unified",               &store_kv_unified);
+        m.def("copy_sparse_kv_to_gpu_with_indptr", &copy_sparse_kv_to_gpu_with_indptr);
 }
