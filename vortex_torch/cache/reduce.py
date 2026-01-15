@@ -386,8 +386,8 @@ class Reduce(vOp):
             )
             output = self.output_buffer
 
-        # --- NEW: Check for unified execution mode ---
-        if hasattr(self, 'is_unified_execution') and self.is_unified_execution:
+        # --- Check for unified execution mode at runtime ---
+        if isinstance(x, UnifiedCacheView):
             return self._execute_unified(x, output, loc, ctx)
 
         # --- EXISTING: Launch the kernel/implementation ---
