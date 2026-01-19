@@ -56,9 +56,9 @@ __global__ void unified_reduce_kernel(
     // Compute base pointer for this page (UVA enables CPU access)
     const __nv_bfloat16* page_base;
     if (is_cpu_page) {
-        page_base = (const __nv_bfloat16*)cpu_buffer_base + (actual_slot * x_D0 * x_D1);
+        page_base = (const __nv_bfloat16*)cpu_buffer_base + ((int64_t)actual_slot * x_D0 * x_D1);
     } else {
-        page_base = (const __nv_bfloat16*)gpu_buffer_base + (actual_slot * x_D0 * x_D1);
+        page_base = (const __nv_bfloat16*)gpu_buffer_base + ((int64_t)actual_slot * x_D0 * x_D1);
     }
 
     // Initialize accumulator based on reduction type
@@ -100,7 +100,7 @@ __global__ void unified_reduce_kernel(
             }
 
             // Write output (always to GPU memory)
-            output[page_id * x_D1 + col] = __float2bfloat16(accum);
+            output[(int64_t)page_id * x_D1 + col] = __float2bfloat16(accum);
         }
 
     } else {  // DIM == 2
@@ -133,7 +133,7 @@ __global__ void unified_reduce_kernel(
                 accum = sqrtf(accum);
             }
 
-            output[page_id * x_D0 + row] = __float2bfloat16(accum);
+            output[(int64_t)page_id * x_D0 + row] = __float2bfloat16(accum);
         }
     }
 }

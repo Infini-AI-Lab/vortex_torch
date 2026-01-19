@@ -58,16 +58,16 @@ __global__ void store_kv_unified_kernel(
     __nv_bfloat16* v_page_base;
 
     if (is_cpu_page) {
-        k_page_base = ((__nv_bfloat16*)cpu_k_base) + (actual_slot * page_size * head_dim);
-        v_page_base = ((__nv_bfloat16*)cpu_v_base) + (actual_slot * page_size * head_dim);
+        k_page_base = ((__nv_bfloat16*)cpu_k_base) + ((int64_t)actual_slot * page_size * head_dim);
+        v_page_base = ((__nv_bfloat16*)cpu_v_base) + ((int64_t)actual_slot * page_size * head_dim);
     } else {
-        k_page_base = ((__nv_bfloat16*)gpu_k_base) + (actual_slot * page_size * head_dim);
-        v_page_base = ((__nv_bfloat16*)gpu_v_base) + (actual_slot * page_size * head_dim);
+        k_page_base = ((__nv_bfloat16*)gpu_k_base) + ((int64_t)actual_slot * page_size * head_dim);
+        v_page_base = ((__nv_bfloat16*)gpu_v_base) + ((int64_t)actual_slot * page_size * head_dim);
     }
 
     // Compute source offset in input tensors
     // Input layout: [num_tokens, num_heads, head_dim]
-    const int input_offset = (token_id * num_kv_heads + head_id) * head_dim;
+    const int64_t input_offset = ((int64_t)token_id * num_kv_heads + head_id) * head_dim;
 
     // Compute destination offset in page
     // Page layout: [page_size, head_dim]
