@@ -46,7 +46,7 @@ def allocate_pages_lru(
         num_kv_heads: Number of KV heads
         max_num_pages: Maximum number of pages (fixed for CUDA graph)
         max_hash_attempts: Maximum hash attempts for eviction
-        use_hive_lockfree: Deprecated - use allocate_pages_hive() for the new kernel
+        use_hive_lockfree: Deprecated - use allocate_pages_hybrid() for the new kernel
     """
     import vortex_torch_C
 
@@ -71,7 +71,7 @@ def allocate_pages_lru(
     )
 
 
-def allocate_pages_hive(
+def allocate_pages_hybrid(
     sparse_kv_indices: torch.Tensor,
     sparse_kv_indptr: torch.Tensor,
     cpu_to_gpu_slot_map: torch.Tensor,
@@ -90,7 +90,7 @@ def allocate_pages_hive(
     max_hash_attempts: int = 30
 ) -> None:
     """
-    Hive-style lock-free LRU allocation kernel with seqlock + timestamp LRU.
+    Hybrid lock-free LRU allocation kernel with seqlock + timestamp LRU.
 
     This kernel uses:
     - Seqlock per set to ensure only one warp mutates a set at a time
@@ -120,7 +120,7 @@ def allocate_pages_hive(
 
     indptr_last_idx = batch_size * num_kv_heads
 
-    vortex_torch_C.allocate_pages_hive_lockfree(
+    vortex_torch_C.allocate_pages_hybrid(
         sparse_kv_indices,
         sparse_kv_indptr,
         indptr_last_idx,
@@ -139,7 +139,7 @@ def allocate_pages_hive(
     )
 
 
-def init_hive_structures(
+def init_hybrid_structures(
     slot_stamps: torch.Tensor,
     set_clock: torch.Tensor,
     set_version: torch.Tensor,
@@ -147,7 +147,7 @@ def init_hive_structures(
     num_sets: int
 ) -> None:
     """
-    Initialize Hive data structures. Call once at setup time.
+    Initialize hybrid data structures. Call once at setup time.
 
     Args:
         slot_stamps: Per-slot timestamps to initialize (uint32, [num_slots])
@@ -158,7 +158,7 @@ def init_hive_structures(
     """
     import vortex_torch_C
 
-    vortex_torch_C.init_hive_structures(
+    vortex_torch_C.init_hybrid_structures(
         slot_stamps,
         set_clock,
         set_version,
@@ -185,7 +185,7 @@ def copy_kv(
     """
     Copy kernel - copies KV data from CPU to GPU based on allocation results.
 
-    Assumes allocate_pages_lru() or allocate_pages_hive() has been called first to set up:
+    Assumes allocate_pages_lru() or allocate_pages_hybrid() has been called first to set up:
     - dst_gpu_slots: destination GPU slots
     - owners_bitmap: which pages need copying
     - evicted_cpu_pages: which pages need eviction (GPU->CPU)

@@ -20,7 +20,7 @@ setup(
                 'csrc/unified_reduce.cu',
                 'csrc/store_kv_unified.cu',
                 'csrc/warp_lru_cache.cu',
-                'csrc/hive_lru_cache.cu',
+                'csrc/hybrid_lru_cache.cu',
                 'csrc/copy_sparse_kv.cu'
             ],
             include_dirs=['csrc'],

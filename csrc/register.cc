@@ -14,7 +14,7 @@ PYBIND11_MODULE(vortex_torch_C, m){
         m.def("unified_reduce",                 &unified_reduce);
         m.def("store_kv_unified",               &store_kv_unified);
         m.def("allocate_pages_lru_warp_with_indptr", &allocate_pages_lru_warp_with_indptr);
-        m.def("allocate_pages_hive_lockfree", &allocate_pages_hive_lockfree);
-        m.def("init_hive_structures",         &init_hive_structures);
+        m.def("allocate_pages_hybrid", &allocate_pages_hybrid);
+        m.def("init_hybrid_structures",         &init_hybrid_structures);
         m.def("copy_kv",                        &copy_kv);
 }
