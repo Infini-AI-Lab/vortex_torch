@@ -151,14 +151,12 @@ struct SetContextWarp {
   __device__ void Lock(uint32_t lane_id) { mutex->Lock(lane_id); }
   __device__ void Unlock(uint32_t lane_id) { mutex->Unlock(lane_id); }
 
-  // Members for original mode
-  int32_t* cpu_to_gpu_slot_map = nullptr;  // Global mapping [MAX_PAGE_ID]
-  int32_t* gpu_to_cpu_page_map = nullptr;  // Per-set mapping [num_ways]
-
-  // Common members
+  // Members
+  int32_t* cpu_to_gpu_slot_map;  // Global mapping [MAX_PAGE_ID]
+  int32_t* gpu_to_cpu_page_map;  // Per-set mapping [num_ways]
   uint8_t* slot_ages;            // Per-set ages [num_ways]
   WarpMutexSemaphoreImpl* mutex; // Per-set mutex
-  bool* used_this_round;         // Per-set bitmap [num_ways] - tracks slots used in current allocation round
+  bool* used_this_round;         // Per-set bitmap [num_ways]
   uint32_t set_base;             // Base slot index for this set
   uint32_t num_ways;
 };
@@ -354,13 +352,13 @@ __global__ void allocate_pages_lru_warp_with_evict_kernel(
 static WarpMutexSemaphoreImpl* cached_mutexes = nullptr;
 static int32_t cached_num_sets = 0;
 
-// Cleanup function to free cached mutexes on program exit
+// Cleanup function to free cached resources on program exit
 static void cleanup_warp_allocator_cache() {
     if (cached_mutexes != nullptr) {
         cudaFree(cached_mutexes);
         cached_mutexes = nullptr;
-        cached_num_sets = 0;
     }
+    cached_num_sets = 0;
 }
 
 // CUDA graph compatible allocation - reads num_pages from sparse_indptr on GPU
@@ -556,6 +554,203 @@ __global__ void allocate_pages_lru_warp_with_evict_indptr_kernel(
     }
 }
 
+// =============================================================================
+// Combined allocation kernel - merges no-evict and with-evict stages
+// This eliminates one kernel launch overhead (~10-15us)
+// =============================================================================
+__global__ void allocate_pages_lru_combined_indptr_kernel(
+    const int32_t* __restrict__ src_page_ids,
+    int32_t* __restrict__ cpu_to_gpu_slot_map,
+    int32_t* __restrict__ gpu_to_cpu_page_map,
+    uint8_t* __restrict__ slot_ages,
+    WarpMutexSemaphoreImpl* __restrict__ set_mutexes,
+    bool* __restrict__ set_slot_used_bitmap,
+    int32_t* __restrict__ dst_staging_slots,
+    bool* __restrict__ owners_bitmap,
+    int32_t* __restrict__ evicted_cpu_pages,
+    int32_t* __restrict__ overflow_flag,
+    const int32_t* __restrict__ sparse_indptr,
+    int32_t indptr_last_idx,
+    int32_t MAX_PAGE_ID,
+    int32_t num_sets,
+    int32_t WAYS,
+    int32_t MAX_HASH_ATTEMPTS
+) {
+    // Read actual N from GPU memory (no CPU sync!)
+    const int32_t N = sparse_indptr[indptr_last_idx];
+
+    const uint32_t global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t global_warp_id = global_thread_id / kWarpSize;
+    const uint32_t lane_id = global_thread_id % kWarpSize;
+    const uint32_t num_warps = gridDim.x * blockDim.x / kWarpSize;
+
+    // Each warp processes batches of kWarpSize requests
+    for (uint32_t batch_offset = global_warp_id * kWarpSize; batch_offset < N;
+         batch_offset += num_warps * kWarpSize) {
+        const uint32_t n_batch_keys = min(kWarpSize, N - (int)batch_offset);
+
+        // All lanes iterate through each request in the batch
+        for (uint32_t i = 0; i < n_batch_keys; ++i) {
+            const uint32_t key_idx = batch_offset + i;
+            const int32_t cpu_slot = src_page_ids[key_idx];
+
+            // Validate cpu_slot
+            if (cpu_slot < 0 || cpu_slot >= MAX_PAGE_ID) {
+                if (lane_id == 0) {
+                    owners_bitmap[key_idx] = false;
+                    dst_staging_slots[key_idx] = -1;
+                }
+                __syncwarp();
+                continue;
+            }
+
+            // =====================================================================
+            // Phase 1: Try allocation without eviction (fast path)
+            // =====================================================================
+            uint64_t h = hash_func_0((uint64_t)cpu_slot);
+            uint32_t candidate_set = (uint32_t)(h % (uint64_t)num_sets);
+
+            SetContextWarp set_ctx(
+                cpu_to_gpu_slot_map,
+                gpu_to_cpu_page_map,
+                slot_ages,
+                set_mutexes,
+                set_slot_used_bitmap,
+                candidate_set,
+                WAYS);
+
+            set_ctx.Lock(lane_id);
+
+            bool is_owner = false;
+            int insert_gpu_slot = set_ctx.InsertNoEvict(lane_id, cpu_slot, MAX_PAGE_ID, is_owner);
+
+            set_ctx.Unlock(lane_id);
+
+            // Fast path succeeded - allocation done without eviction
+            if (insert_gpu_slot >= 0) {
+                if (lane_id == 0) {
+                    owners_bitmap[key_idx] = is_owner;
+                    dst_staging_slots[key_idx] = insert_gpu_slot;
+                    // evicted_cpu_pages[key_idx] already initialized to -1
+                }
+                __syncwarp();
+                continue;
+            }
+
+            // =====================================================================
+            // Phase 2: Slow path - need eviction
+            // CRITICAL: First check if another warp already allocated this page
+            // This handles the case of duplicate page IDs in the request list
+            // =====================================================================
+            int32_t existing_slot = cpu_to_gpu_slot_map[cpu_slot];
+            if (existing_slot >= 0) {
+                // Another warp already allocated this page - just use their slot
+                if (lane_id == 0) {
+                    owners_bitmap[key_idx] = false;  // Not the owner
+                    dst_staging_slots[key_idx] = existing_slot;
+                    // evicted_cpu_pages[key_idx] already initialized to -1
+                }
+                __syncwarp();
+                continue;
+            }
+
+            // Try multiple hash functions to find a set with evictable slots
+            bool allocated = false;
+            int32_t final_gpu_slot = -1;
+            int32_t final_evicted_page = -1;
+
+            for (int hash_attempt = 0; hash_attempt < MAX_HASH_ATTEMPTS && !allocated; ++hash_attempt) {
+                uint64_t h_evict = apply_hash((uint64_t)cpu_slot, hash_attempt);
+                uint32_t evict_set = (uint32_t)(h_evict % (uint64_t)num_sets);
+
+                SetContextWarp evict_ctx(
+                    cpu_to_gpu_slot_map,
+                    gpu_to_cpu_page_map,
+                    slot_ages,
+                    set_mutexes,
+                    set_slot_used_bitmap,
+                    evict_set,
+                    WAYS);
+
+                evict_ctx.Lock(lane_id);
+
+                // Re-check if another warp allocated this page while we were waiting
+                // This prevents the race where two warps try to evict for the same page
+                int32_t recheck_slot = cpu_to_gpu_slot_map[cpu_slot];
+                if (recheck_slot >= 0) {
+                    // Another warp allocated this page - use their slot
+                    evict_ctx.Unlock(lane_id);
+                    if (lane_id == 0) {
+                        is_owner = false;
+                        final_gpu_slot = recheck_slot;
+                        final_evicted_page = -1;
+                    }
+                    allocated = true;
+                    break;
+                }
+
+                bool lane_is_owner = false;
+                int32_t lane_evicted_page = -1;
+                int evict_slot = evict_ctx.InsertWithEvict(lane_id, cpu_slot, MAX_PAGE_ID, lane_is_owner, lane_evicted_page);
+
+                if (evict_slot >= 0) {
+                    if (lane_id == 0) {
+                        is_owner = lane_is_owner;
+                        final_gpu_slot = evict_slot;
+                        final_evicted_page = lane_evicted_page;
+                    }
+                    allocated = true;
+                }
+
+                evict_ctx.Unlock(lane_id);
+
+                if (allocated) break;
+            }
+
+            if (lane_id == 0) {
+                if (!allocated) {
+                    // All hash attempts failed - overflow
+                    atomicMax(overflow_flag, 1);
+                    owners_bitmap[key_idx] = false;
+                    dst_staging_slots[key_idx] = -1;
+                } else {
+                    owners_bitmap[key_idx] = is_owner;
+                    dst_staging_slots[key_idx] = final_gpu_slot;
+                    evicted_cpu_pages[key_idx] = final_evicted_page;
+                }
+            }
+            __syncwarp();
+        }
+    }
+}
+
+// Fused kernel to zero bitmaps and initialize outputs in one launch
+__global__ void zero_allocation_bitmaps_kernel(
+    bool* __restrict__ set_slot_used_bitmap,
+    int32_t* __restrict__ evicted_cpu_pages,
+    int32_t* __restrict__ overflow_flag,
+    int32_t num_slots,
+    int32_t max_num_pages
+) {
+    const uint32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t stride = gridDim.x * blockDim.x;
+
+    // Zero slot bitmap
+    for (int32_t i = tid; i < num_slots; i += stride) {
+        set_slot_used_bitmap[i] = false;
+    }
+
+    // Initialize evicted_cpu_pages to -1 (invalid)
+    for (int32_t i = tid; i < max_num_pages; i += stride) {
+        evicted_cpu_pages[i] = -1;
+    }
+
+    // Zero overflow_flag
+    if (tid == 0) {
+        *overflow_flag = 0;
+    }
+}
+
 // CUDA graph compatible launcher using sparse_indptr to get N
 void allocate_pages_lru_warp_with_indptr(
     at::Tensor src_page_ids,
@@ -565,7 +760,7 @@ void allocate_pages_lru_warp_with_indptr(
     at::Tensor gpu_to_cpu_page_map,
     at::Tensor slot_ages,
     at::Tensor set_slot_used_bitmap,
-    at::Tensor needs_eviction_bitmap,
+    at::Tensor needs_eviction_bitmap,  // Kept for API compatibility, not used in combined kernel
     at::Tensor dst_staging_slots,
     at::Tensor owners_bitmap,
     at::Tensor evicted_cpu_pages,
@@ -576,6 +771,7 @@ void allocate_pages_lru_warp_with_indptr(
     const int32_t MAX_PAGE_ID = cpu_to_gpu_slot_map.size(0);
     const int32_t WAYS = 32;
     const int32_t num_sets = gpu_to_cpu_page_map.size(0) / WAYS;
+    const int32_t num_slots = num_sets * WAYS;
 
     WarpMutexSemaphoreImpl* set_mutexes = cached_mutexes;
 
@@ -601,10 +797,8 @@ void allocate_pages_lru_warp_with_indptr(
         }
     }
 
-    // Zero out the bitmaps and overflow_flag before kernel launch
-    set_slot_used_bitmap.zero_();
-    needs_eviction_bitmap.zero_();
-    overflow_flag.zero_();
+    // IMPORTANT: Get current CUDA stream for CUDA graph compatibility
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
     // Launch configuration with FIXED grid size for CUDA graph compatibility
     const int warps_per_block = 4;
@@ -612,30 +806,17 @@ void allocate_pages_lru_warp_with_indptr(
     const int num_warps = (max_num_pages + kWarpSize - 1) / kWarpSize;
     const int num_blocks = (num_warps + warps_per_block - 1) / warps_per_block;
 
-    // IMPORTANT: Get current CUDA stream for CUDA graph compatibility
-    // Kernels must be launched on the same stream that PyTorch is capturing
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-    // Stage 1: Allocate without eviction
-    allocate_pages_lru_warp_no_evict_indptr_kernel<<<num_blocks, threads_per_block, 0, stream>>>(
-        src_page_ids.data_ptr<int32_t>(),
-        cpu_to_gpu_slot_map.data_ptr<int32_t>(),
-        gpu_to_cpu_page_map.data_ptr<int32_t>(),
-        slot_ages.data_ptr<uint8_t>(),
-        set_mutexes,
+    // Zero bitmaps and initialize outputs in one kernel launch
+    zero_allocation_bitmaps_kernel<<<num_blocks, threads_per_block, 0, stream>>>(
         set_slot_used_bitmap.data_ptr<bool>(),
-        dst_staging_slots.data_ptr<int32_t>(),
-        owners_bitmap.data_ptr<bool>(),
-        needs_eviction_bitmap.data_ptr<bool>(),
-        sparse_indptr.data_ptr<int32_t>(),
-        indptr_last_idx,
-        MAX_PAGE_ID,
-        num_sets,
-        WAYS
+        evicted_cpu_pages.data_ptr<int32_t>(),
+        overflow_flag.data_ptr<int32_t>(),
+        num_slots,
+        max_num_pages
     );
 
-    // Stage 2: Allocate with eviction
-    allocate_pages_lru_warp_with_evict_indptr_kernel<<<num_blocks, threads_per_block, 0, stream>>>(
+    // Combined allocation kernel
+    allocate_pages_lru_combined_indptr_kernel<<<num_blocks, threads_per_block, 0, stream>>>(
         src_page_ids.data_ptr<int32_t>(),
         cpu_to_gpu_slot_map.data_ptr<int32_t>(),
         gpu_to_cpu_page_map.data_ptr<int32_t>(),
@@ -644,7 +825,6 @@ void allocate_pages_lru_warp_with_indptr(
         set_slot_used_bitmap.data_ptr<bool>(),
         dst_staging_slots.data_ptr<int32_t>(),
         owners_bitmap.data_ptr<bool>(),
-        needs_eviction_bitmap.data_ptr<bool>(),
         evicted_cpu_pages.data_ptr<int32_t>(),
         overflow_flag.data_ptr<int32_t>(),
         sparse_indptr.data_ptr<int32_t>(),

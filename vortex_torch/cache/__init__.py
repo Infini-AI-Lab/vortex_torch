@@ -31,14 +31,17 @@ from .elementwise import Relu, Silu, Sigmoid, Abs, Add_Mul
 from .elementwise_binary import Maximum, Minimum, Multiply, Add
 from .triton_kernels import set_kv_buffer_launcher, store_kv_cpu_and_gpu
 from .store_kv import store_kv_unified
-from .copy_sparse_kv import copy_sparse_kv_to_gpu_with_indptr
+from .copy_sparse_kv import allocate_pages_lru, allocate_pages_hive, init_hive_structures, copy_kv
 
 
 __all__ = [
     "set_kv_buffer_launcher",
     "store_kv_cpu_and_gpu",
     "store_kv_unified",
-    "copy_sparse_kv_to_gpu_with_indptr",
+    "allocate_pages_lru",
+    "allocate_pages_hive",
+    "init_hive_structures",
+    "copy_kv",
     "Mean", "Max", "Min", "L2Norm",
     "GeMM",
     "Relu", "Silu", "Sigmoid", "Abs", "Add_Mul",
