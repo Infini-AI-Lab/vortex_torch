@@ -196,7 +196,7 @@ void copy_kv(
     int32_t max_num_pages
 );
 
-// Hybrid lock-free LRU allocation kernel (with seqlock + timestamp LRU)
+// Hive-style lock-free LRU allocation kernel (with seqlock + timestamp LRU)
 void allocate_pages_hybrid(
     at::Tensor src_page_ids,
     at::Tensor sparse_indptr,
@@ -215,7 +215,7 @@ void allocate_pages_hybrid(
     int32_t MAX_HASH_ATTEMPTS
 );
 
-// Helper function to initialize hybrid structures (call once at setup)
+// Helper function to initialize Hive structures (call once at setup)
 void init_hybrid_structures(
     at::Tensor slot_stamps,
     at::Tensor set_clock,

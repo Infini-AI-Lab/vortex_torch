@@ -4,8 +4,19 @@
 constexpr int kWarpSize = 32;
 constexpr uint32_t kFullMask = 0xFFFFFFFFU;
 
-__device__ __forceinline__ int32_t atomic_load(int32_t* ptr) { return atomicAdd(ptr, 0); }
+// Atomic load helper for int32
+__device__ __forceinline__ int32_t atomic_load(int32_t* ptr) {
+    return atomicAdd(ptr, 0);
+}
 
+// Atomic load helper for uint32
+__device__ __forceinline__ uint32_t atomic_load_u32(uint32_t* ptr) {
+    return atomicAdd(ptr, 0);
+}
+
+// =============================================================================
+// Lock-free warp-cooperative allocation kernel with hybrid lock-free/seqlock
+// =============================================================================
 __global__ void allocate_pages_hybrid_kernel(
     const int32_t* __restrict__ src_page_ids,
     int32_t* __restrict__ cpu_to_gpu_slot_map,
@@ -26,190 +37,293 @@ __global__ void allocate_pages_hybrid_kernel(
     int32_t MAX_HASH_ATTEMPTS
 ) {
     const int32_t N = sparse_indptr[indptr_last_idx];
-    const uint32_t global_warp_id = (blockIdx.x * blockDim.x + threadIdx.x) / kWarpSize;
-    const uint32_t lane_id = threadIdx.x % kWarpSize;
+
+    const uint32_t global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+    const uint32_t global_warp_id = global_thread_id / kWarpSize;
+    const uint32_t lane_id = global_thread_id % kWarpSize;
     const uint32_t num_warps = gridDim.x * blockDim.x / kWarpSize;
 
-    // Warp-stride loop
+    // Each warp processes one page at a time
     for (uint32_t key_idx = global_warp_id; key_idx < N; key_idx += num_warps) {
         const int32_t cpu_slot = src_page_ids[key_idx];
-        bool valid_req = (cpu_slot >= 0 && cpu_slot < MAX_PAGE_ID);
-
-        // Result state
-        int32_t res_slot = -1, res_evict = -1;
-        bool res_owner = false, done = !__shfl_sync(kFullMask, valid_req, 0);
 
         // =====================================================================
-        // PHASE 1: OPTIMISTIC CHECK (Optimized: Lane 0 Access Only)
+        // Validate cpu_slot (warp-uniform)
         // =====================================================================
-        
-        // 1. Initial Map Check (Lane 0 loads, Broadcasts)
-        int32_t existing = -1;
-        if (lane_id == 0) existing = atomic_load(&cpu_to_gpu_slot_map[cpu_slot]);
-        existing = __shfl_sync(kFullMask, existing, 0);
+        bool valid = (cpu_slot >= 0 && cpu_slot < MAX_PAGE_ID);
+        valid = __shfl_sync(kFullMask, valid ? 1 : 0, 0);
 
-        if (!done && existing >= 0) {
-            uint32_t set_idx = existing / WAYS;
-            
-            // 2. Lock Version Check (Lane 0 loads, Broadcasts)
-            uint32_t v1 = 1; // Default to locked/odd to fail safely if not loaded
-            if (lane_id == 0) v1 = atomic_load((int32_t*)&set_version[set_idx]);
-            v1 = __shfl_sync(kFullMask, v1, 0);
-            
-            // Only proceed if unlocked (even)
-            if ((v1 & 1) == 0) {
-                // 3. Verify Reverse Map (Lane 0 loads, Broadcasts)
-                int32_t content = -1;
-                if (lane_id == 0) content = atomic_load(&gpu_to_cpu_page_map[existing]);
-                
-                if (__shfl_sync(kFullMask, content, 0) == cpu_slot) {
-                    // Optimistic Update (Lane 0 Only)
-                    if (lane_id == 0) {
-                        atomicAdd(&set_clock[set_idx], 1);
-                        // Approximate stamp read is fine here
-                        slot_stamps[existing] = atomicAdd(&set_clock[set_idx], 0); 
-                        atomicOr(&set_used_mask[set_idx], 1u << (existing % WAYS));
-                    }
-                    __syncwarp();
-                    __threadfence(); // Mandatory memory barrier for race fix
+        if (!valid) {
+            if (lane_id == 0) {
+                owners_bitmap[key_idx] = false;
+                dst_staging_slots[key_idx] = -1;
+            }
+            __syncwarp();
+            continue;
+        }
 
-                    // 4. Post-Update Lock Check (Lane 0 loads, Broadcasts)
-                    uint32_t v2 = 0;
-                    if (lane_id == 0) v2 = atomic_load((int32_t*)&set_version[set_idx]);
-                    v2 = __shfl_sync(kFullMask, v2, 0);
+        // Result variables
+        int32_t result_slot = -1;
+        bool result_is_owner = false;
+        int32_t result_evicted = -1;
+        bool done = false;
 
-                    // If version matched (no eviction occurred during update)
-                    if (v1 == v2) {
-                        // 5. Final Verify (Lane 0 loads, Broadcasts)
-                        if (lane_id == 0) content = atomic_load(&gpu_to_cpu_page_map[existing]);
-                        
-                        if (__shfl_sync(kFullMask, content, 0) == cpu_slot) {
-                            res_slot = existing;
-                            done = true;
-                        }
-                    }
+        // =====================================================================
+        // PHASE 1: LOCK-FREE CACHE HIT CHECK
+        // Fast path - no seqlock needed for reads + atomic timestamp update
+        // =====================================================================
+        int32_t existing_slot = atomic_load(&cpu_to_gpu_slot_map[cpu_slot]);
+        existing_slot = __shfl_sync(kFullMask, existing_slot, 0);
+
+        if (existing_slot >= 0) {
+            // Verify the reverse mapping
+            int32_t slot_content = atomic_load(&gpu_to_cpu_page_map[existing_slot]);
+            slot_content = __shfl_sync(kFullMask, slot_content, 0);
+
+            if (slot_content == cpu_slot) {
+                // Cache hit! Update timestamp and mark used (lock-free)
+                uint32_t existing_set = existing_slot / WAYS;
+                uint32_t existing_way = existing_slot % WAYS;
+
+                if (lane_id == 0) {
+                    // Atomic timestamp update - no lock needed
+                    uint32_t new_stamp = atomicAdd(&set_clock[existing_set], 1);
+                    slot_stamps[existing_slot] = new_stamp;
+                    atomicOr(&set_used_mask[existing_set], 1u << existing_way);
+                }
+                __syncwarp();
+
+                // Re-verify (in case we raced with eviction)
+                slot_content = atomic_load(&gpu_to_cpu_page_map[existing_slot]);
+                slot_content = __shfl_sync(kFullMask, slot_content, 0);
+
+                if (slot_content == cpu_slot) {
+                    result_slot = existing_slot;
+                    result_is_owner = false;
+                    done = true;
                 }
             }
         }
 
-        // =====================================================================
-        // PHASE 2: LOCKED ALLOCATION (Optimized)
-        // =====================================================================
-        for (int attempt = 0; attempt < MAX_HASH_ATTEMPTS && !__shfl_sync(kFullMask, done, 0); ++attempt) {
-            uint64_t h = apply_hash((uint64_t)cpu_slot, attempt);
-            uint32_t set = (uint32_t)(h % num_sets);
-            uint32_t base = set * WAYS;
-
-            // Try Acquire Lock (Lane 0 Only)
-            bool locked = false;
+        // Broadcast done status
+        done = __shfl_sync(kFullMask, done ? 1 : 0, 0);
+        if (done) {
             if (lane_id == 0) {
-                uint32_t v = atomic_load((int32_t*)&set_version[set]);
-                if (!(v & 1) && atomicCAS(&set_version[set], v, v + 1) == v) locked = true;
+                owners_bitmap[key_idx] = result_is_owner;
+                dst_staging_slots[key_idx] = result_slot;
             }
-            if (!__shfl_sync(kFullMask, locked, 0)) continue; // Spin/Retry next hash
+            __syncwarp();
+            continue;
+        }
 
-            // --- CRITICAL SECTION ---
-            
-            // 6. Re-check Map inside Lock (Lane 0 loads, Broadcasts)
-            // Fixes redundant atomics from all lanes
-            if (lane_id == 0) existing = atomic_load(&cpu_to_gpu_slot_map[cpu_slot]);
-            existing = __shfl_sync(kFullMask, existing, 0);
+        // =====================================================================
+        // PHASE 2: SEQLOCK-PROTECTED ALLOCATION
+        // Slow path - need exclusive access to modify slot ownership
+        // =====================================================================
+        for (int hash_attempt = 0; hash_attempt < MAX_HASH_ATTEMPTS && !done; ++hash_attempt) {
+            uint64_t h = apply_hash((uint64_t)cpu_slot, hash_attempt);
+            uint32_t target_set = (uint32_t)(h % (uint64_t)num_sets);
+            uint32_t set_base = target_set * WAYS;
 
-            if (existing >= 0) {
-                if (lane_id == 0) atomicAdd(&set_version[set], 1); // Release
-                res_slot = existing; 
-                done = true; 
+            // Quick re-check if someone else allocated it (lock-free)
+            existing_slot = atomic_load(&cpu_to_gpu_slot_map[cpu_slot]);
+            existing_slot = __shfl_sync(kFullMask, existing_slot, 0);
+
+            if (existing_slot >= 0) {
+                int32_t slot_content = atomic_load(&gpu_to_cpu_page_map[existing_slot]);
+                slot_content = __shfl_sync(kFullMask, slot_content, 0);
+
+                if (slot_content == cpu_slot) {
+                    result_slot = existing_slot;
+                    result_is_owner = false;
+                    done = true;
+                    break;
+                }
+            }
+
+            // Acquire seqlock for this set
+            uint32_t v0 = 0;
+            bool got_lock = false;
+            if (lane_id == 0) {
+                for (int spin = 0; spin < 1000; ++spin) {
+                    v0 = atomic_load_u32(&set_version[target_set]);
+                    if ((v0 & 1) == 0) {
+                        if (atomicCAS(&set_version[target_set], v0, v0 + 1) == v0) {
+                            got_lock = true;
+                            break;
+                        }
+                    }
+                    __threadfence();
+                }
+            }
+            got_lock = __shfl_sync(kFullMask, got_lock ? 1 : 0, 0);
+
+            if (!got_lock) {
+                continue;  // Try next set
+            }
+
+            // === CRITICAL SECTION START ===
+
+            // Re-check inside lock
+            existing_slot = atomic_load(&cpu_to_gpu_slot_map[cpu_slot]);
+            existing_slot = __shfl_sync(kFullMask, existing_slot, 0);
+
+            if (existing_slot >= 0) {
+                int32_t slot_content = atomic_load(&gpu_to_cpu_page_map[existing_slot]);
+                slot_content = __shfl_sync(kFullMask, slot_content, 0);
+
+                if (slot_content == cpu_slot) {
+                    // Release lock and use existing
+                    if (lane_id == 0) {
+                        atomicAdd(&set_version[target_set], 1);
+                    }
+                    __syncwarp();
+                    result_slot = existing_slot;
+                    result_is_owner = false;
+                    done = true;
+                    break;
+                }
+            }
+
+            // Read slot data for this set
+            int32_t lane_page = gpu_to_cpu_page_map[set_base + lane_id];
+            uint32_t lane_stamp = slot_stamps[set_base + lane_id];
+            uint32_t used_mask = set_used_mask[target_set];
+            bool lane_used = (used_mask >> lane_id) & 1;
+
+            // Find empty slots
+            bool lane_empty = (lane_page == -1);
+            unsigned empty_mask = __ballot_sync(kFullMask, lane_empty);
+
+            int32_t candidate_slot = -1;
+            int32_t evicted_page = -1;
+
+            if (empty_mask != 0) {
+                int candidate_way = __ffs(empty_mask) - 1;
+                candidate_slot = set_base + candidate_way;
+            } else {
+                // Need to evict: find slot with minimum stamp that isn't used
+                bool lane_evictable = !lane_used;
+                unsigned evictable_mask = __ballot_sync(kFullMask, lane_evictable);
+
+                if (evictable_mask != 0) {
+                    // Warp reduction to find minimum stamp
+                    uint32_t my_stamp = lane_evictable ? lane_stamp : UINT32_MAX;
+
+                    for (int offset = 16; offset > 0; offset /= 2) {
+                        uint32_t other_stamp = __shfl_xor_sync(kFullMask, my_stamp, offset);
+                        if (other_stamp < my_stamp) {
+                            my_stamp = other_stamp;
+                        }
+                    }
+                    uint32_t min_stamp = __shfl_sync(kFullMask, my_stamp, 0);
+
+                    // Find which lane has the minimum
+                    bool has_min = lane_evictable && (lane_stamp == min_stamp);
+                    unsigned min_mask = __ballot_sync(kFullMask, has_min);
+                    if (min_mask != 0) {
+                        int best_way = __ffs(min_mask) - 1;
+                        candidate_slot = set_base + best_way;
+                        evicted_page = __shfl_sync(kFullMask, lane_page, best_way);
+                    }
+                }
+            }
+
+            // Broadcast candidate
+            candidate_slot = __shfl_sync(kFullMask, candidate_slot, 0);
+            evicted_page = __shfl_sync(kFullMask, evicted_page, 0);
+
+            if (candidate_slot < 0) {
+                // No available slot, release lock and try next set
+                if (lane_id == 0) {
+                    atomicAdd(&set_version[target_set], 1);
+                }
+                __syncwarp();
                 continue;
             }
 
-            // 7. Candidate Selection (Coalesced Loads - safe for all lanes)
-            int32_t pg = gpu_to_cpu_page_map[base + lane_id];
-            bool is_empty = (pg == -1);
-            bool is_used  = (set_used_mask[set] >> lane_id) & 1;
-            uint32_t stamp = slot_stamps[base + lane_id];
-            
-            uint32_t min_stamp = is_used ? 0xFFFFFFFF : stamp;
-            
-            // Warp reduction for LRU
-            for (int i = 16; i > 0; i /= 2) min_stamp = min(min_stamp, __shfl_xor_sync(kFullMask, min_stamp, i));
-            min_stamp = __shfl_sync(kFullMask, min_stamp, 0);
+            // Perform the allocation (only lane 0)
+            bool alloc_success = false;
+            if (lane_id == 0) {
+                // Clear old page's forward mapping if evicting
+                if (evicted_page >= 0 && evicted_page < MAX_PAGE_ID) {
+                    atomicCAS(&cpu_to_gpu_slot_map[evicted_page], candidate_slot, -1);
+                }
 
-            // Determine winner
-            int winner_lane = -1;
-            int empty_mask = __ballot_sync(kFullMask, is_empty);
-            if (empty_mask) {
-                winner_lane = __ffs(empty_mask) - 1;
-            } else {
-                int lru_mask = __ballot_sync(kFullMask, !is_used && (stamp == min_stamp));
-                if (lru_mask) winner_lane = __ffs(lru_mask) - 1;
-            }
+                // Set our page in the reverse mapping
+                gpu_to_cpu_page_map[candidate_slot] = cpu_slot;
 
-            // Shuffle winner data (Safe broadcast, no memory access)
-            int32_t cand_slot = (winner_lane >= 0) ? (base + winner_lane) : -1;
-            int32_t cand_page = (winner_lane >= 0) ? __shfl_sync(kFullMask, pg, winner_lane) : -1;
+                // Set our forward mapping
+                int32_t old_fwd = atomicCAS(&cpu_to_gpu_slot_map[cpu_slot], -1, candidate_slot);
 
-            // 8. Perform Swap (Lane 0 Only)
-            if (cand_slot != -1 && lane_id == 0) {
-                if (cand_page >= 0) atomicCAS(&cpu_to_gpu_slot_map[cand_page], cand_slot, -1);
-                
-                gpu_to_cpu_page_map[cand_slot] = cpu_slot;
-                __threadfence(); // Visibility barrier
-
-                int32_t old = atomicCAS(&cpu_to_gpu_slot_map[cpu_slot], -1, cand_slot);
-                
-                if (old == -1) {
-                    res_owner = true;
+                if (old_fwd == -1) {
+                    // Success!
+                    alloc_success = true;
+                    uint32_t new_stamp = atomicAdd(&set_clock[target_set], 1);
+                    slot_stamps[candidate_slot] = new_stamp;
+                    uint32_t way = candidate_slot - set_base;
+                    atomicOr(&set_used_mask[target_set], 1u << way);
                 } else {
-                    // Collision: Check if we can steal or must revert
-                    // Lane 0 Load + no broadcast needed (local logic)
-                    int32_t other_content = atomic_load(&gpu_to_cpu_page_map[old]); 
-                    
+                    // Someone else allocated - check if valid
+                    int32_t other_content = gpu_to_cpu_page_map[old_fwd];
                     if (other_content == cpu_slot) {
-                        // Revert
-                        gpu_to_cpu_page_map[cand_slot] = cand_page;
-                        if (cand_page >= 0) atomicCAS(&cpu_to_gpu_slot_map[cand_page], -1, cand_slot);
-                        cand_slot = old; 
-                        cand_page = -1;
+                        // Their allocation is valid, revert our slot
+                        gpu_to_cpu_page_map[candidate_slot] = evicted_page >= 0 ? evicted_page : -1;
+                        if (evicted_page >= 0) {
+                            atomicCAS(&cpu_to_gpu_slot_map[evicted_page], -1, candidate_slot);
+                        }
+                        candidate_slot = old_fwd;
+                        evicted_page = -1;
+                        alloc_success = false;  // Not owner, but have slot
                     } else {
-                        // Steal
-                        atomicCAS(&cpu_to_gpu_slot_map[cpu_slot], old, cand_slot);
-                        res_owner = true;
+                        // Their mapping is stale, take it over
+                        atomicCAS(&cpu_to_gpu_slot_map[cpu_slot], old_fwd, candidate_slot);
+                        alloc_success = true;
+                        uint32_t new_stamp = atomicAdd(&set_clock[target_set], 1);
+                        slot_stamps[candidate_slot] = new_stamp;
+                        uint32_t way = candidate_slot - set_base;
+                        atomicOr(&set_used_mask[target_set], 1u << way);
                     }
                 }
-                
-                if (res_owner) {
-                     slot_stamps[cand_slot] = atomicAdd(&set_clock[set], 1);
-                     atomicOr(&set_used_mask[set], 1u << (cand_slot % WAYS));
-                }
             }
 
-            // Broadcast final results
-            cand_slot = __shfl_sync(kFullMask, cand_slot, 0);
-            if (cand_slot != -1) {
-                res_slot = cand_slot;
-                res_evict = (res_owner) ? cand_page : -1;
+            // Broadcast results
+            alloc_success = __shfl_sync(kFullMask, alloc_success ? 1 : 0, 0);
+            candidate_slot = __shfl_sync(kFullMask, candidate_slot, 0);
+            evicted_page = __shfl_sync(kFullMask, evicted_page, 0);
+
+            // Release seqlock
+            if (lane_id == 0) {
+                atomicAdd(&set_version[target_set], 1);
+            }
+            __syncwarp();
+
+            // === CRITICAL SECTION END ===
+
+            if (candidate_slot >= 0) {
+                result_slot = candidate_slot;
+                result_is_owner = alloc_success;
+                result_evicted = alloc_success ? evicted_page : -1;
                 done = true;
             }
-            
-            // Release Lock (Lane 0)
-            if (lane_id == 0) atomicAdd(&set_version[set], 1);
-            __syncwarp();
         }
 
-        // =====================================================================
-        // WRITE BACK (Lane 0 Only)
-        // =====================================================================
+        // Broadcast final done status
+        done = __shfl_sync(kFullMask, done ? 1 : 0, 0);
+
+        // Write results
         if (lane_id == 0) {
-            if (done && res_slot >= 0) {
-                owners_bitmap[key_idx] = res_owner;
-                dst_staging_slots[key_idx] = res_slot;
-                evicted_cpu_pages[key_idx] = res_evict;
-            } else if (valid_req) {
+            if (!done) {
+                atomicMax(overflow_flag, 1);
                 owners_bitmap[key_idx] = false;
                 dst_staging_slots[key_idx] = -1;
-                atomicMax(overflow_flag, 1);
+            } else {
+                owners_bitmap[key_idx] = result_is_owner;
+                dst_staging_slots[key_idx] = result_slot;
+                evicted_cpu_pages[key_idx] = result_evicted;
             }
         }
+        __syncwarp();
     }
 }
 
@@ -327,7 +441,7 @@ void allocate_pages_hybrid(
     );
 }
 
-// Helper function to initialize the new hybrid structures
+// Helper function to initialize the new Hive structures
 void init_hybrid_structures(
     at::Tensor slot_stamps,
     at::Tensor set_clock,
