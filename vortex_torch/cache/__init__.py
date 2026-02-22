@@ -29,11 +29,12 @@ from .reduce import Mean, Max, Min, L2Norm
 from .matmul import GeMM
 from .elementwise import Relu, Silu, Sigmoid, Abs, Add_Mul
 from .elementwise_binary import Maximum, Minimum, Multiply, Add
-from .triton_kernels import set_kv_buffer_launcher
+from .triton_kernels import set_kv_buffer_launcher, set_kv_buffer_int8_launcher
 
 
 __all__ = [
     "set_kv_buffer_launcher",
+    "set_kv_buffer_int8_launcher",
     "Mean", "Max", "Min", "L2Norm",
     "GeMM",
     "Relu", "Silu", "Sigmoid", "Abs", "Add_Mul",
