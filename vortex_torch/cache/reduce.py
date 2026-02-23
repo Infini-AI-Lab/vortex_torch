@@ -345,8 +345,10 @@ class Reduce(vOp):
             )
             output = self.output_buffer
 
-        # Launch the kernel/implementation: impl(x, output, loc, ctx, dim, reduce_type)
-        self.impl(x, output, loc, ctx, self.dim, self.reduce_type)
+        # Launch the kernel/implementation: impl(x, output, loc, ctx, dim, reduce_type, fp8_type, scale)
+        fp8_type = getattr(ctx, 'fp8_type', 0)
+        scale = getattr(ctx, 'kv_scale', 1.0)
+        self.impl(x, output, loc, ctx, self.dim, self.reduce_type, fp8_type, scale)
         return output
 
     

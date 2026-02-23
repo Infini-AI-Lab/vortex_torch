@@ -113,13 +113,13 @@ kv_cache_dtype: str = "auto",
             }
         )
         # --- Per-question debug output  ---
-        print(f"[Q{len(results):03d}] score={float(result):.1f} "
-               f"tokens={item['meta_info']['completion_tokens']} "
-               f"latency={item['meta_info']['e2e_latency']:.2f}s "
-               f"gold={golds[0]}")
-        print(f"  question: {data['question'][:120]}...")
-        print(f"  prediction: {predictions[:200]}...")
-        print()
+        # print(f"[Q{len(results):03d}] score={float(result):.1f} "
+        #       f"tokens={item['meta_info']['completion_tokens']} "
+        #       f"latency={item['meta_info']['e2e_latency']:.2f}s "
+        #       f"gold={golds[0]}")
+        # print(f"  question: {data['question'][:120]}...")
+        # print(f"  prediction: {predictions[:200]}...")
+        # print()
     
 
     total_accuracy = 0.0

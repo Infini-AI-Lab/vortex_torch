@@ -10,17 +10,21 @@ class Context(ContextBase):
     """
     
     __slots__ = ContextBase.__slots__ + (
-        
+
         #page infomation
         "max_new_tokens_per_batch", "page_size", "total_num_pages",
-        
+
         #model infomation
         "head_dim", "head_num",
-        
+
         # auxilary memory in graph
         "_aux_total_bytes",
-        
-        "_aux_total_flops"
+
+        "_aux_total_flops",
+
+        # FP8 quantization: fp8_type (0=none, 1=e4m3, 2=e5m2), kv_scale (per-tensor)
+        "fp8_type",
+        "kv_scale",
     )
 
 
@@ -36,7 +40,11 @@ class Context(ContextBase):
             elif name == "_aux_total_flops":
                 object.__setattr__(self, name, 0)  # start from 0 flops
             elif name == "mode":
-                object.__setattr__(self, name, Mode.profile) 
+                object.__setattr__(self, name, Mode.profile)
+            elif name == "fp8_type":
+                object.__setattr__(self, name, 0)       # 0 = no fp8 (bf16 default)
+            elif name == "kv_scale":
+                object.__setattr__(self, name, 1.0)     # identity scale for bf16
             else:
                 object.__setattr__(self, name, UNSET)
     

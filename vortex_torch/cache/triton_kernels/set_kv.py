@@ -131,11 +131,11 @@ def set_kv_buffer_launcher(
     loc: torch.LongTensor,
     page_size: int
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = new_k.shape[1]
     HEAD_DIM = new_k.shape[2]
-    
+
     set_kv_buffer_kernel[(NNZ, NUM_KV_HEAD)](
         k_cache,
         v_cache,
@@ -146,5 +146,98 @@ def set_kv_buffer_launcher(
         NNZ,
         HEAD_DIM,
         page_size
+    )
+
+
+@triton.jit
+def set_kv_buffer_fp8_kernel(
+    k_cache,        # uint8 paged K cache
+    v_cache,        # uint8 paged V cache
+    new_k,          # bf16 input K [NNZ, NUM_KV_HEAD, HEAD_DIM]
+    new_v,          # bf16 input V [NNZ, NUM_KV_HEAD, HEAD_DIM]
+    loc,            # int64 token positions
+    NUM_KV_HEAD: tl.constexpr,
+    NNZ: tl.constexpr,
+    HEAD_DIM: tl.constexpr,
+    PAGE_SIZE: tl.constexpr,
+    FP8_TYPE: tl.constexpr,   # 1: e4m3 (max=448), 2: e5m2 (max=57344)
+    k_scale,                   # float: per-tensor scale for K quantization
+    v_scale,                   # float: per-tensor scale for V quantization
+):
+    """Quantize bf16 K/V to fp8, bitcast to uint8, and scatter into paged cache."""
+    token_id = tl.program_id(0)
+    if token_id >= NNZ:
+        return
+    head_id = tl.program_id(1)
+    dim = tl.arange(0, HEAD_DIM)
+
+    # Load bf16 source values
+    src_ptr = token_id * NUM_KV_HEAD * HEAD_DIM + head_id * HEAD_DIM + dim
+    src_k = tl.load(new_k + src_ptr).to(tl.float32)
+    src_v = tl.load(new_v + src_ptr).to(tl.float32)
+
+    # Scale down: quantized = real_value / scale
+    inv_k_scale = 1.0 / k_scale
+    inv_v_scale = 1.0 / v_scale
+    scaled_k = src_k * inv_k_scale
+    scaled_v = src_v * inv_v_scale
+
+    # Clamp and cast to fp8, then bitcast to uint8 for storage
+    if FP8_TYPE == 1:
+        # e4m3: max = 448.0
+        clamped_k = tl.minimum(tl.maximum(scaled_k, -448.0), 448.0)
+        clamped_v = tl.minimum(tl.maximum(scaled_v, -448.0), 448.0)
+        q_k = clamped_k.to(tl.float8e4nv).to(tl.uint8, bitcast=True)
+        q_v = clamped_v.to(tl.float8e4nv).to(tl.uint8, bitcast=True)
+    else:
+        # e5m2: max = 57344.0
+        clamped_k = tl.minimum(tl.maximum(scaled_k, -57344.0), 57344.0)
+        clamped_v = tl.minimum(tl.maximum(scaled_v, -57344.0), 57344.0)
+        q_k = clamped_k.to(tl.float8e5).to(tl.uint8, bitcast=True)
+        q_v = clamped_v.to(tl.float8e5).to(tl.uint8, bitcast=True)
+
+    # Compute paged destination offset
+    token_position = tl.load(loc + token_id)
+    page_id = token_position // PAGE_SIZE
+    in_page_offset = token_position % PAGE_SIZE
+    position_trans = page_id * (PAGE_SIZE * NUM_KV_HEAD) + head_id * PAGE_SIZE + in_page_offset
+
+    # Write uint8 values
+    dst_k_ptr = k_cache + position_trans * HEAD_DIM + dim
+    dst_v_ptr = v_cache + position_trans * HEAD_DIM + dim
+    tl.store(dst_k_ptr, q_k)
+    tl.store(dst_v_ptr, q_v)
+
+
+def set_kv_buffer_fp8_launcher(
+    k_cache: torch.Tensor,
+    v_cache: torch.Tensor,
+    new_k: torch.Tensor,
+    new_v: torch.Tensor,
+    loc: torch.LongTensor,
+    page_size: int,
+    k_scale: float,
+    v_scale: float,
+    fp8_type: int = 1,
+):
+    """Quantize bf16 K/V to fp8, bitcast to uint8, and scatter into paged cache.
+
+    Args:
+        fp8_type: 1 for e4m3 (default), 2 for e5m2.
+        k_scale: per-tensor scale used for K quantization.
+        v_scale: per-tensor scale used for V quantization.
+    """
+    NNZ = loc.shape[0]
+    NUM_KV_HEAD = new_k.shape[1]
+    HEAD_DIM = new_k.shape[2]
+
+    set_kv_buffer_fp8_kernel[(NNZ, NUM_KV_HEAD)](
+        k_cache, v_cache,
+        new_k, new_v,
+        loc,
+        NUM_KV_HEAD, NNZ, HEAD_DIM, page_size,
+        FP8_TYPE=fp8_type,
+        k_scale=k_scale,
+        v_scale=v_scale,
     )
 
