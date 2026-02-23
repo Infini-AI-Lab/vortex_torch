@@ -25,8 +25,8 @@ def _fwd_kernel_int8_stage1(
     Q,                  # [batch, num_qo_heads, head_dim] bf16
     K_Buffer,           # int8 paged: flat
     V_Buffer,           # int8 paged: flat
-    K_Scale_Buffer,     # float32: flat (one scale per token slot)
-    V_Scale_Buffer,     # float32: flat
+    K_Scale_Buffer,     # fp16: flat (one scale per token slot)
+    V_Scale_Buffer,     # fp16: flat
     sm_scale,
     kv_indptr,          # [batch + 1] int32, page-level
     kv_indices,         # page indices
@@ -118,7 +118,7 @@ def _fwd_kernel_int8_stage1(
                 K_Scale_Buffer + kv_loc,
                 mask=mask_n,
                 other=1.0,
-            )
+            ).to(tl.float32)
             k = k_int8 * k_scale[:, None]
 
             # Compute QK
@@ -142,7 +142,7 @@ def _fwd_kernel_int8_stage1(
                 V_Scale_Buffer + kv_loc,
                 mask=mask_n,
                 other=1.0,
-            )
+            ).to(tl.float32)
             v = v_int8 * v_scale[:, None]
 
             # Online softmax accumulation
@@ -251,8 +251,8 @@ def paged_decode_int8(
     q: torch.Tensor,                # [batch, num_qo_heads, head_dim] bf16
     k_buffer: torch.Tensor,         # int8 paged K cache
     v_buffer: torch.Tensor,         # int8 paged V cache
-    k_scale_buffer: torch.Tensor,   # float32 scale for K
-    v_scale_buffer: torch.Tensor,   # float32 scale for V
+    k_scale_buffer: torch.Tensor,   # fp16 scale for K
+    v_scale_buffer: torch.Tensor,   # fp16 scale for V
     o: torch.Tensor,                # [batch, num_qo_heads, head_dim] bf16 output
     kv_indptr: torch.Tensor,        # [batch + 1] int32, page-level
     kv_indices: torch.Tensor,       # page indices
@@ -262,6 +262,8 @@ def paged_decode_int8(
     sm_scale: float,
     page_size: int,
     logit_cap: float = 0.0,
+    att_out: torch.Tensor = None,   # optional pre-allocated [batch, head_num, max_kv_splits, Lv]
+    att_lse: torch.Tensor = None,   # optional pre-allocated [batch, head_num, max_kv_splits]
 ):
     """
     Paged decode attention with int8 KV cache and inline dequantization.
@@ -283,17 +285,23 @@ def paged_decode_int8(
 
     num_warps = 4 if kv_group_num == 1 else 2
 
-    # Intermediate buffers for split reduction
-    att_out = torch.empty(
-        (batch, head_num, MAX_KV_SPLITS, Lv),
-        dtype=torch.float32,
-        device=q.device,
-    )
-    att_lse = torch.empty(
-        (batch, head_num, MAX_KV_SPLITS),
-        dtype=torch.float32,
-        device=q.device,
-    )
+    # Use pre-allocated buffers if provided, otherwise allocate
+    if att_out is None:
+        att_out = torch.empty(
+            (batch, head_num, MAX_KV_SPLITS, Lv),
+            dtype=torch.float32,
+            device=q.device,
+        )
+    else:
+        att_out = att_out[:batch]
+    if att_lse is None:
+        att_lse = torch.empty(
+            (batch, head_num, MAX_KV_SPLITS),
+            dtype=torch.float32,
+            device=q.device,
+        )
+    else:
+        att_lse = att_lse[:batch]
 
     stride_buf_kbs = k_buffer.shape[-1]
     stride_buf_vbs = v_buffer.shape[-1]

@@ -23,8 +23,11 @@ setup(
                 'cxx': ['-O3'],
                 'nvcc': [
                     '-O3',
+                    '-gencode=arch=compute_86,code=sm_86',
                     '-gencode=arch=compute_89,code=sm_89',
-                    '-gencode=arch=compute_90,code=sm_90'
+                    '-gencode=arch=compute_90,code=sm_90',
+                    '-gencode=arch=compute_100a,code=sm_100a',
+                    '-gencode=arch=compute_120,code=sm_120'
                 ],
             },
         ),

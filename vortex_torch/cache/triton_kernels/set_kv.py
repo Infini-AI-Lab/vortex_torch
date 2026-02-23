@@ -40,8 +40,8 @@ def set_kv_buffer_kernel(
 def set_kv_buffer_int8_kernel(
     k_cache,        # int8 paged K cache
     v_cache,        # int8 paged V cache
-    k_scale_cache,  # float32 per-token K scale [num_pages, page_size, 1]
-    v_scale_cache,  # float32 per-token V scale [num_pages, page_size, 1]
+    k_scale_cache,  # fp16 per-token K scale [num_pages, page_size, 1]
+    v_scale_cache,  # fp16 per-token V scale [num_pages, page_size, 1]
     new_k,          # bf16 input K [NNZ, NUM_KV_HEAD, HEAD_DIM]
     new_v,          # bf16 input V [NNZ, NUM_KV_HEAD, HEAD_DIM]
     loc,            # int64 token positions
@@ -87,11 +87,11 @@ def set_kv_buffer_int8_kernel(
     tl.store(dst_k_ptr, q_k)
     tl.store(dst_v_ptr, q_v)
 
-    # Write per-token scales: shape [num_pages, page_size, 1]
+    # Write per-token scales (fp16): shape [num_pages, page_size, 1]
     # Layout: page_id * PAGE_SIZE + in_page_offset (flat per-head, one scale per token per head)
     scale_offset = (page_id * NUM_KV_HEAD + head_id) * PAGE_SIZE + in_page_offset
-    tl.store(k_scale_cache + scale_offset, scale_k)
-    tl.store(v_scale_cache + scale_offset, scale_v)
+    tl.store(k_scale_cache + scale_offset, scale_k.to(tl.float16))
+    tl.store(v_scale_cache + scale_offset, scale_v.to(tl.float16))
 
 
 def set_kv_buffer_int8_launcher(
