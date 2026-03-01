@@ -22,9 +22,11 @@ class Context(ContextBase):
 
         "_aux_total_flops",
 
-        # FP8 quantization: fp8_type (0=none, 1=e4m3, 2=e5m2), kv_scale (per-tensor)
-        "fp8_type",
+        # Quantization: quant_type (0=none, 1=int8, 2=e4m3, 3=e5m2),
+        # kv_scale (per-tensor fp8 scale), kv_scale_ptr (per-token int8 scale tensor)
+        "quant_type",
         "kv_scale",
+        "kv_scale_ptr",
     )
 
 
@@ -41,10 +43,12 @@ class Context(ContextBase):
                 object.__setattr__(self, name, 0)  # start from 0 flops
             elif name == "mode":
                 object.__setattr__(self, name, Mode.profile)
-            elif name == "fp8_type":
-                object.__setattr__(self, name, 0)       # 0 = no fp8 (bf16 default)
+            elif name == "quant_type":
+                object.__setattr__(self, name, 0)       # 0 = none (bf16 default)
             elif name == "kv_scale":
                 object.__setattr__(self, name, 1.0)     # identity scale for bf16
+            elif name == "kv_scale_ptr":
+                object.__setattr__(self, name, None)    # per-token scale tensor (int8 only)
             else:
                 object.__setattr__(self, name, UNSET)
     
