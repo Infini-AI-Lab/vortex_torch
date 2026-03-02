@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -e
-export CUDA_VISIBLE_DEVICES=3
 
 sparse_algos=(
   "block_sparse_attention"
