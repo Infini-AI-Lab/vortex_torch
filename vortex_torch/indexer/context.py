@@ -22,7 +22,7 @@ class Context(ContextBase):
         # hardware / paging
         "num_sms", "page_size", "max_num_pages", "max_num_pages_per_request",
         # misc
-        "indexer_dtype", "topk_val", "page_reserved_bos", "page_reserved_eos",
+        "indexer_dtype", "topk_val", "page_reserved_bos", "page_reserved_eos", "topk_type",
         
         # auxilary memory in graph
         "_aux_total_bytes",
@@ -68,6 +68,7 @@ class Context(ContextBase):
     topk_val: int                    #: Top-K value used in pruning or selection.
     page_reserved_bos: int           #: Reserved page count for BOS (begin-of-sequence).
     page_reserved_eos: int           #: Reserved page count for EOS (end-of-sequence).
+    topk_type: str                   #: TopK kernel type: "naive" or "sglang".
 
     # --- auxiliary ---
     _aux_total_bytes: int            #: Accumulated auxiliary memory in bytes.
@@ -144,6 +145,7 @@ class Context(ContextBase):
         
         self.page_reserved_bos = sa.vortex_page_reserved_bos
         self.page_reserved_eos = sa.vortex_page_reserved_eos
+        self.topk_type = getattr(sa, "vortex_topk_type", "naive")
 
         self.max_num_workloads = (
             (self.max_num_pages // max(1, sa.vortex_lb_min_chunk_size)) + max_bs * self.num_kv_heads

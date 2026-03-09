@@ -56,12 +56,13 @@ model_name: str = "Qwen/Qwen3-1.7B",
 sparse_attention: bool = True,
 mem: float = 0.8,
 kv_cache_dtype: str = "auto",
+topk_type: str = "naive",
 ):  
 
-    llm = sgl.Engine(model_path=model_name, 
+    llm = sgl.Engine(model_path=model_name,
                     disable_cuda_graph=False,
                     page_size=page_size,
-                    vortex_topk_val=topk_val,   
+                    vortex_topk_val=topk_val,
                     disable_overlap_schedule=True,
                     attention_backend="flashinfer",
                     enable_vortex_sparsity=sparse_attention,
@@ -72,6 +73,7 @@ kv_cache_dtype: str = "auto",
                     vortex_max_seq_lens=12288,
                     mem_fraction_static=mem,
                     kv_cache_dtype=kv_cache_dtype,
+                    vortex_topk_type=topk_type,
                     )
     
     with open("amc23.jsonl", "r", encoding="utf-8") as f:
@@ -221,6 +223,14 @@ def parse_args():
         choices=["auto", "fp8_e5m2", "fp8_e4m3", "int8"],
         help='KV cache dtype (default: "auto").',
     )
+
+    parser.add_argument(
+        "--topk-type",
+        type=str,
+        default="naive",
+        choices=["naive", "sglang"],
+        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang (default: "naive").',
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -235,6 +245,7 @@ if __name__ == "__main__":
         sparse_attention=not(args.full_attention),
         mem=args.mem,
         kv_cache_dtype=args.kv_cache_dtype,
+        topk_type=args.topk_type,
     )
     print(summary)
 
