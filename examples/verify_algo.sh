@@ -19,6 +19,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
      --topk-val 30 \
      --vortex-module-name "${algo}" \
      --model-name Qwen/Qwen3-1.7B \
+     --topk-type sglang \
      --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
  done

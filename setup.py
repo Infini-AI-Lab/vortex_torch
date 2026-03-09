@@ -17,6 +17,7 @@ setup(
                 'csrc/register.cc',
                 'csrc/utils_sglang.cu',
                 'csrc/topk.cu',
+                'csrc/topk_sglang.cu',
             ],
             include_dirs=['csrc'],
             extra_compile_args={
