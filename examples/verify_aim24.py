@@ -44,11 +44,6 @@ def generate_requests(dataset: Dataset, field_name: str, data_format: str, trial
     return requests
 
 
-
-
-
-
-
 def main():
       model_name = "Qwen/Qwen3-0.6B"
       llm = sgl.Engine(model_path=model_name,
