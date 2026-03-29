@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -e
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=7
 
 sparse_algos=(
   "block_sparse_attention"
+  "nsa"
+  "fsa"
+  "flash_moba"
 )
 
 RESULTS_DIR="results"
@@ -19,7 +22,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
      --topk-val 30 \
      --vortex-module-name "${algo}" \
      --model-name Qwen/Qwen3-1.7B \
-     --topk-type sglang \
+     --topk-type naive \
      --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
  done

@@ -142,12 +142,17 @@ topk_type: str = "naive",
 
     if sparse_attention:
         llm_cfg = AutoConfig.from_pretrained(model_name)
-        flow = vortex_torch.flow.build_vflow(vortex_module_name) 
-        memory_access_runtime = flow.run_indexer_virtual(
-            group_size=llm_cfg.num_attention_heads // llm_cfg.num_key_value_heads,
-            page_size=page_size,
-            head_dim=llm_cfg.head_dim,
-        )
+        flow = vortex_torch.flow.build_vflow(vortex_module_name)
+        try:
+            memory_access_runtime = flow.run_indexer_virtual(
+                group_size=llm_cfg.num_attention_heads // llm_cfg.num_key_value_heads,
+                page_size=page_size,
+                head_dim=llm_cfg.head_dim,
+            )
+        except Exception:
+            # External algorithms (nsa, fsa, flash_moba) override run_indexer_virtual
+            # to return 0 since their vendored kernels don't participate in vortex profiling
+            memory_access_runtime = 0.0
     else:
         memory_access_runtime = 0.0
     

@@ -245,12 +245,12 @@ class topK(vOp):
                 ctx.max_num_pages_per_request,
             )
         else:
-            # topk_output (naive): (x, dense_kv_indptr, dense_kv_indices, sparse_kv_indptr, sparse_kv_indices, ...)
+            # topk_output (naive): (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
             self.impl(
                 x,
                 ctx.dense_kv_indptr,
-                ctx.dense_kv_indices,
                 ctx.sparse_kv_indptr,
+                ctx.dense_kv_indices,
                 o,
                 ctx.batch_size * ctx.num_kv_heads,
                 ctx.topk_val,
