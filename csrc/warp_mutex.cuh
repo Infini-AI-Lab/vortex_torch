@@ -18,6 +18,14 @@ class WarpMutexSemaphoreImpl {
     if (lane_id == 0) { semaphore_.release(); }
   }
 
+  __device__ bool TryLock(uint32_t lane_id) {
+    bool acquired = false;
+    if (lane_id == 0) { acquired = semaphore_.try_acquire(); }
+    acquired = __shfl_sync(0xFFFFFFFF, acquired ? 1 : 0, 0);
+    __syncwarp();
+    return acquired;
+  }
+
  private:
   cuda::binary_semaphore<cuda::thread_scope_device> semaphore_;
 };

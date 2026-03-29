@@ -19,8 +19,9 @@ setup(
                 'csrc/topk.cu',
                 'csrc/unified_reduce.cu',
                 'csrc/store_kv_unified.cu',
-                'csrc/warp_lru_cache.cu',
-                'csrc/hybrid_lru_cache.cu',
+                'csrc/lru_block_alloc.cu',
+                'csrc/lru_global_alloc.cu',
+                'csrc/lru_block_global_alloc.cu',
                 'csrc/copy_sparse_kv.cu'
             ],
             include_dirs=['csrc'],

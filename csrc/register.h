@@ -161,8 +161,8 @@ void store_kv_unified(
     const int64_t     page_size
 );
 
-// LRU allocation kernel only
-void allocate_pages_lru_warp_with_indptr(
+// LRU allocation: block-local shared-memory, 32-way set-associative
+void allocate_pages_lru_block(
     at::Tensor src_page_ids,
     at::Tensor sparse_indptr,
     int32_t indptr_last_idx,
@@ -179,7 +179,42 @@ void allocate_pages_lru_warp_with_indptr(
     int32_t MAX_HASH_ATTEMPTS
 );
 
-// Copy kernel only (for separate benchmarking)
+// LRU allocation: global device semaphores, TryLock + blocking fallback
+void allocate_pages_lru_global(
+    at::Tensor src_page_ids,
+    at::Tensor sparse_indptr,
+    int32_t indptr_last_idx,
+    at::Tensor cpu_to_gpu_slot_map,
+    at::Tensor gpu_to_cpu_page_map,
+    at::Tensor slot_ages,
+    at::Tensor set_slot_used_bitmap,
+    at::Tensor needs_eviction_bitmap,
+    at::Tensor dst_staging_slots,
+    at::Tensor owners_bitmap,
+    at::Tensor evicted_cpu_pages,
+    at::Tensor overflow_flag,
+    int32_t max_num_pages,
+    const int32_t MAX_HASH_ATTEMPTS
+);
+
+// LRU allocation: block-local smem + relative ages + device semaphore global fallback
+void allocate_pages_lru_block_global(
+    at::Tensor src_page_ids,
+    at::Tensor sparse_indptr,
+    int32_t indptr_last_idx,
+    at::Tensor cpu_to_gpu_slot_map,
+    at::Tensor gpu_to_cpu_page_map,
+    at::Tensor slot_ages,
+    at::Tensor set_used_mask,
+    at::Tensor dst_staging_slots,
+    at::Tensor owners_bitmap,
+    at::Tensor evicted_cpu_pages,
+    at::Tensor overflow_flag,
+    int32_t max_num_pages,
+    const int32_t MAX_HASH_ATTEMPTS
+);
+
+// Copy kernel (grid-stride: auto-detect SM count, 256 threads per block)
 void copy_kv(
     at::Tensor cpu_k_buffer,
     at::Tensor cpu_v_buffer,
@@ -194,32 +229,4 @@ void copy_kv(
     int32_t batch_size,
     int32_t num_kv_heads,
     int32_t max_num_pages
-);
-
-// Hive-style lock-free LRU allocation kernel (with seqlock + timestamp LRU)
-void allocate_pages_hybrid(
-    at::Tensor src_page_ids,
-    at::Tensor sparse_indptr,
-    int32_t indptr_last_idx,
-    at::Tensor cpu_to_gpu_slot_map,
-    at::Tensor gpu_to_cpu_page_map,
-    at::Tensor slot_stamps,           // uint32_t per-slot timestamps
-    at::Tensor set_clock,             // uint32_t per-set monotonic clock
-    at::Tensor set_version,           // uint32_t seqlock version per set
-    at::Tensor set_used_mask,         // uint32_t per-set used bitmask
-    at::Tensor dst_staging_slots,
-    at::Tensor owners_bitmap,
-    at::Tensor evicted_cpu_pages,
-    at::Tensor overflow_flag,
-    int32_t max_num_pages,
-    int32_t MAX_HASH_ATTEMPTS
-);
-
-// Helper function to initialize Hive structures (call once at setup)
-void init_hybrid_structures(
-    at::Tensor slot_stamps,
-    at::Tensor set_clock,
-    at::Tensor set_version,
-    int32_t num_slots,
-    int32_t num_sets
 );
