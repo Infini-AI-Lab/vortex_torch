@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=6
 
 sparse_algos=(
   "block_sparse_attention"
@@ -20,6 +20,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
      --vortex-module-name "${algo}" \
      --model-name Qwen/Qwen3-1.7B \
      --kv-cache-dtype int8 \
+     --topk-type naive \
      --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
  done
@@ -34,6 +35,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
      --vortex-module-name "${algo}" \
      --model-name Qwen/Qwen3-1.7B \
      --kv-cache-dtype fp8_e4m3 \
+     --topk-type naive \
      --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
  done
