@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 set -e
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=5
 
 sparse_algos=(
   "block_sparse_attention"
-  "nsa"
-  "fsa"
-  "flash_moba"
 )
 
 RESULTS_DIR="results"
