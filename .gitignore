@@ -236,3 +236,6 @@ compile_commands.json
 
 # Rust lib
 Cargo.lock
+
+/examples/results
+*.npy

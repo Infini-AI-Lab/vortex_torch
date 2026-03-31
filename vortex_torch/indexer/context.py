@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any, Final, Union
+import numpy as np
 import torch
 from ..abs import ContextBase
 from ..utils import UNSET, Mode
@@ -23,6 +24,8 @@ class Context(ContextBase):
         "num_sms", "page_size", "max_num_pages", "max_num_pages_per_request",
         # misc
         "indexer_dtype", "topk_val", "page_reserved_bos", "page_reserved_eos", "topk_type",
+        "topk_mapping_mode", "topk_mapping_power", "topk_mapping_lut", "topk_mapping_quantiles",
+        "topk_histogram_enabled",
         
         # auxilary memory in graph
         "_aux_total_bytes",
@@ -69,6 +72,11 @@ class Context(ContextBase):
     page_reserved_bos: int           #: Reserved page count for BOS (begin-of-sequence).
     page_reserved_eos: int           #: Reserved page count for EOS (end-of-sequence).
     topk_type: str                   #: TopK kernel type: "naive" or "sglang".
+    topk_mapping_mode: int           #: TopK mapping mode (0=none, 1=lut, 2=quantile, 3=power, 4=log).
+    topk_mapping_power: float        #: Power exponent for mapping mode 3.
+    topk_mapping_lut: object         #: Optional uint8[256] LUT tensor for mapping mode 1.
+    topk_mapping_quantiles: object   #: Optional float32[256] quantiles tensor for mapping mode 2.
+    topk_histogram_enabled: bool      #: Enable histogram profiling during inference (default False).
 
     # --- auxiliary ---
     _aux_total_bytes: int            #: Accumulated auxiliary memory in bytes.
@@ -146,12 +154,26 @@ class Context(ContextBase):
         self.page_reserved_bos = sa.vortex_page_reserved_bos
         self.page_reserved_eos = sa.vortex_page_reserved_eos
         self.topk_type = getattr(sa, "vortex_topk_type", "naive")
+        self.topk_mapping_mode = getattr(sa, "vortex_topk_mapping_mode", 0)
+        self.topk_mapping_power = getattr(sa, "vortex_topk_mapping_power", 0.5)
+        self.topk_histogram_enabled = getattr(sa, "vortex_topk_histogram", False)
+
+        device = getattr(model_runner, "device", "cpu")
+
+        # Load calibration data from .npy files when paths are provided
+        lut_path = getattr(sa, 'vortex_topk_mapping_lut_path', None)
+        if lut_path is not None:
+            lut_np = np.load(lut_path).astype(np.uint8)
+            self.topk_mapping_lut = torch.from_numpy(lut_np).to(device)
+
+        quantiles_path = getattr(sa, 'vortex_topk_mapping_quantiles_path', None)
+        if quantiles_path is not None:
+            q_np = np.load(quantiles_path).astype(np.float32)
+            self.topk_mapping_quantiles = torch.from_numpy(q_np).to(device)
 
         self.max_num_workloads = (
             (self.max_num_pages // max(1, sa.vortex_lb_min_chunk_size)) + max_bs * self.num_kv_heads
         )
-
-        device = getattr(model_runner, "device", "cpu")
         self.winfo_q_indices = torch.zeros((self.max_num_workloads,), dtype=torch.int32, device=device)
         self.winfo_kv_offsets = torch.zeros((self.max_num_workloads,), dtype=torch.int32, device=device)
         self.winfo_kv_lens = torch.zeros((self.max_num_workloads,), dtype=torch.int32, device=device)

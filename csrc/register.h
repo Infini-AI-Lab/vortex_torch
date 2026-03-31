@@ -95,7 +95,24 @@ const int64_t       eff_batch_size,
 const int64_t       topk_val,
 const int64_t       reserved_bos,
 const int64_t       reserved_eos,
-const int64_t       max_seq_lengths
+const int64_t       max_seq_lengths,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt
+);
+
+void topk_profile_histogram(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+at::Tensor&         histograms,
+const int64_t       eff_batch_size,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt
 );
 
 void sglang_plan_decode_fa3(

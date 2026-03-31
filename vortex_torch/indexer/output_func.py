@@ -1,9 +1,21 @@
 import torch
-from typing import Dict, Callable, Optional
+from typing import Dict, Callable, List, Optional
 from ..abs import vOp
-from vortex_torch_C import topk_output, topk_output_sglang
+from vortex_torch_C import topk_output, topk_output_sglang, topk_profile_histogram
 from .context import Context
 from ..abs import vTensor, FORMAT
+from ..utils import UNSET
+
+# --- Module-level histogram accumulator for offline calibration ---
+_calibration_histograms: List[torch.Tensor] = []
+
+def get_calibration_histograms() -> List[torch.Tensor]:
+    """Return collected histogram tensors (each [eff_bs, 256] int32 on CPU)."""
+    return _calibration_histograms
+
+def clear_calibration_histograms() -> None:
+    """Clear all collected calibration histograms."""
+    _calibration_histograms.clear()
 
 class topK(vOp):
     r"""
@@ -86,6 +98,7 @@ class topK(vOp):
         super().__init__()
         self.impl: Optional[Callable] = None
         self.topk_type: str = "naive"
+        self.last_histograms: Optional[torch.Tensor] = None
 
     # ---------------- profile ----------------
     def profile(self, x: vTensor, o: vTensor, ctx: Context) -> None:
@@ -232,6 +245,15 @@ class topK(vOp):
 
         if self.topk_type == "sglang":
             # topk_output_sglang: (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
+            mapping_mode = getattr(ctx, 'topk_mapping_mode', 0)
+            mapping_power = getattr(ctx, 'topk_mapping_power', 0.5)
+            mapping_lut = getattr(ctx, 'topk_mapping_lut', None)
+            mapping_quantiles = getattr(ctx, 'topk_mapping_quantiles', None)
+            # UNSET sentinel is not a valid torch.Tensor — coerce to None
+            if mapping_lut is UNSET:
+                mapping_lut = None
+            if mapping_quantiles is UNSET:
+                mapping_quantiles = None
             self.impl(
                 x,
                 ctx.dense_kv_indptr,
@@ -243,14 +265,18 @@ class topK(vOp):
                 ctx.page_reserved_bos,
                 ctx.page_reserved_eos,
                 ctx.max_num_pages_per_request,
+                mapping_mode,
+                mapping_power,
+                mapping_lut,
+                mapping_quantiles,
             )
         else:
-            # topk_output (naive): (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
+            # topk_output (naive): (x, dense_kv_indptr, dense_kv_indices, sparse_kv_indptr, sparse_kv_indices, ...)
             self.impl(
                 x,
                 ctx.dense_kv_indptr,
-                ctx.sparse_kv_indptr,
                 ctx.dense_kv_indices,
+                ctx.sparse_kv_indptr,
                 o,
                 ctx.batch_size * ctx.num_kv_heads,
                 ctx.topk_val,
@@ -258,4 +284,30 @@ class topK(vOp):
                 ctx.page_reserved_eos,
                 ctx.max_num_pages_per_request,
             )
+
+        # Optional histogram profiling (default disabled, no overhead when off).
+        # Skip entirely during CUDA graph capture — allocations and D2H copies
+        # are not permitted while a stream is being captured.
+        if (
+            getattr(ctx, 'topk_histogram_enabled', False)
+            and self.topk_type == "sglang"
+            and not torch.cuda.is_current_stream_capturing()
+        ):
+            eff_bs = ctx.batch_size * ctx.num_kv_heads
+            self.last_histograms = torch.zeros(eff_bs, 256, dtype=torch.int32, device=x.device)
+            topk_profile_histogram(
+                x,
+                ctx.dense_kv_indptr,
+                self.last_histograms,
+                eff_bs,
+                ctx.page_reserved_bos,
+                ctx.page_reserved_eos,
+                mapping_mode,
+                mapping_power,
+                mapping_lut,
+                mapping_quantiles,
+            )
+            # Accumulate histograms for offline calibration
+            _calibration_histograms.append(self.last_histograms.cpu().clone())
+
         return o

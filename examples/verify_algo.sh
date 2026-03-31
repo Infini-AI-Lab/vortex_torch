@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
-export CUDA_VISIBLE_DEVICES=6
+# use CUDA_VISIBLE_DEVICES to set the GPU id you want to use
+export CUDA_VISIBLE_DEVICES=5
 
 sparse_algos=(
   "block_sparse_attention"
