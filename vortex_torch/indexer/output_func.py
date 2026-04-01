@@ -249,6 +249,7 @@ class topK(vOp):
             mapping_power = getattr(ctx, 'topk_mapping_power', 0.5)
             mapping_lut = getattr(ctx, 'topk_mapping_lut', None)
             mapping_quantiles = getattr(ctx, 'topk_mapping_quantiles', None)
+            mapping_noscale = getattr(ctx, 'topk_mapping_noscale', False)
             # UNSET sentinel is not a valid torch.Tensor — coerce to None
             if mapping_lut is UNSET:
                 mapping_lut = None
@@ -269,6 +270,7 @@ class topK(vOp):
                 mapping_power,
                 mapping_lut,
                 mapping_quantiles,
+                mapping_noscale,
             )
         else:
             # topk_output (naive): (x, dense_kv_indptr, dense_kv_indices, sparse_kv_indptr, sparse_kv_indices, ...)
@@ -306,6 +308,7 @@ class topK(vOp):
                 mapping_power,
                 mapping_lut,
                 mapping_quantiles,
+                mapping_noscale,
             )
             # Accumulate histograms for offline calibration
             _calibration_histograms.append(self.last_histograms.cpu().clone())

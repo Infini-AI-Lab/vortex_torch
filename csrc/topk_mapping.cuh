@@ -26,6 +26,9 @@ enum TopKMappingMode {
     MAPPING_ASINH       = 6,  // asinh(beta * x), beta via power_exp
     MAPPING_LOG1P       = 7,  // sign(x) * log1p(alpha * |x|), alpha via power_exp
     MAPPING_TRUNC8      = 8,  // BF16 upper-8-bit bucketing
+    MAPPING_ERF         = 9,  // erf(alpha * x)
+    MAPPING_TANH        = 10, // tanh(alpha * x)
+    MAPPING_SUBTRACT    = 11, // subtract pivot, then fp16 bucketing
 };
 
 struct TopKMappingParams {
@@ -33,6 +36,8 @@ struct TopKMappingParams {
     float power_exp;                       // For MAPPING_POWER (default 0.5)
     const uint8_t* __restrict__ lut;       // [256] byte LUT, or nullptr
     const float* __restrict__ quantiles;   // [256] float quantile breakpoints, or nullptr
+    bool noscale;                          // Skip auto-range linear scaling, use fp16 bucketing on f(x)
+    int sample_stride;                     // Pre-pass sampling stride (1=full, 8=1/8, 0=skip)
 };
 
 // NOTE: convert_to_uint8() must be defined before including this header.
@@ -56,6 +61,14 @@ __device__ __forceinline__ float transform_log1p(float x, float alpha) {
     return copysignf(log1pf(alpha * fabsf(x)), x);
 }
 
+__device__ __forceinline__ float transform_erf(float x, float alpha) {
+    return erff(alpha * x);
+}
+
+__device__ __forceinline__ float transform_tanh(float x, float alpha) {
+    return tanhf(alpha * x);
+}
+
 // ---- Transform dispatcher (returns float, no bucketing) ----
 
 __device__ __forceinline__ float apply_transform(float x, const TopKMappingParams& params) {
@@ -64,6 +77,8 @@ __device__ __forceinline__ float apply_transform(float x, const TopKMappingParam
         case MAPPING_LOG:   return transform_log(x);
         case MAPPING_ASINH: return transform_asinh(x, params.power_exp);
         case MAPPING_LOG1P: return transform_log1p(x, params.power_exp);
+        case MAPPING_ERF:   return transform_erf(x, params.power_exp);
+        case MAPPING_TANH:  return transform_tanh(x, params.power_exp);
         default: return x;
     }
 }
@@ -75,14 +90,16 @@ __device__ __forceinline__ uint8_t linear_map_to_uint8(float val, float range_mi
     return static_cast<uint8_t>(min(max(bin, 0), 255));
 }
 
-// ---- BF16 upper-8-bit bucketing (mode 8) ----
+// ---- BF16-aware bucketing (mode 8) ----
+// BF16 has 8 exponent + 7 mantissa bits.  Taking the upper 8 bits of the
+// sign-flipped bf16 bit-pattern yields only ~20 distinct bins for typical
+// data (the byte is almost entirely exponent).  Instead, convert through
+// fp16 (5 exp + 10 mantissa) which puts 5 exp + 2 mantissa bits in the
+// upper byte, giving ~135+ distinct bins — equivalent to mode 0 but
+// explicitly available as a named mode for documentation/benchmarking.
 
 __device__ __forceinline__ uint8_t convert_to_uint8_bf16(float x) {
-    __nv_bfloat16 bf = __float2bfloat16_rn(x);
-    uint16_t bits = __bfloat16_as_ushort(bf);
-    uint16_t key = (bits & 0x8000) ? static_cast<uint16_t>(~bits)
-                                   : static_cast<uint16_t>(bits | 0x8000);
-    return static_cast<uint8_t>(key >> 8);
+    return convert_to_uint8(x);  // fp16 sign-flip bucketing
 }
 
 // ---- Non-transform mapping functions (unchanged) ----
@@ -130,12 +147,17 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
         case MAPPING_POWER:
         case MAPPING_LOG:
         case MAPPING_ASINH:
-        case MAPPING_LOG1P: {
+        case MAPPING_LOG1P:
+        case MAPPING_ERF:
+        case MAPPING_TANH: {
             float val = apply_transform(x, params);
+            if (params.noscale) return convert_to_uint8(val);
             return linear_map_to_uint8(val, range_min, inv_range);
         }
         case MAPPING_TRUNC8:
             return convert_to_uint8_bf16(x);
+        case MAPPING_SUBTRACT:
+            return convert_to_uint8(x - range_min);  // range_min repurposed as pivot
         default:  // MAPPING_NONE
             return convert_to_uint8(x);
     }
@@ -144,5 +166,11 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
 // Helper: check if a mapping mode needs the auto-range pre-pass
 __device__ __forceinline__ bool needs_auto_range(int mode) {
     return (mode == MAPPING_POWER || mode == MAPPING_LOG ||
-            mode == MAPPING_ASINH || mode == MAPPING_LOG1P);
+            mode == MAPPING_ASINH || mode == MAPPING_LOG1P ||
+            mode == MAPPING_ERF || mode == MAPPING_TANH);
+}
+
+// Helper: check if a mapping mode needs the pivot pre-pass
+__device__ __forceinline__ bool needs_pivot(int mode) {
+    return (mode == MAPPING_SUBTRACT);
 }

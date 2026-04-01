@@ -254,8 +254,8 @@ def parse_args():
         "--topk-mapping-mode",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 6, 7],
-        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p (default: 0).',
+        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract (default: 0).',
     )
 
     parser.add_argument(

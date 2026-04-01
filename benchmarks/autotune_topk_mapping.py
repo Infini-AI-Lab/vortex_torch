@@ -27,8 +27,8 @@ from typing import List
 import numpy as np
 import torch
 
-from bench_topk import make_topk_inputs, compute_histogram_stats
-from vortex_torch_C import topk_profile_histogram
+from bench_topk import make_topk_inputs, bench_kernel, compute_histogram_stats
+from vortex_torch_C import topk_profile_histogram, topk_profile_counters, topk_output_sglang
 
 
 
@@ -37,10 +37,22 @@ SWEEP_GRID = {
     3: ("power_exp", [0.1, 0.25, 0.75, 0.9]),
     6: ("beta", [0.1, 0.5, 1.0, 2.0, 4.0]),
     7: ("alpha", [0.1, 0.5, 0.75, 1.0, 2.0, 4.0, 8.0]),
+    9: ("alpha", [0.1, 0.5, 1.0, 2.0, 4.0]),
+    10: ("alpha", [0.1, 0.5, 1.0, 2.0, 4.0]),
 }
 BASELINES = {
     0: ("none", 0.5),
     4: ("log", 0.5),
+    8: ("trunc8", 0.5),
+    11: ("subtract", 0.5),
+}
+# Noscale baselines for parametric transform modes (skip auto-range pre-pass)
+NOSCALE_BASELINES = {
+    3: ("power_noscale", [0.5]),
+    6: ("asinh_noscale", [1.0]),
+    7: ("log1p_noscale", [1.0]),
+    9: ("erf_noscale", [1.0]),
+    10: ("tanh_noscale", [1.0]),
 }
 MODE_NAMES = {
     0: "none",
@@ -48,6 +60,10 @@ MODE_NAMES = {
     4: "log",
     6: "asinh",
     7: "log1p",
+    8: "trunc8",
+    9: "erf",
+    10: "tanh",
+    11: "subtract",
 }
 
 
@@ -104,6 +120,56 @@ def build_bin_range_table():
         bin_hi[b] = val
 
     return bin_lo, bin_hi
+
+
+def generate_remap_lut(mode: int, param: float) -> np.ndarray:
+    """Generate a 256-entry uint8 LUT that approximates a transform mode.
+
+    For each of the 256 fp16 radix bins, compute the transform of the
+    bin's midpoint value, then linearly map transformed values to [0,255].
+    The resulting LUT can be used with mode=1 (LUT CDF) infrastructure,
+    replacing expensive per-element transcendental math with a single
+    shared memory lookup.
+
+    Args:
+        mode: TopKMappingMode (3=Power, 4=Log, 6=Asinh, 7=Log1p, 9=Erf, 10=Tanh)
+        param: power_exp/beta/alpha for the transform
+
+    Returns:
+        lut: [256] uint8 array mapping original_bin -> remapped_bin
+    """
+    bin_lo, bin_hi = build_bin_range_table()
+    midpoints = (bin_lo + bin_hi) / 2.0  # [256] float32
+
+    # Apply transform
+    if mode == 3:  # power
+        transformed = np.sign(midpoints) * np.abs(midpoints) ** param
+    elif mode == 4:  # log
+        transformed = np.sign(midpoints) * np.log(np.abs(midpoints) + 1.0)
+    elif mode == 6:  # asinh
+        transformed = np.arcsinh(param * midpoints)
+    elif mode == 7:  # log1p
+        transformed = np.sign(midpoints) * np.log1p(param * np.abs(midpoints))
+    elif mode == 9:  # erf
+        from scipy.special import erf
+        transformed = erf(param * midpoints)
+    elif mode == 10:  # tanh
+        transformed = np.tanh(param * midpoints)
+    else:
+        # Identity fallback
+        transformed = midpoints.copy()
+
+    # Handle NaN/Inf from edge cases
+    transformed = np.nan_to_num(transformed, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Linear map to [0, 255]
+    tmin, tmax = transformed.min(), transformed.max()
+    if tmax > tmin:
+        lut = np.clip(((transformed - tmin) / (tmax - tmin) * 255), 0, 255).astype(np.uint8)
+    else:
+        lut = np.full(256, 128, dtype=np.uint8)
+
+    return lut
 
 
 def scores_from_histogram(
@@ -232,7 +298,8 @@ def run_sweep(args) -> List[dict]:
 
         eff_bs = inputs["eff_batch_size"]
 
-        def evaluate(mode: int, power: float, label: str):
+        def evaluate(mode: int, power: float, label: str, noscale: bool = False,
+                    lut_tensor=None):
             hists = torch.zeros(eff_bs, 256, dtype=torch.int32, device="cuda")
             topk_profile_histogram(
                 inputs["x"],
@@ -243,28 +310,62 @@ def run_sweep(args) -> List[dict]:
                 args.reserved_eos,
                 mode,
                 power,
-                None,  # lut
+                lut_tensor,  # lut
                 None,  # quantiles
+                noscale,
             )
             torch.cuda.synchronize()
             stats = compute_histogram_stats(hists)
-            return {
+            result = {
                 "label": label,
                 "mode": mode,
                 "mode_name": MODE_NAMES.get(mode, f"m{mode}"),
                 "param": power,
+                "noscale": noscale,
                 "distribution": dist,
                 "gini": stats["gini"],
                 "max_mean_ratio": stats["max_mean_ratio"],
                 "num_nonzero_bins": stats["num_nonzero_bins"],
             }
 
+            # Counter-based metrics (Stage 2 cost analysis)
+            if args.counters:
+                inputs["sparse_kv_indices"].zero_()
+                counter_buf = torch.zeros(eff_bs, 6, dtype=torch.int32, device="cuda")
+                topk_profile_counters(
+                    inputs["x"],
+                    inputs["dense_kv_indptr"],
+                    inputs["sparse_kv_indptr"],
+                    inputs["dense_kv_indices"],
+                    inputs["sparse_kv_indices"],
+                    counter_buf,
+                    eff_bs,
+                    args.topk_val,
+                    args.reserved_bos,
+                    args.reserved_eos,
+                    inputs["num_pages_per_seg"],
+                    mode,
+                    power,
+                    lut_tensor,  # lut
+                    None,  # quantiles
+                    noscale,
+                )
+                torch.cuda.synchronize()
+                c = counter_buf.float()
+                result["num_equal_mean"] = c[:, 2].mean().item()
+                result["remaining_k_mean"] = c[:, 3].mean().item()
+                result["refine_rounds_mean"] = c[:, 4].mean().item()
+                result["stage2_input_mean"] = c[:, 5].mean().item()
+                result["res_rate_mean"] = (c[:, 3] == 0).float().mean().item()
+
+            return result
+
         # Baselines
         for mode, (name, default_power) in BASELINES.items():
             r = evaluate(mode, default_power, f"m{mode}_{name}")
             results.append(r)
 
-        # Parametric sweep
+        # Parametric sweep (scaled)
         for mode, (param_name, values) in SWEEP_GRID.items():
             mname = MODE_NAMES[mode]
             for val in values:
@@ -272,44 +373,122 @@ def run_sweep(args) -> List[dict]:
                 r = evaluate(mode, val, label)
                 results.append(r)
 
+        # Noscale sweep for parametric modes
+        for mode, (name, values) in NOSCALE_BASELINES.items():
+            mname = MODE_NAMES[mode]
+            for val in values:
+                label = f"m{mode}_{mname}_noscale_{val}"
+                r = evaluate(mode, val, label, noscale=True)
+                results.append(r)
+
+        # LUT approximation sweep: generate a LUT for each (mode, param) and
+        # evaluate via mode=1 (LUT CDF). This replaces per-element transcendentals
+        # with a single shared memory lookup.
+        if args.lut_sweep:
+            lut_modes = {
+                3: [0.25, 0.5, 0.75],
+                6: [0.5, 1.0, 2.0],
+                7: [0.5, 1.0, 2.0],
+                9: [0.5, 1.0, 2.0],
+                10: [0.5, 1.0, 2.0],
+            }
+            for src_mode, params in lut_modes.items():
+                src_name = MODE_NAMES[src_mode]
+                for p in params:
+                    try:
+                        lut_np = generate_remap_lut(src_mode, p)
+                        lut_t = torch.from_numpy(lut_np).cuda()
+                        label = f"lut_{src_name}_{p}"
+                        # Evaluate as mode=1 (LUT CDF) with the generated LUT
+                        r = evaluate(1, 0.5, label, lut_tensor=lut_t)
+                        r["lut_source_mode"] = src_mode
+                        r["lut_source_param"] = p
+                        results.append(r)
+                    except ImportError:
+                        # scipy not available for erf
+                        pass
+
     return results
 
 
-def print_table(results: List[dict]):
+def print_table(results: List[dict], show_latency: bool = False):
     """Print ranked results as a formatted table."""
-    # Sort by Gini ascending (lower = more uniform = better)
-    ranked = sorted(results, key=lambda r: r["gini"])
+    has_counters = any("res_rate_mean" in r for r in results)
+    has_latency = any("full_kernel_ms" in r for r in results)
 
-    header = (
-        f"{'Rank':>4s}  {'Label':<35s}  {'Dist':<12s}  "
-        f"{'Gini':>6s}  {'Max/Mean':>8s}  {'NZBins':>6s}"
-    )
-    print("\n" + "=" * len(header))
-    print("TopK Mapping Auto-Tune Results (ranked by Gini, lower=better)")
-    print("=" * len(header))
-    print(header)
-    print("-" * len(header))
+    # Primary ranking: by res_rate_mean (higher=better) if counters, else by gini (lower=better)
+    if has_counters:
+        ranked = sorted(results, key=lambda r: -r.get("res_rate_mean", 0.0))
+        rank_label = "ranked by res_rate, higher=better"
+    else:
+        ranked = sorted(results, key=lambda r: r["gini"])
+        rank_label = "ranked by Gini, lower=better"
+
+    # Build header
+    cols = f"{'Rank':>4s}  {'Label':<35s}  {'Dist':<12s}  {'Gini':>6s}  {'Max/Mean':>8s}  {'NZBins':>6s}"
+    if has_counters:
+        cols += f"  {'ResRate':>7s}  {'RemK':>5s}  {'Rnds':>4s}  {'S2In':>5s}"
+    if has_latency and show_latency:
+        cols += f"  {'LatMs':>9s}  {'LatRk':>5s}"
+
+    print(f"\n{'=' * len(cols)}")
+    print(f"TopK Mapping Auto-Tune Results ({rank_label})")
+    print("=" * len(cols))
+    print(cols)
+    print("-" * len(cols))
 
     for i, r in enumerate(ranked):
-        print(
-            f"{i+1:4d}  {r['label']:<35s}  {r['distribution']:<12s}  "
+        noscale_tag = " [NS]" if r.get("noscale", False) else ""
+        line = (
+            f"{i+1:4d}  {r['label'] + noscale_tag:<35s}  {r['distribution']:<12s}  "
             f"{r['gini']:6.3f}  "
             f"{r['max_mean_ratio']:8.2f}  {r['num_nonzero_bins']:6d}"
         )
+        if has_counters:
+            rr = r.get("res_rate_mean", 0.0)
+            rk = r.get("remaining_k_mean", 0.0)
+            rnds = r.get("refine_rounds_mean", 0.0)
+            s2in = r.get("stage2_input_mean", 0.0)
+            line += f"  {rr:7.3f}  {rk:5.0f}  {rnds:4.1f}  {s2in:5.0f}"
+        if has_latency and show_latency:
+            lat = r.get("full_kernel_ms", float("nan"))
+            lat_rank = r.get("latency_rank", "-")
+            line += f"  {lat:9.4f}  {lat_rank:>5s}" if isinstance(lat_rank, str) else f"  {lat:9.4f}  {lat_rank:5d}"
+        print(line)
 
-    print("=" * len(header))
+    print("=" * len(cols))
     if ranked:
         best = ranked[0]
-        print(
+        msg = (
             f"\nBest overall: {best['label']} (dist={best['distribution']}) "
             f"— gini={best['gini']:.3f}, max/mean={best['max_mean_ratio']:.2f}"
         )
+        if has_counters:
+            msg += f", res_rate={best.get('res_rate_mean', 0):.3f}"
+        if "full_kernel_ms" in best:
+            msg += f", latency={best['full_kernel_ms']:.4f}ms"
+        print(msg)
 
-    # Per-mode best summary (lowest gini per mode)
+    # If latency data available, also print best by latency
+    if has_latency and show_latency:
+        lat_ranked = sorted([r for r in results if "full_kernel_ms" in r],
+                            key=lambda r: r["full_kernel_ms"])
+        if lat_ranked:
+            best_lat = lat_ranked[0]
+            print(
+                f"Best by latency: {best_lat['label']} (dist={best_lat['distribution']}) "
+                f"— latency={best_lat['full_kernel_ms']:.4f}ms, gini={best_lat['gini']:.3f}"
+            )
+
+    # Per-mode best summary
     mode_best = {}
     for r in results:
         m = r["mode"]
-        if m not in mode_best or r["gini"] < mode_best[m]["gini"]:
+        if has_counters:
+            is_better = m not in mode_best or r.get("res_rate_mean", 0) > mode_best[m].get("res_rate_mean", 0)
+        else:
+            is_better = m not in mode_best or r["gini"] < mode_best[m]["gini"]
+        if is_better:
             mode_best[m] = r
 
     if mode_best:
@@ -322,10 +501,92 @@ def print_table(results: List[dict]):
                 param_str = f"{param_name}={r['param']}"
             else:
                 param_str = "(baseline)"
+            ns_str = " noscale" if r.get("noscale", False) else ""
+            lat_str = f"  latency={r['full_kernel_ms']:.4f}ms" if "full_kernel_ms" in r else ""
+            counter_str = f"  res_rate={r.get('res_rate_mean', 0):.3f}" if has_counters else ""
             print(
-                f"  Mode {m:d} ({mname:>5s}):  {param_str:<20s}  "
-                f"gini={r['gini']:.3f}  max/mean={r['max_mean_ratio']:.2f}"
+                f"  Mode {m:d} ({mname:>5s}{ns_str}):  {param_str:<20s}  "
+                f"gini={r['gini']:.3f}  max/mean={r['max_mean_ratio']:.2f}{counter_str}{lat_str}"
             )
+
+
+def latency_rerank(results: List[dict], args) -> List[dict]:
+    """Re-rank top Gini candidates by actual kernel latency."""
+    # Sort by Gini, take top N
+    ranked = sorted(results, key=lambda r: r["gini"])
+    finalists = ranked[:args.latency_top_n]
+
+    print(f"\n--- Latency re-ranking: timing top {len(finalists)} Gini finalists ---")
+
+    # Build inputs for latency measurement
+    real_histogram = None
+    if args.real_histograms:
+        raw = np.load(args.real_histograms)
+        real_histogram = raw.sum(axis=0) if raw.ndim > 1 else raw
+
+    if real_histogram is not None:
+        inputs = make_real_inputs(
+            batch_size=args.batch_size,
+            num_kv_heads=args.num_kv_heads,
+            seq_len=args.seq_len,
+            page_size=args.page_size,
+            topk_val=args.topk_val,
+            reserved_bos=args.reserved_bos,
+            reserved_eos=args.reserved_eos,
+            histogram=real_histogram,
+        )
+    else:
+        inputs = make_topk_inputs(
+            batch_size=args.batch_size,
+            num_kv_heads=args.num_kv_heads,
+            seq_len=args.seq_len,
+            page_size=args.page_size,
+            topk_val=args.topk_val,
+            reserved_bos=args.reserved_bos,
+            reserved_eos=args.reserved_eos,
+            score_dtype=torch.bfloat16,
+            distribution="normal",
+        )
+
+    eff_bs = inputs["eff_batch_size"]
+    pages_per_seg = inputs["num_pages_per_seg"]
+
+    for r in finalists:
+        inputs["sparse_kv_indices"].zero_()
+        # For LUT-generated entries, regenerate the LUT tensor
+        lut_tensor = None
+        if "lut_source_mode" in r:
+            lut_np = generate_remap_lut(r["lut_source_mode"], r["lut_source_param"])
+            lut_tensor = torch.from_numpy(lut_np).cuda()
+        call_args = (
+            inputs["x"],
+            inputs["dense_kv_indptr"],
+            inputs["sparse_kv_indptr"],
+            inputs["dense_kv_indices"],
+            inputs["sparse_kv_indices"],
+            eff_bs,
+            args.topk_val,
+            args.reserved_bos,
+            args.reserved_eos,
+            pages_per_seg,
+            r["mode"],
+            r["param"],
+            lut_tensor,  # lut
+            None,  # quantiles
+            r.get("noscale", False),
+        )
+        latency = bench_kernel(topk_output_sglang, call_args,
+                               warmup=10, repeat=args.latency_repeat)
+        r["full_kernel_ms"] = latency["mean_ms"]
+        print(f"  {r['label']:<35s}  gini={r['gini']:.3f}  latency={latency['mean_ms']:.4f}ms")
+
+    # Re-rank finalists by latency
+    finalists.sort(key=lambda r: r["full_kernel_ms"])
+    for i, r in enumerate(finalists):
+        r["latency_rank"] = i + 1
+        r["gini_rank"] = next(j+1 for j, x in enumerate(ranked) if x is r)
+
+    return results
 
 
 def main():
@@ -353,6 +614,16 @@ def main():
         "--output-json", type=str, default=None,
         help="Save results to JSON file",
     )
+    parser.add_argument("--latency-rerank", action="store_true",
+                        help="Re-rank top Gini finalists by actual kernel latency")
+    parser.add_argument("--latency-top-n", type=int, default=10,
+                        help="Number of Gini finalists to re-rank by latency (default: 10)")
+    parser.add_argument("--latency-repeat", type=int, default=50,
+                        help="Kernel timing repetitions for latency measurement (default: 50)")
+    parser.add_argument("--counters", action="store_true",
+                        help="Collect counter-based metrics (Stage 2 cost analysis) for each config")
+    parser.add_argument("--lut-sweep", action="store_true",
+                        help="Generate and evaluate LUT approximations for parametric transform modes")
     args = parser.parse_args()
 
     source = f"real ({args.real_histograms})" if args.real_histograms else f"synthetic ({args.distributions})"
@@ -361,12 +632,17 @@ def main():
           f"topk_val={args.topk_val}, num_kv_heads={args.num_kv_heads}")
     print(f"  score source: {source}")
     n_parametric = sum(len(v) for _, v in SWEEP_GRID.values())
+    n_baselines = len(BASELINES)
     n_dists = 1 if args.real_histograms else len(args.distributions)
-    print(f"  sweep: {n_parametric} parametric + {len(BASELINES)} baselines "
-          f"= {n_parametric + len(BASELINES)} combos x {n_dists} dists")
+    print(f"  sweep: {n_parametric} parametric + {n_baselines} baselines "
+          f"= {n_parametric + n_baselines} combos x {n_dists} dists")
 
     results = run_sweep(args)
-    print_table(results)
+
+    if args.latency_rerank:
+        results = latency_rerank(results, args)
+
+    print_table(results, show_latency=args.latency_rerank)
 
     if args.output_json:
         with open(args.output_json, "w") as f:

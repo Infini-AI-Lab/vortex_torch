@@ -6,7 +6,10 @@
 #   Mode 3 (Power):  y = sign(x) * |x|^p
 #   Mode 6 (Asinh):  y = asinh(beta * x)
 #   Mode 7 (Log1p):  y = sign(x) * log1p(alpha * |x|)
-#   Mode 8 (Trunc8): bf16 upper-8-bit bucketing
+#   Mode 8 (Trunc8):   bf16 upper-8-bit bucketing
+#   Mode 9 (Erf):     y = erf(alpha * x)
+#   Mode 10 (Tanh):   y = tanh(alpha * x)
+#   Mode 11 (Subtract): x - pivot (RadiK-style scatter)
 #
 # Four steps:
 #   1. Calibrate — collect real-data histograms
@@ -26,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
 
 # ── Defaults ──────────────────────────────────────────────────
-GPU_ID=5
+GPU_ID=4
 MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=30
 MEM=0.7
@@ -56,7 +59,7 @@ RUN_DIR="${RESULTS_DIR}/dist_analysis_${TIMESTAMP}"
 mkdir -p "${RUN_DIR}"
 
 echo "============================================================"
-echo "Bucket Distribution Profiling (modes 3, 6, 7)"
+echo "Bucket Distribution Profiling (modes 3, 6, 7, 8, 9, 10, 11)"
 echo "  Model:           ${MODEL_NAME}"
 echo "  Algorithm:       ${ALGO}"
 echo "  TopK:            ${TOPK_VAL}"
@@ -95,9 +98,10 @@ AUTOTUNE_JSON="${RUN_DIR}/autotune_results.json"
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
   --topk-val "${TOPK_VAL}" \
   --batch-size 4 \
-  --seq-len 4096 \
-  --num-kv-heads 2 \
+  --seq-len 32768 \
+  --num-kv-heads 8 \
   --real-histograms "${REAL_HIST_PATH}" \
+  --latency-rerank \
   --output-json "${AUTOTUNE_JSON}" \
   2>&1 | tee "${RUN_DIR}/step2_autotune.log"
 
@@ -111,14 +115,14 @@ BENCH_JSON="${RUN_DIR}/bench_distribution.json"
 
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   --batch-sizes 4 \
-  --seq-lens 4096 \
+  --seq-lens 32768 \
   --topk-vals "${TOPK_VAL}" \
-  --num-kv-heads 2 \
+  --num-kv-heads 8 \
   --distributions bucket_uniform normal \
   --histogram \
   --real-histograms "${REAL_HIST_PATH}" \
   --autotune-json "${AUTOTUNE_JSON}" \
-  --filter-kernels sglang_m3 sglang_m6 sglang_m7 sglang_m8 \
+  --filter-kernels naive sglang_m0 sglang_scale sglang_m3 sglang_m3_noscale sglang_m6 sglang_m6_noscale sglang_m7 sglang_m7_noscale sglang_m8 sglang_m9 sglang_m9_noscale sglang_m10 sglang_m10_noscale sglang_m11 \
   --repeat 20 \
   --output-json "${BENCH_JSON}" \
   2>&1 | tee "${RUN_DIR}/step3_bench.log"
@@ -134,13 +138,12 @@ python "${BENCH_DIR}/analyze_topk_distribution.py" \
   --real-histograms "${REAL_HIST_PATH}" \
   --output-dir "${RUN_DIR}" \
   2>&1 | tee "${RUN_DIR}/step4_analyze.log"
-
 echo ">>> Step 4: Done."
 
 # ── Summary ───────────────────────────────────────────────────
 echo ""
 echo "============================================================"
-echo "Bucket Distribution Profiling Complete (modes 3, 6, 7)"
+echo "Bucket Distribution Profiling Complete (modes 3, 6, 7, 8, 9, 10, 11)"
 echo "  All outputs in: ${RUN_DIR}/"
 echo "    autotune_results.json       — hyperparameter sweep rankings"
 echo "    bench_distribution.json     — raw benchmark data"

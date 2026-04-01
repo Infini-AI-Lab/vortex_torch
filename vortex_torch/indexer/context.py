@@ -25,6 +25,7 @@ class Context(ContextBase):
         # misc
         "indexer_dtype", "topk_val", "page_reserved_bos", "page_reserved_eos", "topk_type",
         "topk_mapping_mode", "topk_mapping_power", "topk_mapping_lut", "topk_mapping_quantiles",
+        "topk_mapping_noscale",
         "topk_histogram_enabled",
         
         # auxilary memory in graph
@@ -76,6 +77,7 @@ class Context(ContextBase):
     topk_mapping_power: float        #: Power exponent for mapping mode 3.
     topk_mapping_lut: object         #: Optional uint8[256] LUT tensor for mapping mode 1.
     topk_mapping_quantiles: object   #: Optional float32[256] quantiles tensor for mapping mode 2.
+    topk_mapping_noscale: bool       #: Skip auto-range linear scaling, use fp16 bucketing on f(x) (default False).
     topk_histogram_enabled: bool      #: Enable histogram profiling during inference (default False).
 
     # --- auxiliary ---
@@ -156,6 +158,7 @@ class Context(ContextBase):
         self.topk_type = getattr(sa, "vortex_topk_type", "naive")
         self.topk_mapping_mode = getattr(sa, "vortex_topk_mapping_mode", 0)
         self.topk_mapping_power = getattr(sa, "vortex_topk_mapping_power", 0.5)
+        self.topk_mapping_noscale = getattr(sa, "vortex_topk_mapping_noscale", False)
         self.topk_histogram_enabled = getattr(sa, "vortex_topk_histogram", False)
 
         device = getattr(model_runner, "device", "cpu")

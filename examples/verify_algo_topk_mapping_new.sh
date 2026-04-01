@@ -11,6 +11,9 @@ set -e
 # 6: Asinh          — y = asinh(beta * x)
 # 7: Log1p          — y = sign(x) * log1p(alpha * |x|)
 # 8: Trunc8         — bf16 upper-8-bit bucketing
+# 9: Erf            — y = erf(alpha * x)
+# 10: Tanh          — y = tanh(alpha * x)
+# 11: Subtract      — x - pivot (RadiK-style scatter)
 export CUDA_VISIBLE_DEVICES=5
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,7 +41,7 @@ AUTOTUNE_JSON="${RESULTS_DIR}/autotune_${TIMESTAMP}.json"
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
   --topk-val 30 \
   --batch-size 4 \
-  --seq-len 4096 \
+  --seq-len 32768 \
   --num-kv-heads 2 \
   --real-histograms "${REAL_HISTOGRAMS}" \
   --output-json "${AUTOTUNE_JSON}" \
@@ -47,72 +50,166 @@ echo ">>> Auto-tune results saved to ${AUTOTUNE_JSON}"
 echo ""
 
 # ============================================================
-# Step 1: Mode 3 (power) — sweep p values
+# Extract best per-mode hyperparameters from autotune JSON
+# ============================================================
+eval "$(python3 -c "
+import json, sys
+data = json.load(open(sys.argv[1]))
+best = {}
+for r in data:
+    m = r.get('mode')
+    if m in (3, 6, 7, 9, 10):
+        if m not in best or r['gini'] < best[m]['gini']:
+            best[m] = r
+for m in (3, 6, 7, 9, 10):
+    print(f'BEST_POWER_{m}={best[m][\"param\"]}' if m in best else f'BEST_POWER_{m}=0.5')
+" "${AUTOTUNE_JSON}")"
+echo ">>> Autotuned best powers: mode3=${BEST_POWER_3} mode6=${BEST_POWER_6} mode7=${BEST_POWER_7} mode9=${BEST_POWER_9} mode10=${BEST_POWER_10}"
+echo ""
+
+# ============================================================
+# Step 1: Mode 3 (power) — autotuned best p
 # ============================================================
 echo "============================================================"
-echo "Step 1: Mode 3 (power) — sweeping p"
+echo "Step 1: Mode 3 (power) — p=${BEST_POWER_3} (autotuned)"
 echo "============================================================"
 for algo in "${sparse_algos[@]}"; do
-  for p in 0.1 0.25 0.75 0.9; do
-    OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_3_p${p}_${TIMESTAMP}.log"
-    echo ">>> Mode 3 (power) p=${p} algo=${algo}"
-    { time python verify_algo.py \
-      --trials 8 \
-      --topk-val 30 \
-      --vortex-module-name "${algo}" \
-      --model-name Qwen/Qwen3-1.7B \
-      --topk-type sglang \
-      --topk-mapping-mode 3 \
-      --topk-mapping-power ${p} \
-      --mem 0.7 ; } \
-      2>&1 | tee "${OUTFILE}"
-  done
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_3_p${BEST_POWER_3}_${TIMESTAMP}.log"
+  echo ">>> Mode 3 (power) p=${BEST_POWER_3} algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 3 \
+    --topk-mapping-power ${BEST_POWER_3} \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
 done
 
 # ============================================================
-# Step 2: Mode 6 (asinh) — sweep beta values
+# Step 2: Mode 6 (asinh) — autotuned best beta
 # ============================================================
 echo "============================================================"
-echo "Step 2: Mode 6 (asinh) — sweeping beta"
+echo "Step 2: Mode 6 (asinh) — beta=${BEST_POWER_6} (autotuned)"
 echo "============================================================"
 for algo in "${sparse_algos[@]}"; do
-  for beta in 0.1 0.5 1.0 2.0 4.0; do
-    OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_6_beta${beta}_${TIMESTAMP}.log"
-    echo ">>> Mode 6 (asinh) beta=${beta} algo=${algo}"
-    { time python verify_algo.py \
-      --trials 8 \
-      --topk-val 30 \
-      --vortex-module-name "${algo}" \
-      --model-name Qwen/Qwen3-1.7B \
-      --topk-type sglang \
-      --topk-mapping-mode 6 \
-      --topk-mapping-power ${beta} \
-      --mem 0.7 ; } \
-      2>&1 | tee "${OUTFILE}"
-  done
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_6_beta${BEST_POWER_6}_${TIMESTAMP}.log"
+  echo ">>> Mode 6 (asinh) beta=${BEST_POWER_6} algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 6 \
+    --topk-mapping-power ${BEST_POWER_6} \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
 done
 
 # ============================================================
-# Step 3: Mode 7 (log1p) — sweep alpha values
+# Step 3: Mode 7 (log1p) — autotuned best alpha
 # ============================================================
 echo "============================================================"
-echo "Step 3: Mode 7 (log1p) — sweeping alpha"
+echo "Step 3: Mode 7 (log1p) — alpha=${BEST_POWER_7} (autotuned)"
 echo "============================================================"
 for algo in "${sparse_algos[@]}"; do
-  for alpha in 0.1 0.5 0.75 1.0 2.0 4.0 8.0; do
-    OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_7_alpha${alpha}_${TIMESTAMP}.log"
-    echo ">>> Mode 7 (log1p) alpha=${alpha} algo=${algo}"
-    { time python verify_algo.py \
-      --trials 8 \
-      --topk-val 30 \
-      --vortex-module-name "${algo}" \
-      --model-name Qwen/Qwen3-1.7B \
-      --topk-type sglang \
-      --topk-mapping-mode 7 \
-      --topk-mapping-power ${alpha} \
-      --mem 0.7 ; } \
-      2>&1 | tee "${OUTFILE}"
-  done
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_7_alpha${BEST_POWER_7}_${TIMESTAMP}.log"
+  echo ">>> Mode 7 (log1p) alpha=${BEST_POWER_7} algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 7 \
+    --topk-mapping-power ${BEST_POWER_7} \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
+done
+
+# ============================================================
+# Step 4: Mode 8 (trunc8) — fixed parameter
+# ============================================================
+echo "============================================================"
+echo "Step 4: Mode 8 (trunc8)"
+echo "============================================================"
+for algo in "${sparse_algos[@]}"; do
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_8_${TIMESTAMP}.log"
+  echo ">>> Mode 8 (trunc8) algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 8 \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
+done
+
+# ============================================================
+# Step 5: Mode 9 (erf) — autotuned best alpha
+# ============================================================
+echo "============================================================"
+echo "Step 5: Mode 9 (erf) — alpha=${BEST_POWER_9} (autotuned)"
+echo "============================================================"
+for algo in "${sparse_algos[@]}"; do
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_9_alpha${BEST_POWER_9}_${TIMESTAMP}.log"
+  echo ">>> Mode 9 (erf) alpha=${BEST_POWER_9} algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 9 \
+    --topk-mapping-power ${BEST_POWER_9} \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
+done
+
+# ============================================================
+# Step 6: Mode 10 (tanh) — autotuned best alpha
+# ============================================================
+echo "============================================================"
+echo "Step 6: Mode 10 (tanh) — alpha=${BEST_POWER_10} (autotuned)"
+echo "============================================================"
+for algo in "${sparse_algos[@]}"; do
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_10_alpha${BEST_POWER_10}_${TIMESTAMP}.log"
+  echo ">>> Mode 10 (tanh) alpha=${BEST_POWER_10} algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 10 \
+    --topk-mapping-power ${BEST_POWER_10} \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
+done
+
+# ============================================================
+# Step 7: Mode 11 (subtract) — fixed parameter
+# ============================================================
+echo "============================================================"
+echo "Step 7: Mode 11 (subtract)"
+echo "============================================================"
+for algo in "${sparse_algos[@]}"; do
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_11_${TIMESTAMP}.log"
+  echo ">>> Mode 11 (subtract) algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 11 \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
 done
 
 # ============================================================
@@ -120,9 +217,13 @@ done
 # ============================================================
 echo ""
 echo "============================================================"
-echo "All sweeps complete. Results in ${RESULTS_DIR}/"
-echo "  Auto-tune:  ${AUTOTUNE_JSON}"
-echo "  Mode 3 (power):  p   = [0.1, 0.25, 0.75, 0.9]"
-echo "  Mode 6 (asinh):  beta  = [0.1, 0.5, 1.0, 2.0, 4.0]"
-echo "  Mode 7 (log1p):  alpha = [0.1, 0.5, 0.75, 1.0, 2.0, 4.0, 8.0]"
+echo "All runs complete. Results in ${RESULTS_DIR}/"
+echo "  Auto-tune:   ${AUTOTUNE_JSON}"
+echo "  Mode 3 (power):    p     = ${BEST_POWER_3} (autotuned)"
+echo "  Mode 6 (asinh):    beta  = ${BEST_POWER_6} (autotuned)"
+echo "  Mode 7 (log1p):    alpha = ${BEST_POWER_7} (autotuned)"
+echo "  Mode 8 (trunc8):   (fixed)"
+echo "  Mode 9 (erf):      alpha = ${BEST_POWER_9} (autotuned)"
+echo "  Mode 10 (tanh):    alpha = ${BEST_POWER_10} (autotuned)"
+echo "  Mode 11 (subtract): (fixed)"
 echo "============================================================"

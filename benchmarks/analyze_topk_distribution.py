@@ -40,6 +40,9 @@ MAPPING_MODE_NAMES = {
     6: "Asinh",
     7: "Log1p",
     8: "Trunc8",
+    9: "Erf",
+    10: "Tanh",
+    11: "Subtract",
 }
 
 MAPPING_MODE_FORMULAS = {
@@ -52,25 +55,33 @@ MAPPING_MODE_FORMULAS = {
     6: "Asinh: asinh(beta*x)",
     7: "Log1p: sign(x)*log1p(alpha*|x|)",
     8: "Trunc8: bf16 upper-8-bit bucketing",
+    9: "Erf: erf(alpha*x)",
+    10: "Tanh: tanh(alpha*x)",
+    11: "Subtract: x - pivot (RadiK-style)",
 }
 
 
 def _mode_key_to_display(mode_key: str) -> str:
-    """Convert a mode key like 'mode_3' or 'mode_3_Power' to a display name."""
+    """Convert a mode key like 'mode_3', 'mode_3_Power', or 'mode_3_Power_noscale' to display name."""
+    # Handle noscale suffix
+    noscale = mode_key.endswith("_noscale")
+    base_key = mode_key[:-len("_noscale")] if noscale else mode_key
+    suffix = " noscale" if noscale else ""
+
     # Handle new format: "mode_3_Power"
-    parts = mode_key.split("_", 2)
+    parts = base_key.split("_", 2)
     if len(parts) >= 3:
-        return parts[2]  # e.g. "Power"
+        return parts[2] + suffix  # e.g. "Power noscale"
     # Handle old format: "mode_3"
     try:
         mode_num = int(parts[1])
-        return MAPPING_MODE_NAMES.get(mode_num, mode_key)
+        return MAPPING_MODE_NAMES.get(mode_num, base_key) + suffix
     except (IndexError, ValueError):
         return mode_key
 
 
 def _mode_key_to_number(mode_key: str) -> int:
-    """Extract the mode number from a key like 'mode_3' or 'mode_3_Power'."""
+    """Extract the mode number from a key like 'mode_3', 'mode_3_Power', or 'mode_3_Power_noscale'."""
     parts = mode_key.split("_")
     try:
         return int(parts[1])
@@ -314,7 +325,7 @@ def plot_mapping_mode_comparison(mode_stats_data: dict, output_dir: str):
     x = np.arange(len(modes))
     width = 0.3
 
-    fig, ax1 = plt.subplots(figsize=(10, 5))
+    fig, ax1 = plt.subplots(figsize=(max(10, len(modes) * 0.8), 5))
     ax2 = ax1.twinx()
 
     bars1 = ax1.bar(x - width / 2, ginis, width, label="Gini", color="darkorange")
@@ -324,7 +335,7 @@ def plot_mapping_mode_comparison(mode_stats_data: dict, output_dir: str):
     ax1.set_ylabel("Gini")
     ax2.set_ylabel("Max/Mean Ratio")
     ax1.set_xticks(x)
-    ax1.set_xticklabels(mode_labels, rotation=15, ha="right")
+    ax1.set_xticklabels(mode_labels, rotation=30, ha="right")
     ax1.set_ylim(0, 1.1)
     ax1.set_title("Mapping Mode Comparison")
 

@@ -34,7 +34,7 @@
 set -euo pipefail
 
 # use GPU_ID to set the GPU id you want to use
-GPU_ID=5
+GPU_ID=4
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
@@ -118,7 +118,7 @@ else
   python "${BENCH_DIR}/autotune_topk_mapping.py" \
     --topk-val "${TOPK_VAL}" \
     --batch-size 4 \
-    --seq-len 4096 \
+    --seq-len 32768 \
     --num-kv-heads 2 \
     ${REAL_HIST_ARGS} \
     --output-json "${AUTOTUNE_JSON}" \
@@ -143,7 +143,7 @@ else
 
   python "${BENCH_DIR}/bench_topk.py" \
     --batch-sizes 4 8 16 32 \
-    --seq-lens 2048 4096 8192 16384 \
+    --seq-lens 2048 4096 8192 16384 32768 \
     --topk-vals "${TOPK_VAL}" \
     --num-kv-heads 2 4 \
     --distributions normal lognormal uniform \
@@ -262,6 +262,32 @@ else
     --topk-type sglang \
     --topk-mapping-mode 7 \
     --topk-mapping-power 1.0
+
+  # 3j. SGLang mode 8 (Trunc8)
+  run_e2e "sglang_mode8_trunc8" \
+    --vortex-module-name "${ALGO}" \
+    --topk-type sglang \
+    --topk-mapping-mode 8
+
+  # 3k. SGLang mode 9 (Erf)
+  run_e2e "sglang_mode9_erf" \
+    --vortex-module-name "${ALGO}" \
+    --topk-type sglang \
+    --topk-mapping-mode 9 \
+    --topk-mapping-power 1.0
+
+  # 3l. SGLang mode 10 (Tanh)
+  run_e2e "sglang_mode10_tanh" \
+    --vortex-module-name "${ALGO}" \
+    --topk-type sglang \
+    --topk-mapping-mode 10 \
+    --topk-mapping-power 1.0
+
+  # 3m. SGLang mode 11 (Subtract)
+  run_e2e "sglang_mode11_subtract" \
+    --vortex-module-name "${ALGO}" \
+    --topk-type sglang \
+    --topk-mapping-mode 11
 
   echo ""
   echo ">>> Step 3: Done. E2E logs saved to ${E2E_DIR}/"

@@ -452,18 +452,30 @@ __device__ __forceinline__ float vortex_to_float<__nv_bfloat16>(__nv_bfloat16 x)
 
 constexpr int VORTEX_MAX_TOPK = 2048;
 
+// Per-segment diagnostic counters written by WriteCounters mode
+constexpr int COUNTER_THRESHOLD_BIN = 0;   // Stage 1 coarse threshold bin id
+constexpr int COUNTER_NUM_ABOVE     = 1;   // elements routed above threshold in Stage 1
+constexpr int COUNTER_NUM_EQUAL     = 2;   // elements in threshold bin (Stage 2 input)
+constexpr int COUNTER_REMAINING_K   = 3;   // topk slots remaining after Stage 1 routing
+constexpr int COUNTER_REFINE_ROUNDS = 4;   // Stage 2 rounds used (0 = resolved in Stage 1)
+constexpr int COUNTER_STAGE2_INPUT  = 5;   // candidates entering first Stage 2 refine round
+constexpr int NUM_TOPK_COUNTERS     = 6;
+
 // Templated version of fast_topk_cuda_tl:
 //   - ScoreT: float or __nv_bfloat16
+//   - StopAfterStage1: return after Stage 1 route/filter (for profiling)
+//   - WriteCounters: write diagnostic counters to global memory
 //   - target_k: runtime parameter (replaces compile-time TopK)
 //   - mapping: configurable value-remapping for Stage 1 bin assignment
-template <typename ScoreT>
+template <typename ScoreT, bool StopAfterStage1 = false, bool WriteCounters = false>
 __device__ void fast_topk_vortex(
     const ScoreT* __restrict__ input,
     int*          __restrict__ index,
     int           row_start,
     int           length,
     int           target_k,
-    const TopKMappingParams& mapping)
+    const TopKMappingParams& mapping,
+    int*          counters = nullptr)
 {
     int topk = target_k;
     constexpr auto BLOCK_SIZE = 1024;
@@ -497,10 +509,14 @@ __device__ void fast_topk_vortex(
         __syncthreads();
     }
 
-    // Pre-pass: compute per-block min/max of transformed values for linear bucketing
-    if (needs_auto_range(mapping.mode)) {
+    // Pre-pass: compute per-block min/max of transformed values for linear bucketing.
+    // sample_stride > 1 reduces pre-pass cost by scanning every Nth element;
+    // the approximated range may miss extreme outliers but Stage 2 uses raw
+    // float bits for exact ordering, so correctness is preserved.
+    if (needs_auto_range(mapping.mode) && !mapping.noscale) {
+        const int stride = (mapping.sample_stride > 1) ? mapping.sample_stride : 1;
         float local_min = __FLT_MAX__, local_max = -__FLT_MAX__;
-        for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
+        for (int idx = tx * stride; idx < length; idx += BLOCK_SIZE * stride) {
             float val = apply_transform(vortex_to_float(input[idx + row_start]), mapping);
             local_min = fminf(local_min, val);
             local_max = fmaxf(local_max, val);
@@ -528,12 +544,46 @@ __device__ void fast_topk_vortex(
             }
         }
         __syncthreads();
+    } else if (needs_pivot(mapping.mode)) {
+        // Pivot pre-pass: compute mean of all elements, store in s_range_min.
+        // MAPPING_SUBTRACT uses convert_to_uint8(x - range_min), so centering
+        // around the mean helps distribute values more evenly across bins.
+        float local_sum = 0.0f;
+        for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
+            local_sum += vortex_to_float(input[idx + row_start]);
+        }
+        // Warp-level reduction
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            local_sum += __shfl_xor_sync(0xFFFFFFFF, local_sum, offset);
+        }
+        __shared__ float s_warp_sums[32];
+        int warp_id = tx >> 5, lane_id = tx & 31;
+        if (lane_id == 0) s_warp_sums[warp_id] = local_sum;
+        __syncthreads();
+        if (tx < (BLOCK_SIZE >> 5)) {
+            local_sum = s_warp_sums[tx];
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                local_sum += __shfl_xor_sync(0xFFFFFFFF, local_sum, offset);
+            }
+            if (tx == 0) {
+                s_range_min = local_sum / float(length);  // mean as pivot
+                s_range_inv_range = 0.0f;
+            }
+        }
+        __syncthreads();
     } else {
         if (tx == 0) { s_range_min = 0.0f; s_range_inv_range = 0.0f; }
         __syncthreads();
     }
 
     // Stage 1: 8-bit coarse histogram (with optional mapping)
+    // Bin cache: store computed bins in vh_input_idx[1] (reinterpreted as uint8_t*)
+    // to avoid recomputing mapped_convert_to_uint8 in the route/filter pass.
+    // vh_input_idx[1] is unused until Stage 2 double-buffering starts after route.
+    constexpr int BIN_CACHE_CAPACITY = SMEM_INPUT_SIZE * static_cast<int>(sizeof(int));  // uint8 entries
+    uint8_t* bin_cache = reinterpret_cast<uint8_t*>(vh_input_idx[1]);
+    const bool use_bin_cache = (length <= BIN_CACHE_CAPACITY);
+
     if (tx < RADIX + 1) vh_histogram[tx] = 0;
     __syncthreads();
 
@@ -543,6 +593,9 @@ __device__ void fast_topk_vortex(
             mapping, s_mapping_lut, s_mapping_quantiles,
             s_range_min, s_range_inv_range);
         ::atomicAdd(&vh_histogram[bin], 1);
+        if (use_bin_cache) {
+            bin_cache[idx] = bin;
+        }
     }
     __syncthreads();
 
@@ -574,19 +627,35 @@ __device__ void fast_topk_vortex(
     const auto threshold_bin = vh_threshold_bin_id;
     topk -= vh_histogram[threshold_bin + 1];
 
+    if (WriteCounters && tx == 0 && counters) {
+        counters[COUNTER_THRESHOLD_BIN] = threshold_bin;
+        counters[COUNTER_REMAINING_K] = topk;
+    }
+
     if (topk == 0) {
         for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-            const auto bin = static_cast<int>(
-                mapped_convert_to_uint8(
-                    vortex_to_float(input[idx + row_start]),
-                    mapping, s_mapping_lut, s_mapping_quantiles,
-                    s_range_min, s_range_inv_range));
+            int bin;
+            if (use_bin_cache) {
+                bin = static_cast<int>(bin_cache[idx]);
+            } else {
+                bin = static_cast<int>(
+                    mapped_convert_to_uint8(
+                        vortex_to_float(input[idx + row_start]),
+                        mapping, s_mapping_lut, s_mapping_quantiles,
+                        s_range_min, s_range_inv_range));
+            }
             if (bin > threshold_bin) {
                 const auto pos = ::atomicAdd(&vh_counter, 1);
                 index[pos] = idx;
             }
         }
         __syncthreads();
+        if (WriteCounters && tx == 0 && counters) {
+            counters[COUNTER_NUM_ABOVE] = vh_counter;
+            counters[COUNTER_NUM_EQUAL] = 0;
+            counters[COUNTER_REFINE_ROUNDS] = 0;
+            counters[COUNTER_STAGE2_INPUT] = 0;
+        }
         return;
     } else {
         __syncthreads();
@@ -595,10 +664,15 @@ __device__ void fast_topk_vortex(
 
         for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
             const auto raw_input = vortex_to_float(input[idx + row_start]);
-            const auto bin = static_cast<int>(
-                mapped_convert_to_uint8(raw_input, mapping,
-                                        s_mapping_lut, s_mapping_quantiles,
-                                        s_range_min, s_range_inv_range));
+            int bin;
+            if (use_bin_cache) {
+                bin = static_cast<int>(bin_cache[idx]);
+            } else {
+                bin = static_cast<int>(
+                    mapped_convert_to_uint8(raw_input, mapping,
+                                            s_mapping_lut, s_mapping_quantiles,
+                                            s_range_min, s_range_inv_range));
+            }
             if (bin > threshold_bin) {
                 const auto pos = ::atomicAdd(&vh_counter, 1);
                 index[pos] = idx;
@@ -613,9 +687,19 @@ __device__ void fast_topk_vortex(
             }
         }
         __syncthreads();
+        if (WriteCounters && tx == 0 && counters) {
+            counters[COUNTER_NUM_ABOVE] = vh_counter;
+            counters[COUNTER_NUM_EQUAL] = vh_num_input[0];
+            counters[COUNTER_STAGE2_INPUT] = vh_num_input[0];
+        }
+        if (StopAfterStage1) return;
     }
 
     // Stage 2: refine with 8-bit radix passes (unchanged — uses raw float bits)
+    if constexpr (WriteCounters) {
+        // Default: all 4 rounds used; overwritten at break if resolved early
+        if (tx == 0 && counters) counters[COUNTER_REFINE_ROUNDS] = 4;
+    }
 #pragma unroll 4
     for (int round = 0; round < 4; ++round) {
         __shared__ int vh_last_remain;
@@ -649,6 +733,11 @@ __device__ void fast_topk_vortex(
                 }
             }
             __syncthreads();
+            if constexpr (WriteCounters) {
+                if (tx == 0 && counters) {
+                    counters[COUNTER_REFINE_ROUNDS] = round + 1;
+                }
+            }
             break;
         } else {
             __syncthreads();
@@ -723,6 +812,92 @@ void TopKOutput_Kernel(
 }
 
 // ======================================================================
+// Profiling Stage1 kernel: runs pre-pass + hist + cumsum + route/filter,
+// stops before Stage 2 refinement (for sub-phase timing)
+// ======================================================================
+template <typename ScoreT>
+__global__ __launch_bounds__(kThreadsPerBlock)
+void TopKStage1_Kernel(
+    const ScoreT* __restrict__ score,
+    const int*    __restrict__ dense_kv_indptr,
+    const int*    __restrict__ sparse_kv_indptr,
+    const int*    __restrict__ dense_kv_indices,
+    int*          __restrict__ sparse_kv_indices,
+    const int     topk_val,
+    const int     page_reserved_bos,
+    const int     page_reserved_eos,
+    const TopKMappingParams mapping)
+{
+    const int bx = blockIdx.x;
+
+    const int start = dense_kv_indptr[bx] + page_reserved_bos;
+    const int end   = dense_kv_indptr[bx + 1] - page_reserved_eos;
+    const int nblk  = end - start;
+    if (nblk <= topk_val) return;
+
+    const ScoreT* __restrict__ score_blk = score + start;
+    const int*    __restrict__ idx_blk   = dense_kv_indices + start;
+    int*          __restrict__ out_blk   = sparse_kv_indices
+                                         + sparse_kv_indptr[bx]
+                                         + page_reserved_bos;
+
+    __shared__ int s_indices[VORTEX_MAX_TOPK];
+    fast_topk_vortex<ScoreT, /*StopAfterStage1=*/true>(
+        score_blk, s_indices, 0, nblk, topk_val, mapping);
+    __syncthreads();
+
+    // Remap position indices -> page indices via dense_kv_indices
+    const int tx = threadIdx.x;
+    for (int i = tx; i < topk_val; i += kThreadsPerBlock) {
+        out_blk[i] = idx_blk[s_indices[i]];
+    }
+}
+
+// ======================================================================
+// Profiling counters kernel: runs full pipeline + writes diagnostic
+// counters to a separate global-memory tensor
+// ======================================================================
+template <typename ScoreT>
+__global__ __launch_bounds__(kThreadsPerBlock)
+void TopKCounters_Kernel(
+    const ScoreT* __restrict__ score,
+    const int*    __restrict__ dense_kv_indptr,
+    const int*    __restrict__ sparse_kv_indptr,
+    const int*    __restrict__ dense_kv_indices,
+    int*          __restrict__ sparse_kv_indices,
+    int*          __restrict__ counters,     // [eff_batch_size, NUM_TOPK_COUNTERS]
+    const int     topk_val,
+    const int     page_reserved_bos,
+    const int     page_reserved_eos,
+    const TopKMappingParams mapping)
+{
+    const int bx = blockIdx.x;
+
+    const int start = dense_kv_indptr[bx] + page_reserved_bos;
+    const int end   = dense_kv_indptr[bx + 1] - page_reserved_eos;
+    const int nblk  = end - start;
+    if (nblk <= topk_val) return;
+
+    const ScoreT* __restrict__ score_blk = score + start;
+    const int*    __restrict__ idx_blk   = dense_kv_indices + start;
+    int*          __restrict__ out_blk   = sparse_kv_indices
+                                         + sparse_kv_indptr[bx]
+                                         + page_reserved_bos;
+
+    __shared__ int s_indices[VORTEX_MAX_TOPK];
+    fast_topk_vortex<ScoreT, /*StopAfterStage1=*/false, /*WriteCounters=*/true>(
+        score_blk, s_indices, 0, nblk, topk_val, mapping,
+        counters + bx * NUM_TOPK_COUNTERS);
+    __syncthreads();
+
+    // Remap position indices -> page indices via dense_kv_indices
+    const int tx = threadIdx.x;
+    for (int i = tx; i < topk_val; i += kThreadsPerBlock) {
+        out_blk[i] = idx_blk[s_indices[i]];
+    }
+}
+
+// ======================================================================
 // Profiling histogram kernel: runs only Stage 1 and returns per-segment
 // 256-bin histograms for distribution analysis
 // ======================================================================
@@ -762,10 +937,11 @@ void TopKHistogram_Kernel(
         __syncthreads();
     }
 
-    // Pre-pass: compute per-block min/max for transform modes
-    if (needs_auto_range(mapping.mode)) {
+    // Pre-pass: compute per-block min/max for transform modes (supports sampled stride)
+    if (needs_auto_range(mapping.mode) && !mapping.noscale) {
+        const int stride = (mapping.sample_stride > 1) ? mapping.sample_stride : 1;
         float local_min = __FLT_MAX__, local_max = -__FLT_MAX__;
-        for (int idx = tx; idx < nblk; idx += BLOCK_SIZE) {
+        for (int idx = tx * stride; idx < nblk; idx += BLOCK_SIZE * stride) {
             float val = apply_transform(vortex_to_float(score_blk[idx]), mapping);
             local_min = fminf(local_min, val);
             local_max = fmaxf(local_max, val);
@@ -788,6 +964,30 @@ void TopKHistogram_Kernel(
                 s_range_min = local_min;
                 float range = local_max - local_min;
                 s_range_inv_range = (range > 0.0f) ? 255.0f / range : 0.0f;
+            }
+        }
+        __syncthreads();
+    } else if (needs_pivot(mapping.mode)) {
+        // Pivot pre-pass: compute mean for MAPPING_SUBTRACT
+        float local_sum = 0.0f;
+        for (int idx = tx; idx < nblk; idx += BLOCK_SIZE) {
+            local_sum += vortex_to_float(score_blk[idx]);
+        }
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            local_sum += __shfl_xor_sync(0xFFFFFFFF, local_sum, offset);
+        }
+        __shared__ float s_warp_sums_h[32];
+        int warp_id = tx >> 5, lane_id = tx & 31;
+        if (lane_id == 0) s_warp_sums_h[warp_id] = local_sum;
+        __syncthreads();
+        if (tx < (BLOCK_SIZE >> 5)) {
+            local_sum = s_warp_sums_h[tx];
+            for (int offset = 16; offset > 0; offset >>= 1) {
+                local_sum += __shfl_xor_sync(0xFFFFFFFF, local_sum, offset);
+            }
+            if (tx == 0) {
+                s_range_min = local_sum / float(nblk);
+                s_range_inv_range = 0.0f;
             }
         }
         __syncthreads();
@@ -949,7 +1149,8 @@ void topk_output_sglang(
     const int64_t     mapping_mode,
     const double      mapping_power,
     std::optional<at::Tensor> mapping_lut,
-    std::optional<at::Tensor> mapping_quantiles)
+    std::optional<at::Tensor> mapping_quantiles,
+    const bool        mapping_noscale)
 {
     TORCH_CHECK(topk_val <= VORTEX_MAX_TOPK,
                 "topk_output: topk_val (", topk_val,
@@ -961,6 +1162,8 @@ void topk_output_sglang(
     mapping.power_exp = static_cast<float>(mapping_power);
     mapping.lut = nullptr;
     mapping.quantiles = nullptr;
+    mapping.noscale = mapping_noscale;
+    mapping.sample_stride = 1;
 
     if (mapping_lut.has_value()) {
         const auto& lut = mapping_lut.value();
@@ -1029,7 +1232,8 @@ void topk_profile_histogram(
     const int64_t     mapping_mode,
     const double      mapping_power,
     std::optional<at::Tensor> mapping_lut,
-    std::optional<at::Tensor> mapping_quantiles)
+    std::optional<at::Tensor> mapping_quantiles,
+    const bool        mapping_noscale)
 {
     CHECK_CUDA(x);
     CHECK_CUDA(dense_kv_indptr);
@@ -1046,6 +1250,8 @@ void topk_profile_histogram(
     mapping.power_exp = static_cast<float>(mapping_power);
     mapping.lut = nullptr;
     mapping.quantiles = nullptr;
+    mapping.noscale = mapping_noscale;
+    mapping.sample_stride = 1;
 
     if (mapping_lut.has_value()) {
         const auto& lut = mapping_lut.value();
@@ -1091,5 +1297,177 @@ void topk_profile_histogram(
     const auto result = cudaGetLastError();
     TORCH_CHECK(result == cudaSuccess,
                 "topk_profile_histogram kernel failed: ", ::cudaGetErrorString(result));
+}
+
+// Helper: build TopKMappingParams from host arguments
+static TopKMappingParams build_mapping_params(
+    int64_t mapping_mode, double mapping_power,
+    std::optional<at::Tensor>& mapping_lut,
+    std::optional<at::Tensor>& mapping_quantiles,
+    bool mapping_noscale = false,
+    int sample_stride = 1)
+{
+    TopKMappingParams mapping{};
+    mapping.mode = static_cast<int>(mapping_mode);
+    mapping.power_exp = static_cast<float>(mapping_power);
+    mapping.lut = nullptr;
+    mapping.quantiles = nullptr;
+    mapping.noscale = mapping_noscale;
+    mapping.sample_stride = sample_stride;
+
+    if (mapping_lut.has_value()) {
+        const auto& lut = mapping_lut.value();
+        CHECK_CUDA(lut);
+        TORCH_CHECK(lut.dim() == 1 && lut.size(0) == 256 && lut.scalar_type() == at::ScalarType::Byte,
+                     "mapping_lut must be a 1D uint8 tensor of size 256");
+        mapping.lut = lut.data_ptr<uint8_t>();
+    }
+    if (mapping_quantiles.has_value()) {
+        const auto& q = mapping_quantiles.value();
+        CHECK_CUDA(q);
+        TORCH_CHECK(q.dim() == 1 && q.size(0) == 256 && q.scalar_type() == at::ScalarType::Float,
+                     "mapping_quantiles must be a 1D float32 tensor of size 256");
+        mapping.quantiles = q.data_ptr<float>();
+    }
+    return mapping;
+}
+
+// ======================================================================
+// Profiling: Stage 1 only (pre-pass + hist + cumsum + route/filter)
+// ======================================================================
+void topk_profile_stage1(
+    const at::Tensor& x,
+    const at::Tensor& dense_kv_indptr,
+    const at::Tensor& sparse_kv_indptr,
+    const at::Tensor& dense_kv_indices,
+    at::Tensor&       sparse_kv_indices,
+    const int64_t     eff_batch_size,
+    const int64_t     topk_val,
+    const int64_t     reserved_bos,
+    const int64_t     reserved_eos,
+    const int64_t     max_num_pages,
+    const int64_t     mapping_mode,
+    const double      mapping_power,
+    std::optional<at::Tensor> mapping_lut,
+    std::optional<at::Tensor> mapping_quantiles,
+    const bool        mapping_noscale)
+{
+    TORCH_CHECK(topk_val <= VORTEX_MAX_TOPK,
+                "topk_profile_stage1: topk_val (", topk_val,
+                ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
+
+    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles, mapping_noscale);
+
+    dim3 nblks(eff_batch_size);
+    dim3 nthreads(kThreadsPerBlock);
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
+
+    if (x.scalar_type() == at::ScalarType::BFloat16) {
+        setup_kernel_smem_once<TopKStage1_Kernel<__nv_bfloat16>, kSmem>();
+        TopKStage1_Kernel<__nv_bfloat16><<<nblks, nthreads, kSmem, stream>>>(
+            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos,
+            mapping);
+    } else if (x.scalar_type() == at::ScalarType::Float) {
+        setup_kernel_smem_once<TopKStage1_Kernel<float>, kSmem>();
+        TopKStage1_Kernel<float><<<nblks, nthreads, kSmem, stream>>>(
+            x.data_ptr<float>(),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos,
+            mapping);
+    } else {
+        TORCH_CHECK(false,
+                    "topk_profile_stage1: unsupported dtype ",
+                    x.scalar_type());
+    }
+
+    const auto result = cudaGetLastError();
+    TORCH_CHECK(result == cudaSuccess,
+                "topk_profile_stage1 kernel failed: ", ::cudaGetErrorString(result));
+}
+
+// ======================================================================
+// Profiling: full pipeline + diagnostic counters
+// ======================================================================
+void topk_profile_counters(
+    const at::Tensor& x,
+    const at::Tensor& dense_kv_indptr,
+    const at::Tensor& sparse_kv_indptr,
+    const at::Tensor& dense_kv_indices,
+    at::Tensor&       sparse_kv_indices,
+    at::Tensor&       counters,
+    const int64_t     eff_batch_size,
+    const int64_t     topk_val,
+    const int64_t     reserved_bos,
+    const int64_t     reserved_eos,
+    const int64_t     max_num_pages,
+    const int64_t     mapping_mode,
+    const double      mapping_power,
+    std::optional<at::Tensor> mapping_lut,
+    std::optional<at::Tensor> mapping_quantiles,
+    const bool        mapping_noscale)
+{
+    TORCH_CHECK(topk_val <= VORTEX_MAX_TOPK,
+                "topk_profile_counters: topk_val (", topk_val,
+                ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
+    CHECK_CUDA(counters);
+    TORCH_CHECK(counters.dim() == 2 && counters.size(0) == eff_batch_size
+                && counters.size(1) == NUM_TOPK_COUNTERS,
+                "counters must be [eff_batch_size, ", NUM_TOPK_COUNTERS, "]");
+    TORCH_CHECK(counters.scalar_type() == at::ScalarType::Int,
+                "counters must be int32");
+
+    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles, mapping_noscale);
+
+    dim3 nblks(eff_batch_size);
+    dim3 nthreads(kThreadsPerBlock);
+    cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
+
+    if (x.scalar_type() == at::ScalarType::BFloat16) {
+        setup_kernel_smem_once<TopKCounters_Kernel<__nv_bfloat16>, kSmem>();
+        TopKCounters_Kernel<__nv_bfloat16><<<nblks, nthreads, kSmem, stream>>>(
+            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            counters.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos,
+            mapping);
+    } else if (x.scalar_type() == at::ScalarType::Float) {
+        setup_kernel_smem_once<TopKCounters_Kernel<float>, kSmem>();
+        TopKCounters_Kernel<float><<<nblks, nthreads, kSmem, stream>>>(
+            x.data_ptr<float>(),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            counters.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos,
+            mapping);
+    } else {
+        TORCH_CHECK(false,
+                    "topk_profile_counters: unsupported dtype ",
+                    x.scalar_type());
+    }
+
+    const auto result = cudaGetLastError();
+    TORCH_CHECK(result == cudaSuccess,
+                "topk_profile_counters kernel failed: ", ::cudaGetErrorString(result));
 }
 
