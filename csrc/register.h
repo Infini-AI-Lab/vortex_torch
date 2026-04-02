@@ -114,7 +114,8 @@ const int64_t       mapping_mode = 0,
 const double        mapping_power = 0.5,
 std::optional<at::Tensor> mapping_lut = std::nullopt,
 std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false
+const bool          mapping_noscale = false,
+const int64_t       topk_val = 0
 );
 
 void topk_profile_stage1(

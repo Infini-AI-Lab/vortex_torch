@@ -4,16 +4,24 @@
 #include <cstdint>
 
 // ============================================================
-// TopK bucket-sort distribution mapping strategies
+// TopK bucket-sort Stage-1 remapping strategies
 //
 // These transforms remap float scores before Stage 1's 8-bit
-// histogram binning, aiming for a more uniform distribution
-// across the 256 coarse bins.  Stage 2 refinement still uses
-// convert_to_uint32() on raw floats, so correctness is preserved.
+// histogram binning.  The primary goal is to maximize coarse-bin
+// resolution in the score region that determines the top-k
+// cutoff, thereby:
+//   - shrinking the Stage-1 threshold bin (fewer collisions)
+//   - reducing COUNTER_NUM_EQUAL / COUNTER_STAGE2_INPUT
+//   - reducing the number of Stage-2 refine rounds
 //
-// Modes 3/4/6/7 use a data-adaptive linear mapping to [0,255]
-// instead of fp16 bit-pattern bucketing, guaranteeing full
-// bucket utilization regardless of value range.
+// Stage 2 refinement still uses convert_to_uint32() on raw
+// floats, so final ordering correctness is always preserved.
+//
+// Modes 3/4/6/7/9/10 apply a nonlinear transform then linearly
+// map the result to [0,255].  Mode 12 (ADAPTIVE_TAIL_WINDOW)
+// directly focuses all 256 bins on the competitive upper tail
+// estimated from the top-k ratio, collapsing irrelevant
+// low-score mass into bin 0.
 // ============================================================
 
 enum TopKMappingMode {
@@ -29,15 +37,19 @@ enum TopKMappingMode {
     MAPPING_ERF         = 9,  // erf(alpha * x)
     MAPPING_TANH        = 10, // tanh(alpha * x)
     MAPPING_SUBTRACT    = 11, // subtract pivot, then fp16 bucketing
+    MAPPING_ADAPTIVE_TAIL_WINDOW = 12, // focus bins on upper tail via sampled quantile
 };
 
 struct TopKMappingParams {
     int mode;                              // TopKMappingMode
     float power_exp;                       // For MAPPING_POWER (default 0.5)
+                                           // For MAPPING_ADAPTIVE_TAIL_WINDOW: tail expansion
+                                           //   factor rho (default 4.0).  tau_low = Q(1 - rho*k/n).
     const uint8_t* __restrict__ lut;       // [256] byte LUT, or nullptr
     const float* __restrict__ quantiles;   // [256] float quantile breakpoints, or nullptr
     bool noscale;                          // Skip auto-range linear scaling, use fp16 bucketing on f(x)
     int sample_stride;                     // Pre-pass sampling stride (1=full, 8=1/8, 0=skip)
+    int target_k;                          // Top-k value; used by MAPPING_ADAPTIVE_TAIL_WINDOW
 };
 
 // NOTE: convert_to_uint8() must be defined before including this header.
@@ -158,6 +170,8 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
             return convert_to_uint8_bf16(x);
         case MAPPING_SUBTRACT:
             return convert_to_uint8(x - range_min);  // range_min repurposed as pivot
+        case MAPPING_ADAPTIVE_TAIL_WINDOW:
+            return linear_map_to_uint8(x, range_min, inv_range);
         default:  // MAPPING_NONE
             return convert_to_uint8(x);
     }
@@ -173,4 +187,9 @@ __device__ __forceinline__ bool needs_auto_range(int mode) {
 // Helper: check if a mapping mode needs the pivot pre-pass
 __device__ __forceinline__ bool needs_pivot(int mode) {
     return (mode == MAPPING_SUBTRACT);
+}
+
+// Helper: check if mode is the adaptive tail-window pre-pass
+__device__ __forceinline__ bool needs_tail_window(int mode) {
+    return (mode == MAPPING_ADAPTIVE_TAIL_WINDOW);
 }

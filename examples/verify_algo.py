@@ -254,15 +254,15 @@ def parse_args():
         "--topk-mapping-mode",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract (default: 0).',
+        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window (default: 0).',
     )
 
     parser.add_argument(
         "--topk-mapping-power",
         type=float,
         default=0.5,
-        help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 7 asinh), alpha (mode 8 log1p). Default: 0.5.',
+        help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 6 asinh), alpha (mode 7 log1p), rho tail expansion (mode 12). Default: 0.5.',
     )
 
     parser.add_argument(

@@ -27,7 +27,8 @@ PYBIND11_MODULE(vortex_torch_C, m){
               py::arg("mapping_power") = 0.5,
               py::arg("mapping_lut") = py::none(),
               py::arg("mapping_quantiles") = py::none(),
-              py::arg("mapping_noscale") = false);
+              py::arg("mapping_noscale") = false,
+              py::arg("topk_val") = 0);
         m.def("topk_profile_stage1",           &topk_profile_stage1,
               py::arg("x"), py::arg("dense_kv_indptr"), py::arg("sparse_kv_indptr"),
               py::arg("dense_kv_indices"), py::arg("sparse_kv_indices"),

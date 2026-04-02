@@ -309,6 +309,7 @@ class topK(vOp):
                 mapping_lut,
                 mapping_quantiles,
                 mapping_noscale,
+                ctx.topk_val,
             )
             # Accumulate histograms for offline calibration
             _calibration_histograms.append(self.last_histograms.cpu().clone())

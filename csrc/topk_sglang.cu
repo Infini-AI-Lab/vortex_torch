@@ -571,6 +571,113 @@ __device__ void fast_topk_vortex(
             }
         }
         __syncthreads();
+    } else if (needs_tail_window(mapping.mode)) {
+        // Adaptive tail-window pre-pass: estimate tau_low = Q(1 - rho*k/n)
+        // and local_max via a sampled quantile estimator.  All 256 coarse bins
+        // are then allocated to [tau_low, local_max]; scores below tau_low
+        // collapse into bin 0 via linear_map_to_uint8 clamping.
+        constexpr int MAX_SAMPLES = 1024;
+        __shared__ float s_samples[MAX_SAMPLES];
+        __shared__ int   s_sample_count;
+
+        if (tx == 0) s_sample_count = 0;
+        __syncthreads();
+
+        // Compute sampling stride so we collect ~MAX_SAMPLES from the segment
+        const int desired_stride = (length + MAX_SAMPLES - 1) / MAX_SAMPLES;
+        const int sample_stride = max(desired_stride, 1);
+
+        // Each thread samples elements and finds local_max simultaneously
+        float local_max = -__FLT_MAX__;
+        for (int idx = tx * sample_stride; idx < length; idx += BLOCK_SIZE * sample_stride) {
+            float val = vortex_to_float(input[idx + row_start]);
+            local_max = fmaxf(local_max, val);
+            int slot = ::atomicAdd(&s_sample_count, 1);
+            if (slot < MAX_SAMPLES) {
+                s_samples[slot] = val;
+            }
+        }
+
+        // Reduce local_max across block
+        for (int offset = 16; offset > 0; offset >>= 1)
+            local_max = fmaxf(local_max, __shfl_xor_sync(0xFFFFFFFF, local_max, offset));
+        __shared__ float s_warp_maxs_tw[32];
+        {
+            int warp_id = tx >> 5, lane_id = tx & 31;
+            if (lane_id == 0) s_warp_maxs_tw[warp_id] = local_max;
+        }
+        __syncthreads();
+        if (tx < (BLOCK_SIZE >> 5)) {
+            local_max = s_warp_maxs_tw[tx];
+            for (int offset = 16; offset > 0; offset >>= 1)
+                local_max = fmaxf(local_max, __shfl_xor_sync(0xFFFFFFFF, local_max, offset));
+            if (tx == 0) s_warp_maxs_tw[0] = local_max;
+        }
+        __syncthreads();
+        local_max = s_warp_maxs_tw[0];
+
+        int nsamp = min(s_sample_count, MAX_SAMPLES);
+
+        // Simple odd-even transposition sort on the sample buffer.
+        // nsamp <= 1024, and we have 1024 threads, so each thread
+        // handles one element.  O(nsamp) parallel rounds suffice.
+        __syncthreads();
+        if (nsamp >= 2) {
+            for (int pass = 0; pass < nsamp; ++pass) {
+                // Even phase: compare (0,1), (2,3), ...
+                if (tx * 2 + 1 < nsamp) {
+                    int i = tx * 2;
+                    if (s_samples[i] > s_samples[i + 1]) {
+                        float tmp = s_samples[i];
+                        s_samples[i] = s_samples[i + 1];
+                        s_samples[i + 1] = tmp;
+                    }
+                }
+                __syncthreads();
+                // Odd phase: compare (1,2), (3,4), ...
+                if (tx * 2 + 2 < nsamp) {
+                    int i = tx * 2 + 1;
+                    if (s_samples[i] > s_samples[i + 1]) {
+                        float tmp = s_samples[i];
+                        s_samples[i] = s_samples[i + 1];
+                        s_samples[i + 1] = tmp;
+                    }
+                }
+                __syncthreads();
+            }
+        }
+
+        // Estimate tau_low = Q(1 - rho * k / n)
+        if (tx == 0) {
+            float rho = mapping.power_exp;  // reused as tail expansion factor
+            if (rho <= 0.0f) rho = 4.0f;
+            int k = (mapping.target_k > 0) ? mapping.target_k : target_k;
+            float frac = 1.0f - rho * float(k) / float(length);
+            frac = fmaxf(frac, 0.0f);  // clamp: never go below rank 0
+
+            float tau_low;
+            if (nsamp < 4 || frac <= 0.0f) {
+                // Too few samples or the tail covers everything: full range
+                tau_low = -__FLT_MAX__;
+            } else {
+                float fidx = frac * float(nsamp - 1);
+                int lo = __float2int_rd(fidx);
+                lo = min(max(lo, 0), nsamp - 2);
+                float t = fidx - float(lo);
+                tau_low = s_samples[lo] * (1.0f - t) + s_samples[lo + 1] * t;
+            }
+
+            // Fallback: if tau_low >= local_max, use full-range linear mapping
+            if (tau_low >= local_max) {
+                // Find the actual minimum from sorted samples
+                tau_low = (nsamp > 0) ? s_samples[0] : local_max;
+            }
+
+            float range = local_max - tau_low;
+            s_range_min = tau_low;
+            s_range_inv_range = (range > 1e-10f) ? 255.0f / range : 0.0f;
+        }
+        __syncthreads();
     } else {
         if (tx == 0) { s_range_min = 0.0f; s_range_inv_range = 0.0f; }
         __syncthreads();
@@ -991,6 +1098,96 @@ void TopKHistogram_Kernel(
             }
         }
         __syncthreads();
+    } else if (needs_tail_window(mapping.mode)) {
+        // Adaptive tail-window pre-pass (histogram kernel variant)
+        constexpr int MAX_SAMPLES_H = 1024;
+        __shared__ float s_samples_h[MAX_SAMPLES_H];
+        __shared__ int   s_sample_count_h;
+
+        if (tx == 0) s_sample_count_h = 0;
+        __syncthreads();
+
+        const int desired_stride = (nblk + MAX_SAMPLES_H - 1) / MAX_SAMPLES_H;
+        const int sample_stride_h = max(desired_stride, 1);
+
+        float local_max = -__FLT_MAX__;
+        for (int idx = tx * sample_stride_h; idx < nblk; idx += BLOCK_SIZE * sample_stride_h) {
+            float val = vortex_to_float(score_blk[idx]);
+            local_max = fmaxf(local_max, val);
+            int slot = ::atomicAdd(&s_sample_count_h, 1);
+            if (slot < MAX_SAMPLES_H) s_samples_h[slot] = val;
+        }
+
+        for (int offset = 16; offset > 0; offset >>= 1)
+            local_max = fmaxf(local_max, __shfl_xor_sync(0xFFFFFFFF, local_max, offset));
+        __shared__ float s_warp_maxs_h[32];
+        {
+            int warp_id = tx >> 5, lane_id = tx & 31;
+            if (lane_id == 0) s_warp_maxs_h[warp_id] = local_max;
+        }
+        __syncthreads();
+        if (tx < (BLOCK_SIZE >> 5)) {
+            local_max = s_warp_maxs_h[tx];
+            for (int offset = 16; offset > 0; offset >>= 1)
+                local_max = fmaxf(local_max, __shfl_xor_sync(0xFFFFFFFF, local_max, offset));
+            if (tx == 0) s_warp_maxs_h[0] = local_max;
+        }
+        __syncthreads();
+        local_max = s_warp_maxs_h[0];
+
+        int nsamp = min(s_sample_count_h, MAX_SAMPLES_H);
+
+        __syncthreads();
+        if (nsamp >= 2) {
+            for (int pass = 0; pass < nsamp; ++pass) {
+                if (tx * 2 + 1 < nsamp) {
+                    int i = tx * 2;
+                    if (s_samples_h[i] > s_samples_h[i + 1]) {
+                        float tmp = s_samples_h[i];
+                        s_samples_h[i] = s_samples_h[i + 1];
+                        s_samples_h[i + 1] = tmp;
+                    }
+                }
+                __syncthreads();
+                if (tx * 2 + 2 < nsamp) {
+                    int i = tx * 2 + 1;
+                    if (s_samples_h[i] > s_samples_h[i + 1]) {
+                        float tmp = s_samples_h[i];
+                        s_samples_h[i] = s_samples_h[i + 1];
+                        s_samples_h[i + 1] = tmp;
+                    }
+                }
+                __syncthreads();
+            }
+        }
+
+        if (tx == 0) {
+            float rho = mapping.power_exp;
+            if (rho <= 0.0f) rho = 4.0f;
+            int k = mapping.target_k;
+            float frac = (k > 0 && nblk > 0) ? 1.0f - rho * float(k) / float(nblk) : 0.0f;
+            frac = fmaxf(frac, 0.0f);
+
+            float tau_low;
+            if (nsamp < 4 || frac <= 0.0f) {
+                tau_low = -__FLT_MAX__;
+            } else {
+                float fidx = frac * float(nsamp - 1);
+                int lo = __float2int_rd(fidx);
+                lo = min(max(lo, 0), nsamp - 2);
+                float t = fidx - float(lo);
+                tau_low = s_samples_h[lo] * (1.0f - t) + s_samples_h[lo + 1] * t;
+            }
+
+            if (tau_low >= local_max) {
+                tau_low = (nsamp > 0) ? s_samples_h[0] : local_max;
+            }
+
+            float range = local_max - tau_low;
+            s_range_min = tau_low;
+            s_range_inv_range = (range > 1e-10f) ? 255.0f / range : 0.0f;
+        }
+        __syncthreads();
     } else {
         if (tx == 0) { s_range_min = 0.0f; s_range_inv_range = 0.0f; }
         __syncthreads();
@@ -1164,6 +1361,7 @@ void topk_output_sglang(
     mapping.quantiles = nullptr;
     mapping.noscale = mapping_noscale;
     mapping.sample_stride = 1;
+    mapping.target_k = static_cast<int>(topk_val);
 
     if (mapping_lut.has_value()) {
         const auto& lut = mapping_lut.value();
@@ -1233,7 +1431,8 @@ void topk_profile_histogram(
     const double      mapping_power,
     std::optional<at::Tensor> mapping_lut,
     std::optional<at::Tensor> mapping_quantiles,
-    const bool        mapping_noscale)
+    const bool        mapping_noscale,
+    const int64_t     topk_val)
 {
     CHECK_CUDA(x);
     CHECK_CUDA(dense_kv_indptr);
@@ -1252,6 +1451,7 @@ void topk_profile_histogram(
     mapping.quantiles = nullptr;
     mapping.noscale = mapping_noscale;
     mapping.sample_stride = 1;
+    mapping.target_k = static_cast<int>(topk_val);
 
     if (mapping_lut.has_value()) {
         const auto& lut = mapping_lut.value();
@@ -1305,7 +1505,8 @@ static TopKMappingParams build_mapping_params(
     std::optional<at::Tensor>& mapping_lut,
     std::optional<at::Tensor>& mapping_quantiles,
     bool mapping_noscale = false,
-    int sample_stride = 1)
+    int sample_stride = 1,
+    int target_k = 0)
 {
     TopKMappingParams mapping{};
     mapping.mode = static_cast<int>(mapping_mode);
@@ -1314,6 +1515,7 @@ static TopKMappingParams build_mapping_params(
     mapping.quantiles = nullptr;
     mapping.noscale = mapping_noscale;
     mapping.sample_stride = sample_stride;
+    mapping.target_k = target_k;
 
     if (mapping_lut.has_value()) {
         const auto& lut = mapping_lut.value();
@@ -1356,7 +1558,8 @@ void topk_profile_stage1(
                 "topk_profile_stage1: topk_val (", topk_val,
                 ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
 
-    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles, mapping_noscale);
+    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles,
+                                        mapping_noscale, /*sample_stride=*/1, /*target_k=*/static_cast<int>(topk_val));
 
     dim3 nblks(eff_batch_size);
     dim3 nthreads(kThreadsPerBlock);
@@ -1428,7 +1631,8 @@ void topk_profile_counters(
     TORCH_CHECK(counters.scalar_type() == at::ScalarType::Int,
                 "counters must be int32");
 
-    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles, mapping_noscale);
+    auto mapping = build_mapping_params(mapping_mode, mapping_power, mapping_lut, mapping_quantiles,
+                                        mapping_noscale, /*sample_stride=*/1, /*target_k=*/static_cast<int>(topk_val));
 
     dim3 nblks(eff_batch_size);
     dim3 nthreads(kThreadsPerBlock);

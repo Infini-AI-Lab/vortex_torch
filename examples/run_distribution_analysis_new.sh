@@ -36,7 +36,7 @@ MEM=0.7
 ALGO="block_sparse_attention"
 # The path to the raw_histograms.npy file (set to skip calibration)
 # REAL_HISTOGRAMS="/scr/dataset/yuke/xinrui/new/vortex_torch/examples/calibration/raw_histograms.npy"
-REAL_HISTOGRAMS="${SCRIPT_DIR}/calibration/raw_histograms.npy"
+REAL_HISTOGRAMS=""
 # ── Parse arguments ───────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -24,7 +24,7 @@ sparse_algos=(
 )
 
 # Path to real-data histograms from calibration (for auto-tuning)
-REAL_HISTOGRAMS="/scr/dataset/yuke/xinrui/new/vortex_torch/examples/calibration/raw_histograms.npy"
+REAL_HISTOGRAMS=""
 
 RESULTS_DIR="results"
 mkdir -p "${RESULTS_DIR}"
@@ -213,6 +213,28 @@ for algo in "${sparse_algos[@]}"; do
 done
 
 # ============================================================
+# Step 8: Mode 12 (adaptive_tail_window), rho=4.0
+# ============================================================
+echo ""
+echo "============================================================"
+echo "Step 8: Mode 12 (adaptive_tail_window), rho=4.0"
+echo "============================================================"
+for algo in "${sparse_algos[@]}"; do
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_12_${TIMESTAMP}.log"
+  echo ">>> Mode 12 (adaptive_tail_window) algo=${algo}"
+  { time python verify_algo.py \
+    --trials 8 \
+    --topk-val 30 \
+    --vortex-module-name "${algo}" \
+    --model-name Qwen/Qwen3-1.7B \
+    --topk-type sglang \
+    --topk-mapping-mode 12 \
+    --topk-mapping-power 4.0 \
+    --mem 0.7 ; } \
+    2>&1 | tee "${OUTFILE}"
+done
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""
@@ -226,4 +248,5 @@ echo "  Mode 8 (trunc8):   (fixed)"
 echo "  Mode 9 (erf):      alpha = ${BEST_POWER_9} (autotuned)"
 echo "  Mode 10 (tanh):    alpha = ${BEST_POWER_10} (autotuned)"
 echo "  Mode 11 (subtract): (fixed)"
+echo "  Mode 12 (tail_win): rho   = 4.0"
 echo "============================================================"
