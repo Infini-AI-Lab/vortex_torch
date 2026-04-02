@@ -117,8 +117,8 @@ const int            page_reserved_eos)
 void topk_output(
 const at::Tensor& x,
 const at::Tensor& dense_kv_indptr,
-const at::Tensor& sparse_kv_indptr,
 const at::Tensor& dense_kv_indices,
+const at::Tensor& sparse_kv_indptr,
 at::Tensor&       sparse_kv_indices,
 const int64_t     eff_batch_size,
 const int64_t     topk_val,

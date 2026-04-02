@@ -11,7 +11,11 @@ from lighteval.utils.language import Language
 from lighteval.models.model_output import ModelResponse
 from datasets import load_dataset, Dataset, concatenate_datasets
 import argparse
+import ast
 import json
+import os
+import subprocess
+import sys
 
 MATH_QUERY_TEMPLATE = """
 Solve the following math problem efficiently and clearly.  The last line of your response should be of the following format: 'Therefore, the final answer is: $\\boxed{{ANSWER}}$. I hope it is correct' (without quotes) where ANSWER is just the final number or expression that solves the problem. Think step by step before answering.
@@ -54,13 +58,21 @@ page_size: int = 16,
 vortex_module_name: str = "gqa_block_sparse_attention",
 model_name: str = "Qwen/Qwen3-1.7B",
 sparse_attention: bool = True,
-mem: float = 0.8
-):  
+mem: float = 0.8,
+kv_cache_dtype: str = "auto",
+topk_type: str = "naive",
+topk_mapping_mode: int = 0,
+topk_mapping_power: float = 0.5,
+topk_mapping_lut_path: str = None,
+topk_mapping_quantiles_path: str = None,
+index_cache_shared_layers: list = None,
+disable_cuda_graph: bool = False,
+):
 
-    llm = sgl.Engine(model_path=model_name, 
-                    disable_cuda_graph=False,
+    llm = sgl.Engine(model_path=model_name,
+                    disable_cuda_graph=disable_cuda_graph,
                     page_size=page_size,
-                    vortex_topk_val=topk_val,   
+                    vortex_topk_val=topk_val,
                     disable_overlap_schedule=True,
                     attention_backend="flashinfer",
                     enable_vortex_sparsity=sparse_attention,
@@ -69,17 +81,23 @@ mem: float = 0.8
                     vortex_layers_skip=list(range(1)),
                     vortex_module_name=vortex_module_name,
                     vortex_max_seq_lens=12288,
-                    mem_fraction_static=mem
+                    mem_fraction_static=mem,
+                    kv_cache_dtype=kv_cache_dtype,
+                    vortex_topk_type=topk_type,
+                    vortex_topk_mapping_mode=topk_mapping_mode,
+                    vortex_topk_mapping_power=topk_mapping_power,
+                    vortex_topk_mapping_lut_path=topk_mapping_lut_path,
+                    vortex_topk_mapping_quantiles_path=topk_mapping_quantiles_path,
+                    vortex_index_cache_shared_layers=index_cache_shared_layers,
                     )
-    
-    with open("examples/amc23.jsonl", "r", encoding="utf-8") as f:
+    with open("amc23.jsonl", "r", encoding="utf-8") as f:
         requests = [json.loads(line) for line in f]
-    
+
     requests = requests * trials
     prompts = [req["prompt"] for req in requests]
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_new_tokens": 8192}
-    
+
     o = llm.generate(prompts, sampling_params)
     gold_metric =  MultilingualExtractiveMatchMetric(
             language=Language.ENGLISH,
@@ -89,7 +107,7 @@ mem: float = 0.8
             pred_extraction_target=(ExprExtractionConfig(), LatexExtractionConfig(boxed_match_priority=0)),
             aggregation_function=max,
         )
-    
+
     results = []
     for data, item in zip(requests, o):
         golds = [data["answer"]]
@@ -99,7 +117,7 @@ mem: float = 0.8
             result = gold_metric.compute(model_response=ModelResponse(text=[predictions]), doc=target)
         except:
             result = 0.0
-        
+
         results.append(
             {
                 "score": float(result),
@@ -110,7 +128,15 @@ mem: float = 0.8
                 "num_tokens": item["meta_info"]["completion_tokens"]
             }
         )
-    
+        # --- Per-question debug output  ---
+        # print(f"[Q{len(results):03d}] score={float(result):.1f} "
+        #       f"tokens={item['meta_info']['completion_tokens']} "
+        #       f"latency={item['meta_info']['e2e_latency']:.2f}s "
+        #       f"gold={golds[0]}")
+        # print(f"  question: {data['question'][:120]}...")
+        # print(f"  prediction: {predictions[:200]}...")
+        # print()
+
 
     total_accuracy = 0.0
     total_tokens = 0
@@ -130,12 +156,17 @@ mem: float = 0.8
 
     if sparse_attention:
         llm_cfg = AutoConfig.from_pretrained(model_name)
-        flow = vortex_torch.flow.build_vflow(vortex_module_name) 
-        memory_access_runtime = flow.run_indexer_virtual(
-            group_size=llm_cfg.num_attention_heads // llm_cfg.num_key_value_heads,
-            page_size=page_size,
-            head_dim=llm_cfg.head_dim,
-        )
+        flow = vortex_torch.flow.build_vflow(vortex_module_name)
+        try:
+            memory_access_runtime = flow.run_indexer_virtual(
+                group_size=llm_cfg.num_attention_heads // llm_cfg.num_key_value_heads,
+                page_size=page_size,
+                head_dim=llm_cfg.head_dim,
+            )
+        except Exception:
+            # External algorithms (nsa, fsa, flash_moba) override run_indexer_virtual
+            # to return 0 since their vendored kernels don't participate in vortex profiling
+            memory_access_runtime = 0.0
     else:
         memory_access_runtime = 0.0
     
@@ -203,10 +234,69 @@ def parse_args():
         default=0.8,
         help="memory fraction in sglang",
     )
+
+    parser.add_argument(
+        "--kv-cache-dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "fp8_e5m2", "fp8_e4m3", "int8"],
+        help='KV cache dtype (default: "auto").',
+    )
+
+    parser.add_argument(
+        "--topk-type",
+        type=str,
+        default="naive",
+        choices=["naive", "sglang"],
+        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang (default: "naive").',
+    )
+    parser.add_argument(
+        "--topk-mapping-mode",
+        type=int,
+        default=0,
+        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window (default: 0).',
+    )
+
+    parser.add_argument(
+        "--topk-mapping-power",
+        type=float,
+        default=0.5,
+        help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 6 asinh), alpha (mode 7 log1p), rho tail expansion (mode 12). Default: 0.5.',
+    )
+
+    parser.add_argument(
+        "--topk-mapping-lut-path",
+        type=str,
+        default=None,
+        help="Path to .npy file with uint8[256] LUT for topk mapping mode 1.",
+    )
+
+    parser.add_argument(
+        "--topk-mapping-quantiles-path",
+        type=str,
+        default=None,
+        help="Path to .npy file with float32[256] quantiles for topk mapping mode 2.",
+    )
+
+    parser.add_argument(
+        "--index-cache-shared-layers",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Layer IDs that reuse indices from the nearest preceding full layer (skip indexer).",
+    )
+
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
+
+    # --- Mode 5: Index Cache (default even-layer pattern) ---
+    if args.topk_mapping_mode == 5:
+        if args.index_cache_shared_layers is None:
+            args.index_cache_shared_layers = list(range(2, 28, 2))  # [2,4,6,...,26]
+        args.topk_mapping_mode = 0
 
     summary = verify_algos(
         trials=args.trials,
@@ -215,7 +305,14 @@ if __name__ == "__main__":
         vortex_module_name=args.vortex_module_name,
         model_name=args.model_name,
         sparse_attention=not(args.full_attention),
-        mem=args.mem
+        mem=args.mem,
+        kv_cache_dtype=args.kv_cache_dtype,
+        topk_type=args.topk_type,
+        topk_mapping_mode=args.topk_mapping_mode,
+        topk_mapping_power=args.topk_mapping_power,
+        topk_mapping_lut_path=args.topk_mapping_lut_path,
+        topk_mapping_quantiles_path=args.topk_mapping_quantiles_path,
+        index_cache_shared_layers=args.index_cache_shared_layers,
     )
     print(summary)
 

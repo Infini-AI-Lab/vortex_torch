@@ -85,6 +85,75 @@ const int64_t       reserved_eos,
 const int64_t       max_seq_lengths
 );
 
+void topk_output_sglang(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
+at::Tensor&         sparse_kv_indices,
+const int64_t       eff_batch_size,
+const int64_t       topk_val,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       max_seq_lengths,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt,
+const bool          mapping_noscale = false
+);
+
+void topk_profile_histogram(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+at::Tensor&         histograms,
+const int64_t       eff_batch_size,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt,
+const bool          mapping_noscale = false,
+const int64_t       topk_val = 0
+);
+
+void topk_profile_stage1(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
+at::Tensor&         sparse_kv_indices,
+const int64_t       eff_batch_size,
+const int64_t       topk_val,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       max_num_pages,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt,
+const bool          mapping_noscale = false
+);
+
+void topk_profile_counters(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
+at::Tensor&         sparse_kv_indices,
+at::Tensor&         counters,
+const int64_t       eff_batch_size,
+const int64_t       topk_val,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       max_num_pages,
+const int64_t       mapping_mode = 0,
+const double        mapping_power = 0.5,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt,
+const bool          mapping_noscale = false
+);
 
 void sglang_plan_decode_fa3(
 const at::Tensor&   cached_seq_lens,

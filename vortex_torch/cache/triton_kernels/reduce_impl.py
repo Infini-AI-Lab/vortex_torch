@@ -4,6 +4,17 @@ import triton.language as tl
 from ..context import Context
 from ...utils import ReduceType
 
+
+# ---------------------------------------------------------------------------
+# Helper: Load a page block from src_ptr, handling bf16 / int8 / fp8-stored-as-uint8.
+#   QUANT_TYPE == 0  -> bf16 pointer, load normally
+#   QUANT_TYPE == 1  -> int8 pointer, dequant with per-row scale from kv_scale_ptr
+#   QUANT_TYPE == 2  -> uint8 pointer, bitcast to float8e4nv, dequant with per-tensor scale
+#   QUANT_TYPE == 3  -> uint8 pointer, bitcast to float8e5, dequant with per-tensor scale
+# All quantised paths return a float32 tensor ready for reduction.
+# ---------------------------------------------------------------------------
+
+
 @triton.jit
 def reduce_pp_kernel(
 x, output, loc,
@@ -12,9 +23,12 @@ x_D1: tl.constexpr,
 NUM_KV_HEAD: tl.constexpr,
 PAGE_SIZE: tl.constexpr,
 REDUCE_TYPE: tl.constexpr,  # 0:Mean, 1:Max, 2:Min, 3:L2Norm
-DIM: tl.constexpr           # 1: over rows (axis=0) -> len x_D1; 2: over cols (axis=1) -> len x_D0
-):  
-    
+DIM: tl.constexpr,           # 1: over rows (axis=0) -> len x_D1; 2: over cols (axis=1) -> len x_D0
+QUANT_TYPE: tl.constexpr,   # 0: bf16, 1: int8, 2: e4m3, 3: e5m2
+scale,                        # float: 1.0 for bf16, kv_scale for fp8
+kv_scale_ptr,                 # pointer to per-token int8 scales (unused when QUANT_TYPE != 1)
+):
+
     token_id = tl.program_id(0)
     head_id  = tl.program_id(1)
 
@@ -29,7 +43,22 @@ DIM: tl.constexpr           # 1: over rows (axis=0) -> len x_D1; 2: over cols (a
     rows = tl.arange(0, x_D0)[:, None]     # [x_D0, 1]
     cols = tl.arange(0, x_D1)[None, :]     # [1, x_D1]
     src_ptr = x + x_offset + rows * x_D1 + cols
-    page_block = tl.load(src_ptr)
+
+    if QUANT_TYPE == 1:
+        # int8: load int8 values, dequant with per-row scale
+        raw = tl.load(src_ptr).to(tl.float32)
+        # Per-row scales stored at kv_scale_ptr[page_id * x_D0 + row]
+        scale_offset = page_id * x_D0 + tl.arange(0, x_D0)
+        row_scales = tl.load(kv_scale_ptr + scale_offset).to(tl.float32)  # [x_D0]
+        page_block = raw * row_scales[:, None]  # broadcast [x_D0, 1]
+    elif QUANT_TYPE == 2:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e4nv, bitcast=True).to(tl.float32) * scale
+    elif QUANT_TYPE == 3:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e5, bitcast=True).to(tl.float32) * scale
+    else:
+        page_block = tl.load(src_ptr)
 
     if DIM == 1:
         # reduce over rows -> axis=0 -> length x_D1
@@ -71,11 +100,14 @@ loc: torch.LongTensor,
 ctx: Context,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = ctx.head_num
-    
+
     reduce_pp_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -85,7 +117,10 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=ctx.page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
 
 
@@ -97,11 +132,14 @@ num_kv_heads: int,
 page_size: int,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = num_kv_heads
-    
+
     reduce_pp_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -111,7 +149,10 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
 
 
@@ -124,9 +165,12 @@ def reduce_rp_kernel(
     NUM_KV_HEAD: tl.constexpr,
     PAGE_SIZE: tl.constexpr,
     REDUCE_TYPE: tl.constexpr,       # 0: Mean, 1: Max, 2: Min, 3: L2Norm (not RMS)
-    DIM: tl.constexpr                # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+    DIM: tl.constexpr,               # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+    QUANT_TYPE: tl.constexpr,        # 0: bf16, 1: int8, 2: e4m3, 3: e5m2
+    scale,                            # float: 1.0 for bf16, kv_scale for fp8
+    kv_scale_ptr,                     # pointer to per-token int8 scales (unused when QUANT_TYPE != 1)
 ):
-    
+
     # Program IDs:
     #   pid0 = token index (0 .. num_tokens-1)
     #   pid1 = head  index (0 .. NUM_KV_HEAD-1)
@@ -156,7 +200,20 @@ def reduce_rp_kernel(
 
     # Load the full page block for this (token_id, head_id).
     # Assumes the page is full; add masks here if you have partial tiles.
-    page_block = tl.load(src_ptr)
+    if QUANT_TYPE == 1:
+        # int8: load int8 values, dequant with per-row scale
+        raw = tl.load(src_ptr).to(tl.float32)
+        scale_offset = page_id * x_D0 + tl.arange(0, x_D0)
+        row_scales = tl.load(kv_scale_ptr + scale_offset).to(tl.float32)
+        page_block = raw * row_scales[:, None]
+    elif QUANT_TYPE == 2:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e4nv, bitcast=True).to(tl.float32) * scale
+    elif QUANT_TYPE == 3:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e5, bitcast=True).to(tl.float32) * scale
+    else:
+        page_block = tl.load(src_ptr)
 
     # Reduction:
     if DIM == 1:
@@ -196,7 +253,7 @@ def reduce_rp_kernel(
         # Write to output: layout [num_pages, x_D0] for DIM==2.
         dst_ptr = output + page_id * x_D0 + tl.arange(0, x_D0)
         tl.store(dst_ptr, reduce_vec)
-    
+
 
 
 def reduce_rp(
@@ -206,11 +263,14 @@ loc: torch.LongTensor,
 ctx: Context,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = ctx.head_num
-    
+
     reduce_rp_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -220,7 +280,10 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=ctx.page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
 
 
@@ -232,11 +295,14 @@ num_kv_heads: int,
 page_size: int,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = num_kv_heads
-    
+
     reduce_rp_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -246,7 +312,10 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
 
 
@@ -258,7 +327,10 @@ x_D1: tl.constexpr,              # cols per page
 NUM_KV_HEAD: tl.constexpr,
 PAGE_SIZE: tl.constexpr,
 REDUCE_TYPE: tl.constexpr,       # 0: Mean, 1: Max, 2: Min, 3: L2Norm (not RMS)
-DIM: tl.constexpr                # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+DIM: tl.constexpr,               # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+QUANT_TYPE: tl.constexpr,        # 0: bf16, 1: int8, 2: e4m3, 3: e5m2
+scale,                            # float: 1.0 for bf16, kv_scale for fp8
+kv_scale_ptr,                     # pointer to per-token int8 scales (unused when QUANT_TYPE != 1)
 ):
     """
     Layouts:
@@ -297,7 +369,20 @@ DIM: tl.constexpr                # 1: reduce over rows -> len x_D1; 2: reduce ov
     src_ptr = x + x_offset + rows * x_D1 + cols
 
     # Load the full page block. Assumes full tiles; add masks if needed.
-    page_block = tl.load(src_ptr)
+    if QUANT_TYPE == 1:
+        # int8: load int8 values, dequant with per-row scale
+        raw = tl.load(src_ptr).to(tl.float32)
+        scale_offset = page_id * x_D0 + tl.arange(0, x_D0)
+        row_scales = tl.load(kv_scale_ptr + scale_offset).to(tl.float32)
+        page_block = raw * row_scales[:, None]
+    elif QUANT_TYPE == 2:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e4nv, bitcast=True).to(tl.float32) * scale
+    elif QUANT_TYPE == 3:
+        raw = tl.load(src_ptr)
+        page_block = raw.to(tl.float8e5, bitcast=True).to(tl.float32) * scale
+    else:
+        page_block = tl.load(src_ptr)
 
     # --- Reduction & write-out ---
     if DIM == 1:
@@ -344,11 +429,14 @@ loc: torch.LongTensor,
 ctx: Context,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = ctx.head_num
-    
+
     reduce_pr_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -358,9 +446,12 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=ctx.page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
-    
+
 def _reduce_pr(
 x: torch.Tensor,
 output: torch.Tensor,
@@ -369,11 +460,14 @@ num_kv_heads: int,
 page_size: int,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = num_kv_heads
-    
+
     reduce_pr_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -383,7 +477,10 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
 
 
@@ -395,7 +492,10 @@ x_D1: tl.constexpr,              # cols per token-page
 NUM_KV_HEAD: tl.constexpr,
 PAGE_SIZE: tl.constexpr,
 REDUCE_TYPE: tl.constexpr,       # 0: Mean, 1: Max, 2: Min, 3: L2Norm (not RMS)
-DIM: tl.constexpr                # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+DIM: tl.constexpr,               # 1: reduce over rows -> len x_D1; 2: reduce over cols -> len x_D0
+QUANT_TYPE: tl.constexpr,        # 0: bf16, 1: int8, 2: e4m3, 3: e5m2
+scale,                            # float: 1.0 for bf16, kv_scale for fp8
+kv_scale_ptr,                     # pointer to per-token int8 scales (unused when QUANT_TYPE != 1)
 ):
     """
     Layouts:
@@ -420,7 +520,22 @@ DIM: tl.constexpr                # 1: reduce over rows -> len x_D1; 2: reduce ov
     rows     = tl.arange(0, x_D0)[:, None]         # [x_D0, 1]
     cols     = tl.arange(0, x_D1)[None, :]         # [1, x_D1]
     src_ptr  = x + x_base + rows * x_D1 + cols
-    page_blk = tl.load(src_ptr)                    # assumes full page; add masks if needed
+
+    if QUANT_TYPE == 1:
+        # int8: load int8 values, dequant with per-row scale
+        raw = tl.load(src_ptr).to(tl.float32)
+        page_id = (token_position // PAGE_SIZE) * NUM_KV_HEAD + head_id
+        scale_offset = page_id * x_D0 + tl.arange(0, x_D0)
+        row_scales = tl.load(kv_scale_ptr + scale_offset).to(tl.float32)
+        page_blk = raw * row_scales[:, None]
+    elif QUANT_TYPE == 2:
+        raw = tl.load(src_ptr)
+        page_blk = raw.to(tl.float8e4nv, bitcast=True).to(tl.float32) * scale
+    elif QUANT_TYPE == 3:
+        raw = tl.load(src_ptr)
+        page_blk = raw.to(tl.float8e5, bitcast=True).to(tl.float32) * scale
+    else:
+        page_blk = tl.load(src_ptr)                    # assumes full page; add masks if needed
 
     # ---- reduce ----
     if DIM == 1:
@@ -464,11 +579,14 @@ loc: torch.LongTensor,
 ctx: Context,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = ctx.head_num
-    
+
     reduce_rr_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -478,9 +596,12 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=ctx.page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
-    
+
 
 def _reduce_rr(
 x: torch.Tensor,
@@ -490,11 +611,14 @@ num_kv_heads: int,
 page_size: int,
 dim: int,
 reduce_type: ReduceType,
+quant_type: int = 0,
+scale: float = 1.0,
+kv_scale_ptr=None,
 ):
-    
+
     NNZ = loc.shape[0]
     NUM_KV_HEAD = num_kv_heads
-    
+
     reduce_rr_kernel[(NNZ, NUM_KV_HEAD)](
         x=x,
         output=output,
@@ -504,5 +628,8 @@ reduce_type: ReduceType,
         NUM_KV_HEAD=NUM_KV_HEAD,
         PAGE_SIZE=page_size,
         REDUCE_TYPE=reduce_type.value,
-        DIM=dim
+        DIM=dim,
+        QUANT_TYPE=quant_type,
+        scale=scale,
+        kv_scale_ptr=kv_scale_ptr if kv_scale_ptr is not None else x,
     )
