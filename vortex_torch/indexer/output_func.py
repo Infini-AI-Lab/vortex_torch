@@ -1,7 +1,7 @@
 import torch
 from typing import Dict, Callable, Optional
 from ..abs import vOp
-from vortex_torch_C import topk_output
+from vortex_torch_C import topk_output, topk_output_sglang
 from .context import Context
 from ..abs import vTensor, FORMAT
 
@@ -75,13 +75,17 @@ class topK(vOp):
     """
 
     # Dispatch by input format; only RAGGED is supported for now.
-    _impl_map: Dict[FORMAT, Callable] = {
-        FORMAT.RAGGED: topk_output,
+    _impl_map: Dict[FORMAT, Dict[str, Callable]] = {
+        FORMAT.RAGGED: {
+            "naive": topk_output,
+            "sglang": topk_output_sglang,
+        },
     }
 
     def __init__(self):
         super().__init__()
         self.impl: Optional[Callable] = None
+        self.topk_type: str = "naive"
 
     # ---------------- profile ----------------
     def profile(self, x: vTensor, o: vTensor, ctx: Context) -> None:
@@ -152,7 +156,13 @@ class topK(vOp):
             f"{prefix}no implementation for x._format={x_fmt}. "
             f"Available: {list(self._impl_map.keys())}"
         )
-        self.impl = self._impl_map[x_fmt]
+        self.topk_type = getattr(ctx, "topk_type", "naive")
+        impl_variants = self._impl_map[x_fmt]
+        assert self.topk_type in impl_variants, (
+            f"{prefix}no topk implementation for topk_type='{self.topk_type}'. "
+            f"Available: {list(impl_variants.keys())}"
+        )
+        self.impl = impl_variants[self.topk_type]
 
         # ---- optional sanity checks on `o` ----
         # We only assert device consistency and leave exact (S_pack, D0, D1)
@@ -220,16 +230,33 @@ class topK(vOp):
         prefix = self._prefix()
         assert self.impl is not None, f"{prefix}execute called before profile() (impl is None)"
 
-        self.impl(
-            x,
-            ctx.dense_kv_indptr,
-            ctx.sparse_kv_indptr,
-            ctx.dense_kv_indices,
-            o,
-            ctx.batch_size * ctx.num_kv_heads,
-            ctx.topk_val,
-            ctx.page_reserved_bos,
-            ctx.page_reserved_eos,
-            ctx.max_num_pages_per_request,
-        )
+        if self.topk_type == "sglang":
+            # topk_output_sglang: (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
+            self.impl(
+                x,
+                ctx.dense_kv_indptr,
+                ctx.sparse_kv_indptr,
+                ctx.dense_kv_indices,
+                o,
+                ctx.batch_size * ctx.num_kv_heads,
+                ctx.topk_val,
+                ctx.page_reserved_bos,
+                ctx.page_reserved_eos,
+                ctx.max_num_pages_per_request,
+            )
+        else:
+            # topk_output (naive): actual C++ param order is (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
+            # Note: register.h names are misleading — the .cu implementation takes sparse_kv_indptr before dense_kv_indices
+            self.impl(
+                x,
+                ctx.dense_kv_indptr,
+                ctx.sparse_kv_indptr,
+                ctx.dense_kv_indices,
+                o,
+                ctx.batch_size * ctx.num_kv_heads,
+                ctx.topk_val,
+                ctx.page_reserved_bos,
+                ctx.page_reserved_eos,
+                ctx.max_num_pages_per_request,
+            )
         return o

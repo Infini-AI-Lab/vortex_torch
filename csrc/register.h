@@ -75,8 +75,8 @@ const int64_t       head_dim
 void topk_output(
 const at::Tensor&   x,
 const at::Tensor&   dense_kv_indptr,
-const at::Tensor&   dense_kv_indices,
 const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
 at::Tensor&         sparse_kv_indices,
 const int64_t       eff_batch_size,
 const int64_t       topk_val,
@@ -85,6 +85,18 @@ const int64_t       reserved_eos,
 const int64_t       max_seq_lengths
 );
 
+void topk_output_sglang(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
+at::Tensor&         sparse_kv_indices,
+const int64_t       eff_batch_size,
+const int64_t       topk_val,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       max_seq_lengths
+);
 
 void sglang_plan_decode_fa3(
 const at::Tensor&   cached_seq_lens,
@@ -132,7 +144,7 @@ const int64_t       num_kv_heads,
 const int64_t       head_dim
 );
 
-// Unified CPU/GPU reduction kernel
+// Unified CPU/GPU reduction kernel (supports bf16, fp8_e4m3, fp8_e5m2)
 void unified_reduce(
     at::Tensor&       output,
     const at::Tensor& loc,
@@ -145,7 +157,9 @@ void unified_reduce(
     const int64_t     page_size,
     const int64_t     reduce_type,
     const int64_t     dim,
-    const int64_t     num_cpu_slots
+    const int64_t     num_cpu_slots,
+    const int64_t     quant_type,
+    const double      kv_scale
 );
 
 // Unified CPU/GPU KV storage kernel
@@ -161,7 +175,7 @@ void store_kv_unified(
     const int64_t     page_size
 );
 
-// LRU allocation: block-local shared-memory, 32-way set-associative
+// LRU allocation: block-local shared-memory, 32-way set-associative (no global fallback)
 void allocate_pages_lru_block(
     at::Tensor src_page_ids,
     at::Tensor sparse_indptr,
@@ -169,8 +183,7 @@ void allocate_pages_lru_block(
     at::Tensor cpu_to_gpu_slot_map,
     at::Tensor gpu_to_cpu_page_map,
     at::Tensor slot_ages,
-    at::Tensor set_slot_used_bitmap,
-    at::Tensor needs_eviction_bitmap,
+    at::Tensor set_used_mask,
     at::Tensor dst_staging_slots,
     at::Tensor owners_bitmap,
     at::Tensor evicted_cpu_pages,
@@ -187,8 +200,7 @@ void allocate_pages_lru_global(
     at::Tensor cpu_to_gpu_slot_map,
     at::Tensor gpu_to_cpu_page_map,
     at::Tensor slot_ages,
-    at::Tensor set_slot_used_bitmap,
-    at::Tensor needs_eviction_bitmap,
+    at::Tensor set_used_mask,
     at::Tensor dst_staging_slots,
     at::Tensor owners_bitmap,
     at::Tensor evicted_cpu_pages,
@@ -212,6 +224,52 @@ void allocate_pages_lru_block_global(
     at::Tensor overflow_flag,
     int32_t max_num_pages,
     const int32_t MAX_HASH_ATTEMPTS
+);
+
+// Policy-agnostic allocation: block-local smem + global fallback, configurable policy
+void allocate_pages_block_global(
+    at::Tensor src_page_ids,
+    at::Tensor sparse_indptr,
+    int32_t indptr_last_idx,
+    at::Tensor cpu_to_gpu_slot_map,
+    at::Tensor gpu_to_cpu_page_map,
+    at::Tensor slot_state,
+    at::Tensor set_used_mask,
+    at::Tensor dst_staging_slots,
+    at::Tensor owners_bitmap,
+    at::Tensor evicted_cpu_pages,
+    at::Tensor overflow_flag,
+    int32_t max_num_pages,
+    const int32_t MAX_HASH_ATTEMPTS,
+    int32_t cache_policy
+);
+
+// Dequantize int8 pages from CPU pinned memory to GPU bf16
+void dequant_int8_cpu_to_bf16(
+    at::Tensor cpu_int8_buffer,
+    at::Tensor gpu_scale_buffer,
+    at::Tensor gpu_dst_buffer,
+    at::Tensor src_page_ids,
+    at::Tensor dst_page_ids,
+    int32_t page_size,
+    int32_t head_dim
+);
+
+// Gather scattered per-head pages into contiguous multi-head ragged buffer
+void gather_pages_to_ragged(
+    at::Tensor src_kv,
+    at::Tensor dst_buf,
+    at::Tensor page_indices,
+    at::Tensor kv_indptr,
+    at::Tensor dst_offsets,
+    int32_t total_pages,
+    int32_t num_kv_heads,
+    int32_t page_size,
+    int32_t head_dim,
+    int32_t bs,
+    int32_t quant_type,
+    double kv_scale,
+    at::Tensor src_scale
 );
 
 // Copy kernel (grid-stride: auto-detect SM count, 256 threads per block)

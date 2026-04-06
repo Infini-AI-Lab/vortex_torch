@@ -54,13 +54,15 @@ page_size: int = 16,
 vortex_module_name: str = "gqa_block_sparse_attention",
 model_name: str = "Qwen/Qwen3-1.7B",
 sparse_attention: bool = True,
-mem: float = 0.8
+mem: float = 0.8,
+kv_cache_dtype: str = "auto",
+topk_type: str = "naive",
 ):  
 
-    llm = sgl.Engine(model_path=model_name, 
+    llm = sgl.Engine(model_path=model_name,
                     disable_cuda_graph=False,
                     page_size=page_size,
-                    vortex_topk_val=topk_val,   
+                    vortex_topk_val=topk_val,
                     disable_overlap_schedule=True,
                     attention_backend="flashinfer",
                     enable_vortex_sparsity=sparse_attention,
@@ -69,10 +71,12 @@ mem: float = 0.8
                     vortex_layers_skip=list(range(1)),
                     vortex_module_name=vortex_module_name,
                     vortex_max_seq_lens=12288,
-                    mem_fraction_static=mem
+                    mem_fraction_static=mem,
+                    kv_cache_dtype=kv_cache_dtype,
+                    vortex_topk_type=topk_type,
                     )
     
-    with open("examples/amc23.jsonl", "r", encoding="utf-8") as f:
+    with open("amc23.jsonl", "r", encoding="utf-8") as f:
         requests = [json.loads(line) for line in f]
     
     requests = requests * trials
@@ -110,6 +114,14 @@ mem: float = 0.8
                 "num_tokens": item["meta_info"]["completion_tokens"]
             }
         )
+        # --- Per-question debug output  ---
+        # print(f"[Q{len(results):03d}] score={float(result):.1f} "
+        #       f"tokens={item['meta_info']['completion_tokens']} "
+        #       f"latency={item['meta_info']['e2e_latency']:.2f}s "
+        #       f"gold={golds[0]}")
+        # print(f"  question: {data['question'][:120]}...")
+        # print(f"  prediction: {predictions[:200]}...")
+        # print()
     
 
     total_accuracy = 0.0
@@ -203,6 +215,22 @@ def parse_args():
         default=0.8,
         help="memory fraction in sglang",
     )
+
+    parser.add_argument(
+        "--kv-cache-dtype",
+        type=str,
+        default="auto",
+        choices=["auto", "fp8_e5m2", "fp8_e4m3", "int8"],
+        help='KV cache dtype (default: "auto").',
+    )
+
+    parser.add_argument(
+        "--topk-type",
+        type=str,
+        default="naive",
+        choices=["naive", "sglang"],
+        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang (default: "naive").',
+    )
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -215,7 +243,9 @@ if __name__ == "__main__":
         vortex_module_name=args.vortex_module_name,
         model_name=args.model_name,
         sparse_attention=not(args.full_attention),
-        mem=args.mem
+        mem=args.mem,
+        kv_cache_dtype=args.kv_cache_dtype,
+        topk_type=args.topk_type,
     )
     print(summary)
 

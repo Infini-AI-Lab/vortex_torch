@@ -390,8 +390,18 @@ class Reduce(vOp):
         if isinstance(x, UnifiedCacheView):
             return self._execute_unified(x, output, loc, ctx)
 
-        # --- EXISTING: Launch the kernel/implementation ---
-        self.impl(x, output, loc, ctx, self.dim, self.reduce_type)
+        # Launch the kernel/implementation: impl(x, output, loc, ctx, dim, reduce_type, quant_type, scale, kv_scale_ptr)
+        # Derive quant_type from fp8_type: 0=bf16, 1=int8, 2=e4m3, 3=e5m2
+        fp8_type = getattr(ctx, 'fp8_type', 0)
+        kv_scale_ptr = getattr(ctx, 'kv_scale_ptr', None)
+        if fp8_type > 0:
+            quant_type = fp8_type + 1  # fp8_type 1(e4m3)→2, 2(e5m2)→3
+        elif kv_scale_ptr is not None:
+            quant_type = 1  # int8
+        else:
+            quant_type = 0  # bf16
+        scale = getattr(ctx, 'kv_scale', 1.0)
+        self.impl(x, output, loc, ctx, self.dim, self.reduce_type, quant_type, scale, kv_scale_ptr)
         return output
 
     # --------------------------------------------------------------------- #
@@ -432,6 +442,10 @@ class Reduce(vOp):
         cpu_base = x.get_cpu_base_ptr() if x.has_cpu_pages() else 0
         gpu_base = x.get_gpu_base_ptr()
 
+        # quant_type: 0=bf16, 1=fp8_e4m3, 2=fp8_e5m2
+        quant_type = getattr(ctx, 'fp8_type', 0)
+        kv_scale = float(getattr(ctx, 'kv_scale', 1.0))
+
         vortex_torch_C.unified_reduce(
             output,
             loc,
@@ -444,7 +458,9 @@ class Reduce(vOp):
             ctx.page_size,
             self.reduce_type.value,
             self.dim,
-            x.num_cpu_slots
+            x.num_cpu_slots,
+            quant_type,
+            kv_scale,
         )
 
         return output
@@ -457,6 +473,9 @@ class Reduce(vOp):
         ctx: Context,
         dim: int,
         reduce_type: ReduceType,
+        quant_type: int = 0,
+        scale: float = 1.0,
+        kv_scale_ptr=None,
     ):
         """
         Placeholder implementation function for unified path.

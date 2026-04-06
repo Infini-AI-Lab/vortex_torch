@@ -17,22 +17,26 @@ setup(
                 'csrc/register.cc',
                 'csrc/utils_sglang.cu',
                 'csrc/topk.cu',
+                'csrc/topk_sglang.cu',
                 'csrc/unified_reduce.cu',
                 'csrc/store_kv_unified.cu',
                 'csrc/lru_block_alloc.cu',
                 'csrc/lru_global_alloc.cu',
                 'csrc/lru_block_global_alloc.cu',
-                'csrc/copy_sparse_kv.cu'
+                'csrc/alloc_block_global.cu',
+                'csrc/copy_sparse_kv.cu',
+                'csrc/dequant_int8_cpu_to_bf16.cu',
+                'csrc/gather_pages_to_ragged.cu'
             ],
             include_dirs=['csrc'],
             extra_compile_args={
                 'cxx': ['-O3'],
                 'nvcc': [
                     '-O3',
+                    '-gencode=arch=compute_80,code=sm_80',
                     '-gencode=arch=compute_86,code=sm_86',
                     '-gencode=arch=compute_89,code=sm_89',
-                    '-gencode=arch=compute_90,code=sm_90',
-                    '-gencode=arch=compute_80,code=sm_80'
+                    '-gencode=arch=compute_90,code=sm_90'
                 ],
             },
         ),

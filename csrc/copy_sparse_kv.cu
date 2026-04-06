@@ -116,6 +116,20 @@ void copy_kv(
             sparse_kv_indices.data_ptr<int32_t>(), dst_gpu_slots.data_ptr<int32_t>(),
             owners_bitmap.data_ptr<bool>(), evicted_cpu_pages.data_ptr<int32_t>(),
             sparse_kv_indptr.data_ptr<int32_t>(), indptr_last_idx, page_size, head_dim);
+    } else if (cpu_k_buffer.dtype() == torch::kInt8) {
+        copy_gridstride_kernel<int8_t><<<num_blocks, threads, 0, stream>>>(
+            cpu_k_buffer.data_ptr<int8_t>(), cpu_v_buffer.data_ptr<int8_t>(),
+            gpu_k_buffer.data_ptr<int8_t>(), gpu_v_buffer.data_ptr<int8_t>(),
+            sparse_kv_indices.data_ptr<int32_t>(), dst_gpu_slots.data_ptr<int32_t>(),
+            owners_bitmap.data_ptr<bool>(), evicted_cpu_pages.data_ptr<int32_t>(),
+            sparse_kv_indptr.data_ptr<int32_t>(), indptr_last_idx, page_size, head_dim);
+    } else if (cpu_k_buffer.dtype() == torch::kByte) {
+        copy_gridstride_kernel<uint8_t><<<num_blocks, threads, 0, stream>>>(
+            cpu_k_buffer.data_ptr<uint8_t>(), cpu_v_buffer.data_ptr<uint8_t>(),
+            gpu_k_buffer.data_ptr<uint8_t>(), gpu_v_buffer.data_ptr<uint8_t>(),
+            sparse_kv_indices.data_ptr<int32_t>(), dst_gpu_slots.data_ptr<int32_t>(),
+            owners_bitmap.data_ptr<bool>(), evicted_cpu_pages.data_ptr<int32_t>(),
+            sparse_kv_indptr.data_ptr<int32_t>(), indptr_last_idx, page_size, head_dim);
     } else {
         TORCH_CHECK(false, "Unsupported dtype for copy_kv");
     }

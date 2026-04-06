@@ -8,6 +8,7 @@ PYBIND11_MODULE(vortex_torch_C, m){
     m.def("Chunkwise_NH2HN_Transpose", &Chunkwise_NH2HN_Transpose);
     m.def("Chunkwise_HN2NH_Transpose", &Chunkwise_HN2NH_Transpose);
     m.def("topk_output", &topk_output);
+        m.def("topk_output_sglang",             &topk_output_sglang);
     m.def("sglang_plan_decode_fa3", &sglang_plan_decode_fa3);
     m.def("sglang_plan_prefill_fa3", &sglang_plan_prefill_fa3);
     m.def("Chunkwise_HN2NH_Transpose_FA3", &Chunkwise_HN2NH_Transpose_FA3);
@@ -16,5 +17,8 @@ PYBIND11_MODULE(vortex_torch_C, m){
     m.def("allocate_pages_lru_block", &allocate_pages_lru_block);
     m.def("allocate_pages_lru_global", &allocate_pages_lru_global);
     m.def("allocate_pages_lru_block_global", &allocate_pages_lru_block_global);
+    m.def("allocate_pages_block_global", &allocate_pages_block_global);
     m.def("copy_kv", &copy_kv);
+    m.def("dequant_int8_cpu_to_bf16", &dequant_int8_cpu_to_bf16);
+    m.def("gather_pages_to_ragged", &gather_pages_to_ragged);
 }

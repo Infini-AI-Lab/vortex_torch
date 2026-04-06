@@ -431,6 +431,7 @@ class vFlow(ABC):
         ctx.page_size = page_size
         ctx.max_num_pages = 0
         ctx.max_num_pages_per_request = 0
+        ctx.topk_type = "naive"
         
         device = "cuda"
         dtype = torch.bfloat16
