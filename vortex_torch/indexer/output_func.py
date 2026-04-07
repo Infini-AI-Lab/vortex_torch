@@ -1,7 +1,7 @@
 import torch
 from typing import Dict, Callable, List, Optional
 from ..abs import vOp
-from vortex_torch_C import topk_output, topk_output_sglang, topk_profile_histogram
+from vortex_torch_C import topk_output, topk_output_sglang, topk_output_sglang_ori, topk_profile_histogram
 from .context import Context
 from ..abs import vTensor, FORMAT
 from ..utils import UNSET
@@ -91,6 +91,7 @@ class topK(vOp):
         FORMAT.RAGGED: {
             "naive": topk_output,
             "sglang": topk_output_sglang,
+            "sglang_ori": topk_output_sglang_ori,
         },
     }
 
@@ -271,6 +272,20 @@ class topK(vOp):
                 mapping_lut,
                 mapping_quantiles,
                 mapping_noscale,
+            )
+        elif self.topk_type == "sglang_ori":
+            # topk_output_sglang_ori: same CSR interface, no mapping params
+            self.impl(
+                x,
+                ctx.dense_kv_indptr,
+                ctx.sparse_kv_indptr,
+                ctx.dense_kv_indices,
+                o,
+                ctx.batch_size * ctx.num_kv_heads,
+                ctx.topk_val,
+                ctx.page_reserved_bos,
+                ctx.page_reserved_eos,
+                ctx.max_num_pages_per_request,
             )
         else:
             # topk_output (naive): (x, dense_kv_indptr, dense_kv_indices, sparse_kv_indptr, sparse_kv_indices, ...)

@@ -38,6 +38,8 @@ enum TopKMappingMode {
     MAPPING_TANH        = 10, // tanh(alpha * x)
     MAPPING_SUBTRACT    = 11, // subtract pivot, then fp16 bucketing
     MAPPING_ADAPTIVE_TAIL_WINDOW = 12, // focus bins on upper tail via sampled quantile
+    MAPPING_EXP_STRETCH  = 13, // exp(alpha * x), concentrates bin resolution on upper tail
+    MAPPING_TOPK_WINDOW  = 14, // k-aware linear windowing: focus bins on [tau_low, max]
 };
 
 struct TopKMappingParams {
@@ -81,6 +83,12 @@ __device__ __forceinline__ float transform_tanh(float x, float alpha) {
     return tanhf(alpha * x);
 }
 
+__device__ __forceinline__ float transform_exp_stretch(float x, float alpha) {
+    float z = alpha * x;
+    z = fminf(z, 80.0f);  // prevent float32 overflow (exp(80) ~ 5.5e34)
+    return expf(z);
+}
+
 // ---- Transform dispatcher (returns float, no bucketing) ----
 
 __device__ __forceinline__ float apply_transform(float x, const TopKMappingParams& params) {
@@ -91,6 +99,7 @@ __device__ __forceinline__ float apply_transform(float x, const TopKMappingParam
         case MAPPING_LOG1P: return transform_log1p(x, params.power_exp);
         case MAPPING_ERF:   return transform_erf(x, params.power_exp);
         case MAPPING_TANH:  return transform_tanh(x, params.power_exp);
+        case MAPPING_EXP_STRETCH: return transform_exp_stretch(x, params.power_exp);
         default: return x;
     }
 }
@@ -161,7 +170,8 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
         case MAPPING_ASINH:
         case MAPPING_LOG1P:
         case MAPPING_ERF:
-        case MAPPING_TANH: {
+        case MAPPING_TANH:
+        case MAPPING_EXP_STRETCH: {
             float val = apply_transform(x, params);
             if (params.noscale) return convert_to_uint8(val);
             return linear_map_to_uint8(val, range_min, inv_range);
@@ -171,6 +181,7 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
         case MAPPING_SUBTRACT:
             return convert_to_uint8(x - range_min);  // range_min repurposed as pivot
         case MAPPING_ADAPTIVE_TAIL_WINDOW:
+        case MAPPING_TOPK_WINDOW:
             return linear_map_to_uint8(x, range_min, inv_range);
         default:  // MAPPING_NONE
             return convert_to_uint8(x);
@@ -181,7 +192,8 @@ __device__ __forceinline__ uint8_t mapped_convert_to_uint8(
 __device__ __forceinline__ bool needs_auto_range(int mode) {
     return (mode == MAPPING_POWER || mode == MAPPING_LOG ||
             mode == MAPPING_ASINH || mode == MAPPING_LOG1P ||
-            mode == MAPPING_ERF || mode == MAPPING_TANH);
+            mode == MAPPING_ERF || mode == MAPPING_TANH ||
+            mode == MAPPING_EXP_STRETCH);
 }
 
 // Helper: check if a mapping mode needs the pivot pre-pass
@@ -192,4 +204,9 @@ __device__ __forceinline__ bool needs_pivot(int mode) {
 // Helper: check if mode is the adaptive tail-window pre-pass
 __device__ __forceinline__ bool needs_tail_window(int mode) {
     return (mode == MAPPING_ADAPTIVE_TAIL_WINDOW);
+}
+
+// Helper: check if mode is the lightweight topk-window pre-pass
+__device__ __forceinline__ bool needs_topk_window(int mode) {
+    return (mode == MAPPING_TOPK_WINDOW);
 }

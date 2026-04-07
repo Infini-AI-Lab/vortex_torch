@@ -48,6 +48,7 @@ ALGO="block_sparse_attention"
 SKIP_CALIBRATE=false
 SKIP_KERNEL=false
 SKIP_E2E=true
+BENCHMARKS="amc23"    # space-separated list, e.g. "amc23 aime24"
 
 # ── Parse arguments ───────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -58,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --mem)             MEM="$2"; shift 2 ;;
     --gpu)             GPU_ID="$2"; shift 2 ;;
     --algo)            ALGO="$2"; shift 2 ;;
+    --benchmark)       BENCHMARKS="$2"; shift 2 ;;
     --skip-calibrate)  SKIP_CALIBRATE=true; shift ;;
     --skip-kernel)     SKIP_KERNEL=true; shift ;;
     --skip-e2e)        SKIP_E2E=true; shift ;;
@@ -70,7 +72,8 @@ export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 mkdir -p "${RESULTS_DIR}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RUN_DIR="${RESULTS_DIR}/topk_benchmark_${TIMESTAMP}"
+BENCH_LABEL=$(echo "${BENCHMARKS}" | tr ' ' '_')
+RUN_DIR="${RESULTS_DIR}/topk_benchmark_${BENCH_LABEL}_${TIMESTAMP}"
 mkdir -p "${RUN_DIR}"
 
 echo "============================================================"
@@ -194,6 +197,7 @@ else
       --trials "${TRIALS}" \
       --topk-val "${TOPK_VAL}" \
       --model-name "${MODEL_NAME}" \
+      --benchmark ${BENCHMARKS} \
       --mem "${MEM}" \
       "$@" ; } \
       2>&1 | tee "${logfile}"

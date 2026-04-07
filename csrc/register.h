@@ -103,6 +103,19 @@ std::optional<at::Tensor> mapping_quantiles = std::nullopt,
 const bool          mapping_noscale = false
 );
 
+void topk_output_sglang_ori(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+const at::Tensor&   sparse_kv_indptr,
+const at::Tensor&   dense_kv_indices,
+at::Tensor&         sparse_kv_indices,
+const int64_t       eff_batch_size,
+const int64_t       topk_val,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       max_num_pages
+);
+
 void topk_profile_histogram(
 const at::Tensor&   x,
 const at::Tensor&   dense_kv_indptr,

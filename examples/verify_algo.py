@@ -51,6 +51,63 @@ def generate_requests(dataset: Dataset, field_name: str, data_format: str, trial
 
     return requests
 
+BENCHMARK_REGISTRY = {
+    "amc23": {
+        "type": "jsonl",
+        "path": "amc23.jsonl",
+        "prompt_key": "prompt",
+        "answer_key": "answer",
+        "question_key": "question",
+    },
+    "aime24": {
+        "type": "huggingface",
+        "path": "HuggingFaceH4/aime_2024",
+        "split": "train",
+        "field_name": "problem",
+        "answer_key": "answer",
+    },
+}
+
+def _load_benchmark(benchmark_name: str, trials: int, tokenizer=None):
+    """Load benchmark data and return (prompts, requests) tuple."""
+    cfg = BENCHMARK_REGISTRY[benchmark_name]
+
+    if cfg["type"] == "jsonl":
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        jsonl_path = os.path.join(script_dir, cfg["path"])
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            requests = [json.loads(line) for line in f]
+        requests = requests * trials
+        prompts = [req[cfg["prompt_key"]] for req in requests]
+        return prompts, requests
+
+    elif cfg["type"] == "huggingface":
+        dataset = load_dataset(cfg["path"], split=cfg["split"])
+        hf_requests = generate_requests(dataset, cfg["field_name"], MATH_QUERY_TEMPLATE)
+        # Normalize keys: ensure "question" and "answer" exist
+        for req in hf_requests:
+            if "question" not in req and cfg["field_name"] in req:
+                req["question"] = req[cfg["field_name"]]
+        # Build chat-template prompts if tokenizer is provided
+        if tokenizer is not None:
+            texts = [x["conversations"] for x in hf_requests]
+            prompts = [
+                tokenizer.apply_chat_template(
+                    text, tokenize=False, add_generation_prompt=True, enable_thinking=True
+                ) for text in texts
+            ] * trials
+            hf_requests = hf_requests * trials
+        else:
+            prompts = [
+                MATH_QUERY_TEMPLATE.format(Question=x[cfg["field_name"]]) for x in hf_requests
+            ] * trials
+            hf_requests = hf_requests * trials
+        return prompts, hf_requests
+
+    else:
+        raise ValueError(f"Unknown benchmark type: {cfg['type']}")
+
+
 def verify_algos(
 trials: int = 2,
 topk_val: int = 30,
@@ -67,6 +124,7 @@ topk_mapping_lut_path: str = None,
 topk_mapping_quantiles_path: str = None,
 index_cache_shared_layers: list = None,
 disable_cuda_graph: bool = False,
+benchmark: str = "amc23",
 ):
 
     llm = sgl.Engine(model_path=model_name,
@@ -90,11 +148,8 @@ disable_cuda_graph: bool = False,
                     vortex_topk_mapping_quantiles_path=topk_mapping_quantiles_path,
                     vortex_index_cache_shared_layers=index_cache_shared_layers,
                     )
-    with open("amc23.jsonl", "r", encoding="utf-8") as f:
-        requests = [json.loads(line) for line in f]
-
-    requests = requests * trials
-    prompts = [req["prompt"] for req in requests]
+    tokenizer = AutoTokenizer.from_pretrained(model_name) if benchmark != "amc23" else None
+    prompts, requests = _load_benchmark(benchmark, trials, tokenizer=tokenizer)
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "max_new_tokens": 8192}
 
@@ -247,15 +302,15 @@ def parse_args():
         "--topk-type",
         type=str,
         default="naive",
-        choices=["naive", "sglang"],
-        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang (default: "naive").',
+        choices=["naive", "sglang", "sglang_ori"],
+        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang, "sglang_ori" for original sglang baseline (default: "naive").',
     )
     parser.add_argument(
         "--topk-mapping-mode",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window (default: 0).',
+        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window, 13=exp_stretch, 14=topk_window (default: 0).',
     )
 
     parser.add_argument(
@@ -287,6 +342,15 @@ def parse_args():
         help="Layer IDs that reuse indices from the nearest preceding full layer (skip indexer).",
     )
 
+    parser.add_argument(
+        "--benchmark",
+        type=str,
+        nargs="+",
+        default=["amc23"],
+        help="Benchmark(s) to run. Available: amc23, aime24. "
+             "Use multiple values to run several benchmarks sequentially (default: amc23).",
+    )
+
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -298,22 +362,31 @@ if __name__ == "__main__":
             args.index_cache_shared_layers = list(range(2, 28, 2))  # [2,4,6,...,26]
         args.topk_mapping_mode = 0
 
-    summary = verify_algos(
-        trials=args.trials,
-        topk_val=args.topk_val,
-        page_size=args.page_size,
-        vortex_module_name=args.vortex_module_name,
-        model_name=args.model_name,
-        sparse_attention=not(args.full_attention),
-        mem=args.mem,
-        kv_cache_dtype=args.kv_cache_dtype,
-        topk_type=args.topk_type,
-        topk_mapping_mode=args.topk_mapping_mode,
-        topk_mapping_power=args.topk_mapping_power,
-        topk_mapping_lut_path=args.topk_mapping_lut_path,
-        topk_mapping_quantiles_path=args.topk_mapping_quantiles_path,
-        index_cache_shared_layers=args.index_cache_shared_layers,
-    )
-    print(summary)
+    for bench_name in args.benchmark:
+        if bench_name not in BENCHMARK_REGISTRY:
+            print(f"WARNING: Unknown benchmark '{bench_name}', skipping. Available: {list(BENCHMARK_REGISTRY.keys())}")
+            continue
+        print(f"\n{'='*60}")
+        print(f"Benchmark: {bench_name}")
+        print(f"{'='*60}")
+        summary = verify_algos(
+            trials=args.trials,
+            topk_val=args.topk_val,
+            page_size=args.page_size,
+            vortex_module_name=args.vortex_module_name,
+            model_name=args.model_name,
+            sparse_attention=not(args.full_attention),
+            mem=args.mem,
+            kv_cache_dtype=args.kv_cache_dtype,
+            topk_type=args.topk_type,
+            topk_mapping_mode=args.topk_mapping_mode,
+            topk_mapping_power=args.topk_mapping_power,
+            topk_mapping_lut_path=args.topk_mapping_lut_path,
+            topk_mapping_quantiles_path=args.topk_mapping_quantiles_path,
+            index_cache_shared_layers=args.index_cache_shared_layers,
+            benchmark=bench_name,
+        )
+        summary["benchmark"] = bench_name
+        print(summary)
 
     exit(0)

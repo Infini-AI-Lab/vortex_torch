@@ -35,8 +35,8 @@ TOPK_VAL=30
 MEM=0.7
 ALGO="block_sparse_attention"
 # The path to the raw_histograms.npy file (set to skip calibration)
-# REAL_HISTOGRAMS="/scr/dataset/yuke/xinrui/new/vortex_torch/examples/calibration/raw_histograms.npy"
-REAL_HISTOGRAMS=""
+REAL_HISTOGRAMS="/data/datasets/xinrui/My_Projects/vortex_torch/examples/calibration/raw_histograms.npy"
+# REAL_HISTOGRAMS=""
 # ── Parse arguments ───────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,7 +55,7 @@ export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 mkdir -p "${RESULTS_DIR}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-RUN_DIR="${RESULTS_DIR}/dist_analysis_${TIMESTAMP}"
+RUN_DIR="${RESULTS_DIR}/dist_analysis_topk${TOPK_VAL}_${TIMESTAMP}"
 mkdir -p "${RUN_DIR}"
 
 echo "============================================================"
@@ -120,9 +120,10 @@ PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   --num-kv-heads 8 \
   --distributions bucket_uniform normal \
   --histogram \
+  --counters \
   --real-histograms "${REAL_HIST_PATH}" \
   --autotune-json "${AUTOTUNE_JSON}" \
-  --filter-kernels naive sglang_m0 sglang_scale sglang_m3 sglang_m3_noscale sglang_m6 sglang_m6_noscale sglang_m7 sglang_m7_noscale sglang_m8 sglang_m9 sglang_m9_noscale sglang_m10 sglang_m10_noscale sglang_m11 \
+  --filter-kernels naive sglang_ori sglang_m0 sglang_scale sglang_m3 sglang_m3_noscale sglang_m6 sglang_m6_noscale sglang_m7 sglang_m7_noscale sglang_m8 sglang_m9 sglang_m9_noscale sglang_m10 sglang_m10_noscale sglang_m11 sglang_m13 sglang_m13_noscale sglang_m14 \
   --repeat 20 \
   --output-json "${BENCH_JSON}" \
   2>&1 | tee "${RUN_DIR}/step3_bench.log"

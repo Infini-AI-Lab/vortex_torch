@@ -14,7 +14,18 @@ set -e
 # 9: Erf            — y = erf(alpha * x)
 # 10: Tanh          — y = tanh(alpha * x)
 # 11: Subtract      — x - pivot (RadiK-style scatter)
-export CUDA_VISIBLE_DEVICES=0
+GPU_ID=0
+BENCHMARKS="amc23"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --gpu)        GPU_ID="$2"; shift 2 ;;
+    --benchmark)  BENCHMARKS="$2"; shift 2 ;;
+    *) echo "Unknown option: $1"; exit 1 ;;
+  esac
+done
+
+export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
@@ -23,13 +34,13 @@ sparse_algos=(
   "block_sparse_attention"
 )
 
-RESULTS_DIR="results"
+BENCH_LABEL=$(echo "${BENCHMARKS}" | tr ' ' '_')
+RESULTS_DIR="results/${BENCH_LABEL}"
 mkdir -p "${RESULTS_DIR}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 # Set this to an existing calibration directory to skip re-running calibration.
 # It must contain lut.npy and quantiles.npy (output of calibrate_topk.py).
-CALIBRATION_DIR="/scr/dataset/yuke/xinrui/new/vortex_torch/examples/calibration"
-
+CALIBRATION_DIR="/data/datasets/xinrui/My_Projects/vortex_torch/examples/calibration"
 # ============================================================
 # Baseline: naive topk (mode 0)
 # ============================================================
@@ -44,6 +55,7 @@ for algo in "${sparse_algos[@]}"; do
       --model-name Qwen/Qwen3-1.7B \
       --topk-type naive \
       --topk-mapping-mode 0 \
+      --benchmark ${BENCHMARKS} \
       --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
 done
@@ -167,6 +179,7 @@ for algo in "${sparse_algos[@]}"; do
       --model-name Qwen/Qwen3-1.7B \
       --topk-type sglang \
       --topk-mapping-mode ${topk_mapping_mode} \
+      --benchmark ${BENCHMARKS} \
       --mem 0.7 ; } \
       2>&1 | tee "${OUTFILE}"
   done
@@ -266,3 +279,24 @@ for algo in "${sparse_algos[@]}"; do
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done
+
+# ============================================================
+# Counter profiling: collect COUNTER_NUM_EQUAL for all modes
+# ============================================================
+echo ""
+echo "============================================================"
+echo "Counter profiling: COUNTER_NUM_EQUAL per mode (topk=30)"
+echo "============================================================"
+COUNTER_JSON="${RESULTS_DIR}/counters_${TIMESTAMP}.json"
+PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
+  --batch-sizes 4 \
+  --seq-lens 4096 \
+  --topk-vals 30 \
+  --num-kv-heads 2 \
+  --distributions normal \
+  --counters \
+  --filter-kernels sglang_ori sglang_m0 sglang_m3 sglang_m6 sglang_m7 sglang_m8 sglang_m9 sglang_m10 sglang_m11 \
+  --repeat 5 \
+  --output-json "${COUNTER_JSON}" \
+  2>&1 | tee "${RESULTS_DIR}/counters_${TIMESTAMP}.log"
+echo ">>> Counters saved to ${COUNTER_JSON}"

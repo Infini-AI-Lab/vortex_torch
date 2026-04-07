@@ -43,6 +43,8 @@ MAPPING_MODE_NAMES = {
     9: "Erf",
     10: "Tanh",
     11: "Subtract",
+    13: "ExpStretch",
+    14: "TopkWindow",
 }
 
 MAPPING_MODE_FORMULAS = {
@@ -58,6 +60,8 @@ MAPPING_MODE_FORMULAS = {
     9: "Erf: erf(alpha*x)",
     10: "Tanh: tanh(alpha*x)",
     11: "Subtract: x - pivot (RadiK-style)",
+    13: "ExpStretch: exp(alpha*x)",
+    14: "TopkWindow: k-aware linear windowing",
 }
 
 

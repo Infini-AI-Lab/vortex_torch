@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from vortex_torch_C import (
-    topk_output, topk_output_sglang, topk_profile_histogram,
+    topk_output, topk_output_sglang, topk_output_sglang_ori, topk_profile_histogram,
     topk_profile_stage1, topk_profile_counters,
 )
 
@@ -37,6 +37,8 @@ MAPPING_MODE_NAMES = {
     9: "Erf",
     10: "Tanh",
     11: "Subtract",
+    13: "ExpStretch",
+    14: "TopkWindow",
 }
 
 MAPPING_MODE_FORMULAS = {
@@ -52,6 +54,8 @@ MAPPING_MODE_FORMULAS = {
     9: "Erf: erf(alpha*x)",
     10: "Tanh: tanh(alpha*x)",
     11: "Subtract: x - pivot (RadiK-style)",
+    13: "ExpStretch: exp(alpha*x)",
+    14: "TopkWindow: k-aware linear windowing",
 }
 
 
@@ -209,7 +213,7 @@ def _load_autotune_powers(path: str) -> Dict[int, float]:
     best: Dict[int, dict] = {}
     for r in data:
         m = r.get("mode")
-        if m not in (3, 6, 7, 9, 10):
+        if m not in (3, 6, 7, 9, 10, 13, 14):
             continue
         if has_res_rate:
             score = r.get("res_rate_mean", 0.0)
@@ -229,7 +233,8 @@ def _resolve_mode_power(args, mode: int) -> float:
     Priority: per-mode CLI flag > autotune JSON > global --mapping-power.
     """
     per_mode_flag = {3: args.mapping_power_3, 6: args.mapping_power_6, 7: args.mapping_power_7,
-                     9: getattr(args, 'mapping_power_9', None), 10: getattr(args, 'mapping_power_10', None)}
+                     9: getattr(args, 'mapping_power_9', None), 10: getattr(args, 'mapping_power_10', None),
+                     13: getattr(args, 'mapping_power_13', None), 14: getattr(args, 'mapping_power_14', None)}
     if mode in per_mode_flag and per_mode_flag[mode] is not None:
         return per_mode_flag[mode]
     if hasattr(args, "_autotune_powers") and mode in args._autotune_powers:
@@ -285,6 +290,7 @@ def run_benchmark(args) -> List[dict]:
     # Build kernel list
     all_kernels = {
         "naive": "naive",
+        "sglang_ori": "sglang_ori",
         "sglang_m0": "sglang_m0",
         "sglang_scale": "sglang_scale",  # mode 3 with p=1.0 (identity + linear auto-range scaling)
         "sglang_m3": "sglang_m3",
@@ -300,6 +306,9 @@ def run_benchmark(args) -> List[dict]:
         "sglang_m10": "sglang_m10",
         "sglang_m10_noscale": "sglang_m10_noscale",
         "sglang_m11": "sglang_m11",
+        "sglang_m13": "sglang_m13",
+        "sglang_m13_noscale": "sglang_m13_noscale",
+        "sglang_m14": "sglang_m14",
     }
     if mapping_lut is not None:
         all_kernels["sglang_m1"] = "sglang_m1"
@@ -409,6 +418,20 @@ def run_benchmark(args) -> List[dict]:
                                     pages_per_seg,
                                 )
                                 result = bench_kernel(topk_output, call_args, args.warmup, args.repeat)
+                            elif kernel_name == "sglang_ori":
+                                call_args = (
+                                    inputs["x"],
+                                    inputs["dense_kv_indptr"],
+                                    inputs["sparse_kv_indptr"],
+                                    inputs["dense_kv_indices"],
+                                    inputs["sparse_kv_indices"],
+                                    eff_bs,
+                                    topk_val,
+                                    args.reserved_bos,
+                                    args.reserved_eos,
+                                    pages_per_seg,
+                                )
+                                result = bench_kernel(topk_output_sglang_ori, call_args, args.warmup, args.repeat)
                             elif kernel_name == "sglang_scale":
                                 call_args = (
                                     inputs["x"],
@@ -437,7 +460,7 @@ def run_benchmark(args) -> List[dict]:
                                 elif mode == 2:
                                     extra_kwargs["mapping_quantiles"] = mapping_quantiles
 
-                                if mode in (3, 6, 7, 9, 10):
+                                if mode in (3, 6, 7, 9, 10, 13, 14):
                                     power = _resolve_mode_power(args, mode)
                                 else:
                                     power = 0.5
@@ -464,6 +487,8 @@ def run_benchmark(args) -> List[dict]:
                             # Build label
                             if kernel_name == "naive":
                                 label = "naive"
+                            elif kernel_name == "sglang_ori":
+                                label = "sglang Ori (no remap)"
                             elif kernel_name == "sglang_scale":
                                 label = "sglang Scale Only (p=1.0)"
                             else:
@@ -471,14 +496,14 @@ def run_benchmark(args) -> List[dict]:
                                 m = int(m_str.split("_")[0])
                                 noscale_suffix = " noscale" if kernel_name.endswith("_noscale") else ""
                                 mname = MAPPING_MODE_NAMES.get(m, f'm{m}')
-                                if m in (3, 6, 7, 9, 10):
-                                    pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha"}[m]
+                                if m in (3, 6, 7, 9, 10, 13, 14):
+                                    pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha", 13: "alpha", 14: "rho"}[m]
                                     label = f"sglang {mname} ({pname}={_resolve_mode_power(args, m)}){noscale_suffix}"
                                 else:
                                     label = f"sglang {mname}{noscale_suffix}"
 
-                            # Sub-phase profiling for sglang kernels
-                            if kernel_name != "naive":
+                            # Sub-phase profiling for sglang kernels (skip ori baseline)
+                            if kernel_name not in ("naive", "sglang_ori"):
                                 if kernel_name == "sglang_scale":
                                     s1_mode, s1_power = 3, 1.0
                                     s1_lut, s1_q = None, None
@@ -487,7 +512,7 @@ def run_benchmark(args) -> List[dict]:
                                     s1_mode_str = kernel_name.split("_m")[1]
                                     s1_mode = int(s1_mode_str.split("_")[0])
                                     s1_noscale = kernel_name.endswith("_noscale")
-                                    if s1_mode in (3, 6, 7, 9, 10):
+                                    if s1_mode in (3, 6, 7, 9, 10, 13, 14):
                                         s1_power = _resolve_mode_power(args, s1_mode)
                                     else:
                                         s1_power = 0.5
@@ -580,6 +605,46 @@ def run_benchmark(args) -> List[dict]:
                                         'refine_rounds_max': c[:, 4].max().item(),
                                         'stage2_input_max': c[:, 5].max().item(),
                                     }
+
+                            # Counter collection for kernels skipped by sub-phase profiling
+                            if kernel_name in ("sglang_ori",) and args.counters:
+                                inputs["sparse_kv_indices"].zero_()
+                                counter_buf = torch.zeros(eff_bs, 6, dtype=torch.int32, device="cuda")
+                                counter_args = (
+                                    inputs["x"],
+                                    inputs["dense_kv_indptr"],
+                                    inputs["sparse_kv_indptr"],
+                                    inputs["dense_kv_indices"],
+                                    inputs["sparse_kv_indices"],
+                                    counter_buf,
+                                    eff_bs,
+                                    topk_val,
+                                    args.reserved_bos,
+                                    args.reserved_eos,
+                                    pages_per_seg,
+                                    0,     # mode 0 (no mapping) — matches ori behavior
+                                    0.5,
+                                    None,
+                                    None,
+                                    False,
+                                )
+                                topk_profile_counters(*counter_args)
+                                torch.cuda.synchronize()
+                                c = counter_buf.float()
+                                result['counters'] = {
+                                    'threshold_bin_mean': c[:, 0].mean().item(),
+                                    'num_above_mean': c[:, 1].mean().item(),
+                                    'num_equal_mean': c[:, 2].mean().item(),
+                                    'remaining_k_mean': c[:, 3].mean().item(),
+                                    'refine_rounds_mean': c[:, 4].mean().item(),
+                                    'stage2_input_mean': c[:, 5].mean().item(),
+                                    'threshold_bin_max': c[:, 0].max().item(),
+                                    'num_above_max': c[:, 1].max().item(),
+                                    'num_equal_max': c[:, 2].max().item(),
+                                    'remaining_k_max': c[:, 3].max().item(),
+                                    'refine_rounds_max': c[:, 4].max().item(),
+                                    'stage2_input_max': c[:, 5].max().item(),
+                                }
 
                             kernel_entries.append((label, kernel_name, result))
                             config_results["kernels"][kernel_name] = result
@@ -703,7 +768,7 @@ def run_benchmark(args) -> List[dict]:
 
                                 extra_lut = mapping_lut if mode == 1 else None
                                 extra_q = mapping_quantiles if mode == 2 else None
-                                power = _resolve_mode_power(args, mode) if mode in (3, 6, 7, 9, 10) else 0.5
+                                power = _resolve_mode_power(args, mode) if mode in (3, 6, 7, 9, 10, 13, 14) else 0.5
 
                                 topk_profile_histogram(
                                     hist_inputs["x"],
@@ -716,6 +781,8 @@ def run_benchmark(args) -> List[dict]:
                                     power,
                                     extra_lut,
                                     extra_q,
+                                    False,      # mapping_noscale
+                                    topk_val,   # needed for mode 12/14 (tail/topk window)
                                 )
                                 torch.cuda.synchronize()
 
@@ -725,8 +792,8 @@ def run_benchmark(args) -> List[dict]:
                                 mformula = MAPPING_MODE_FORMULAS.get(mode, mname)
                                 mode_stats["name"] = mname
                                 mode_stats["formula"] = mformula
-                                if mode in (3, 6, 7, 9, 10):
-                                    pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha"}[mode]
+                                if mode in (3, 6, 7, 9, 10, 13, 14):
+                                    pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha", 13: "alpha", 14: "rho"}[mode]
                                     mode_stats["param"] = f"{pname}={power}"
                                     display_name = f"{mname} ({pname}={power})"
                                 else:
@@ -736,7 +803,7 @@ def run_benchmark(args) -> List[dict]:
                                 hist_entries.append((display_name, f"mode {mode:2d}", mode_stats))
 
                             # Noscale histogram analysis for parametric transform modes
-                            noscale_modes = [m for m in (3, 6, 7, 9, 10) if m in modes_to_test]
+                            noscale_modes = [m for m in (3, 6, 7, 9, 10, 13) if m in modes_to_test]
                             for mode in noscale_modes:
                                 ns_hists = torch.zeros(hist_eff_bs, 256, dtype=torch.int32, device="cuda")
                                 power = _resolve_mode_power(args, mode)
@@ -758,7 +825,7 @@ def run_benchmark(args) -> List[dict]:
                                 ns_stats["raw_counts"] = ns_hists.sum(dim=0).tolist()
                                 mname = MAPPING_MODE_NAMES.get(mode, f"m{mode}")
                                 mformula = MAPPING_MODE_FORMULAS.get(mode, mname)
-                                pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha"}[mode]
+                                pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha", 13: "alpha"}[mode]
                                 ns_stats["name"] = f"{mname} noscale"
                                 ns_stats["formula"] = mformula
                                 ns_stats["param"] = f"{pname}={power}"
@@ -831,9 +898,13 @@ def main():
                         help="Beta for mode 6 asinh (overrides --mapping-power)")
     parser.add_argument("--mapping-power-7", type=float, default=None,
                         help="Alpha for mode 7 log1p (overrides --mapping-power)")
+    parser.add_argument("--mapping-power-13", type=float, default=None,
+                        help="Alpha for mode 13 exp_stretch (overrides --mapping-power)")
+    parser.add_argument("--mapping-power-14", type=float, default=None,
+                        help="Rho for mode 14 topk_window (overrides --mapping-power)")
     parser.add_argument("--autotune-json", type=str, default=None,
                         help="Path to autotune_results.json — extracts best per-mode hyperparameters "
-                             "(overrides --mapping-power for modes 3/6/7)")
+                             "(overrides --mapping-power for modes 3/6/7/13/14)")
     parser.add_argument("--lut-path", type=str, default=None, help="Path to .npy uint8[256] LUT for mode=1")
     parser.add_argument("--quantiles-path", type=str, default=None, help="Path to .npy float32[256] for mode=2")
     parser.add_argument("--output-json", type=str, default=None, help="Save results to JSON file")
