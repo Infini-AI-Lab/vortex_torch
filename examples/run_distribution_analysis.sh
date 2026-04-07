@@ -47,6 +47,9 @@ MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=30
 MEM=0.7
 ALGO="block_sparse_attention"
+RADIX_BITS=8
+SAMPLE_STRIDE=1
+SEQ_LEN=32768
 # The path to the raw_histograms.npy file (set to skip calibration)
 REAL_HISTOGRAMS="/data/datasets/xinrui/My_Projects/vortex_torch/examples/calibration/raw_histograms.npy"
 REAL_HISTOGRAMS=""
@@ -59,11 +62,22 @@ while [[ $# -gt 0 ]]; do
     --gpu)              GPU_ID="$2"; shift 2 ;;
     --algo)             ALGO="$2"; shift 2 ;;
     --real-histograms)  REAL_HISTOGRAMS="$2"; shift 2 ;;
+    --radix-bits)       RADIX_BITS="$2"; shift 2 ;;
+    --sample-stride)    SAMPLE_STRIDE="$2"; shift 2 ;;
+    --seq-len)          SEQ_LEN="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
 
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
+
+# Validate seq_len: need pages/seg > topk_val (page_size=16, reserved=3 pages)
+MIN_SEQ_LEN=$(( (TOPK_VAL + 4) * 16 ))
+if [ "${SEQ_LEN}" -lt "${MIN_SEQ_LEN}" ]; then
+  echo "ERROR: --seq-len ${SEQ_LEN} too small for --topk-val ${TOPK_VAL}."
+  echo "  Minimum: ${MIN_SEQ_LEN} (pages/seg must exceed topk_val + 3 reserved pages)"
+  exit 1
+fi
 
 RESULTS_DIR="${SCRIPT_DIR}/results"
 mkdir -p "${RESULTS_DIR}"
@@ -77,6 +91,8 @@ echo "  Model:           ${MODEL_NAME}"
 echo "  Algorithm:       ${ALGO}"
 echo "  TopK:            ${TOPK_VAL}"
 echo "  GPU:             ${GPU_ID}"
+echo "  Radix bits:      ${RADIX_BITS} ($(( 1 << RADIX_BITS )) bins)"
+echo "  Sample stride:   ${SAMPLE_STRIDE}"
 echo "  Real histograms: ${REAL_HISTOGRAMS:-<will calibrate>}"
 echo "  Output:          ${RUN_DIR}"
 echo "============================================================"
@@ -117,7 +133,7 @@ fi
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
   --topk-val "${TOPK_VAL}" \
   --batch-size 4 \
-  --seq-len 32768 \
+  --seq-len ${SEQ_LEN} \
   --num-kv-heads 2 \
   "${AUTOTUNE_EXTRA_ARGS[@]}" \
   --output-json "${AUTOTUNE_JSON}" \
@@ -157,7 +173,7 @@ fi
 
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   --batch-sizes 4 \
-  --seq-lens 32768 \
+  --seq-lens ${SEQ_LEN} \
   --topk-vals "${TOPK_VAL}" \
   --num-kv-heads 8 \
   --distributions bucket_uniform normal \
@@ -166,6 +182,8 @@ PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   "${BENCH_EXTRA_ARGS[@]}" \
   --autotune-json "${AUTOTUNE_JSON}" \
   --filter-kernels naive sglang_ori sglang_m0 sglang_scale sglang_m1 sglang_m2 sglang_m3 sglang_m3_noscale sglang_m4 sglang_m6 sglang_m6_noscale sglang_m7 sglang_m7_noscale sglang_m8 sglang_m9 sglang_m9_noscale sglang_m10 sglang_m10_noscale sglang_m11 sglang_m13 sglang_m13_noscale sglang_m14 \
+  --radix-bits "${RADIX_BITS}" \
+  --sample-stride "${SAMPLE_STRIDE}" \
   --repeat 20 \
   --output-json "${BENCH_JSON}" \
   2>&1 | tee "${RUN_DIR}/step3_bench.log"

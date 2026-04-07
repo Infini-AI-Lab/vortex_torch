@@ -100,7 +100,9 @@ const int64_t       mapping_mode = 0,
 const double        mapping_power = 0.5,
 std::optional<at::Tensor> mapping_lut = std::nullopt,
 std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false
+const bool          mapping_noscale = false,
+const int64_t       sample_stride = 1,
+const int64_t       radix_bits = 8
 );
 
 void topk_output_sglang_ori(
@@ -113,7 +115,8 @@ const int64_t       eff_batch_size,
 const int64_t       topk_val,
 const int64_t       reserved_bos,
 const int64_t       reserved_eos,
-const int64_t       max_num_pages
+const int64_t       max_num_pages,
+const int64_t       radix_bits = 8
 );
 
 void topk_profile_histogram(
@@ -128,7 +131,8 @@ const double        mapping_power = 0.5,
 std::optional<at::Tensor> mapping_lut = std::nullopt,
 std::optional<at::Tensor> mapping_quantiles = std::nullopt,
 const bool          mapping_noscale = false,
-const int64_t       topk_val = 0
+const int64_t       topk_val = 0,
+const int64_t       sample_stride = 1
 );
 
 void topk_profile_stage1(

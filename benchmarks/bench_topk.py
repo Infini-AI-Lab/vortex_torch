@@ -227,19 +227,118 @@ def _load_autotune_powers(path: str) -> Dict[int, float]:
     return {m: v["param"] for m, v in best.items()}
 
 
-def _resolve_mode_power(args, mode: int) -> float:
+def _resolve_mode_hparam(args, mode: int) -> float:
     """Return the power/beta/alpha for a parametric mapping mode.
 
     Priority: per-mode CLI flag > autotune JSON > global --mapping-power.
     """
-    per_mode_flag = {3: args.mapping_power_3, 6: args.mapping_power_6, 7: args.mapping_power_7,
-                     9: getattr(args, 'mapping_power_9', None), 10: getattr(args, 'mapping_power_10', None),
-                     13: getattr(args, 'mapping_power_13', None), 14: getattr(args, 'mapping_power_14', None)}
+    per_mode_flag = {3: args.mapping_hparam_3, 6: args.mapping_hparam_6, 7: args.mapping_hparam_7,
+                     9: getattr(args, 'mapping_hparam_9', None), 10: getattr(args, 'mapping_hparam_10', None),
+                     13: getattr(args, 'mapping_hparam_13', None), 14: getattr(args, 'mapping_hparam_14', None)}
     if mode in per_mode_flag and per_mode_flag[mode] is not None:
         return per_mode_flag[mode]
     if hasattr(args, "_autotune_powers") and mode in args._autotune_powers:
         return args._autotune_powers[mode]
-    return args.mapping_power
+    return args.mapping_hparam
+
+
+def _run_subphase_profiling(subphase_modes, inputs, eff_bs, topk_val,
+                            pages_per_seg, args, mapping_lut, mapping_quantiles):
+    """Run sub-phase profiling (histogram_only + stage1_full) for each mode.
+
+    For topk <= 512, runs inline. For topk > 512, runs each mode in a
+    separate subprocess to avoid CUDA shared memory exhaustion from
+    accumulated kernel template registrations.
+    """
+    import subprocess, sys, tempfile, os
+
+    for kernel_name, s1_mode, s1_power, s1_noscale, result in subphase_modes:
+        s1_lut = mapping_lut if s1_mode == 1 else None
+        s1_q = mapping_quantiles if s1_mode == 2 else None
+
+        if topk_val <= 512:
+            # Inline: run directly in this process
+            hist_buf = torch.zeros(eff_bs, 256, dtype=torch.int32, device="cuda")
+            hist_args = (
+                inputs["x"], inputs["dense_kv_indptr"], hist_buf, eff_bs,
+                args.reserved_bos, args.reserved_eos,
+                s1_mode, s1_power, s1_lut, s1_q, s1_noscale,
+            )
+            hist_result = bench_kernel(topk_profile_histogram, hist_args, args.warmup, args.repeat)
+
+            inputs["sparse_kv_indices"].zero_()
+            stage1_args = (
+                inputs["x"], inputs["dense_kv_indptr"], inputs["sparse_kv_indptr"],
+                inputs["dense_kv_indices"], inputs["sparse_kv_indices"],
+                eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+                s1_mode, s1_power, s1_lut, s1_q, s1_noscale,
+            )
+            stage1_result = bench_kernel(topk_profile_stage1, stage1_args, args.warmup, args.repeat)
+        else:
+            # Subprocess: fresh CUDA context per mode to avoid shared memory exhaustion
+            script = f"""
+import torch, json, sys
+sys.path.insert(0, '{os.path.dirname(os.path.abspath(__file__))}')
+from vortex_torch_C import topk_profile_histogram, topk_profile_stage1
+from bench_topk import make_topk_inputs, bench_kernel
+
+inputs = make_topk_inputs(
+    batch_size={inputs['x'].shape[0] // (eff_bs // (inputs['x'].shape[0] if eff_bs == inputs['x'].shape[0] else 1)) if False else 1},
+    num_kv_heads=1, seq_len={pages_per_seg * 16},
+    page_size=16, topk_val={topk_val},
+    reserved_bos={args.reserved_bos}, reserved_eos={args.reserved_eos},
+    score_dtype=torch.bfloat16, distribution="normal",
+)
+eff_bs = {eff_bs}
+# Recreate inputs with correct eff_bs
+inputs = make_topk_inputs(
+    batch_size={eff_bs // max(1, eff_bs // pages_per_seg) if False else eff_bs},
+    num_kv_heads=1, seq_len={pages_per_seg * 16},
+    page_size=16, topk_val={topk_val},
+    reserved_bos={args.reserved_bos}, reserved_eos={args.reserved_eos},
+    score_dtype=torch.bfloat16, distribution="normal",
+)
+eff_bs = inputs["eff_batch_size"]
+
+hist_buf = torch.zeros(eff_bs, 256, dtype=torch.int32, device="cuda")
+hist_result = bench_kernel(topk_profile_histogram,
+    (inputs["x"], inputs["dense_kv_indptr"], hist_buf, eff_bs,
+     {args.reserved_bos}, {args.reserved_eos}, {s1_mode}, {s1_power},
+     None, None, {s1_noscale}), 5, {args.repeat})
+
+inputs["sparse_kv_indices"].zero_()
+stage1_result = bench_kernel(topk_profile_stage1,
+    (inputs["x"], inputs["dense_kv_indptr"], inputs["sparse_kv_indptr"],
+     inputs["dense_kv_indices"], inputs["sparse_kv_indices"],
+     eff_bs, {topk_val}, {args.reserved_bos}, {args.reserved_eos},
+     inputs["num_pages_per_seg"], {s1_mode}, {s1_power},
+     None, None, {s1_noscale}), 5, {args.repeat})
+
+print(json.dumps({{"hist": hist_result, "stage1": stage1_result}}))
+"""
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-c", script],
+                    capture_output=True, text=True, timeout=60,
+                    env={**os.environ, "PYTHONPATH": os.path.dirname(os.path.abspath(__file__)) + "/.."})
+                if proc.returncode == 0:
+                    data = json.loads(proc.stdout.strip().split("\n")[-1])
+                    hist_result = data["hist"]
+                    stage1_result = data["stage1"]
+                else:
+                    # Subprocess failed — skip sub-phase for this mode
+                    continue
+            except Exception:
+                continue
+
+        result['histogram_only_mean_ms'] = hist_result['mean_ms']
+        result['histogram_only_median_ms'] = hist_result['median_ms']
+        result['stage1_full_mean_ms'] = stage1_result['mean_ms']
+        result['stage1_full_median_ms'] = stage1_result['median_ms']
+        result['route_overhead_mean_ms'] = stage1_result['mean_ms'] - hist_result['mean_ms']
+        result['route_overhead_median_ms'] = stage1_result['median_ms'] - hist_result['median_ms']
+        result['stage2_refine_mean_ms'] = result['mean_ms'] - stage1_result['mean_ms']
+        result['stage2_refine_median_ms'] = result['median_ms'] - stage1_result['median_ms']
 
 
 def run_benchmark(args) -> List[dict]:
@@ -275,6 +374,7 @@ def run_benchmark(args) -> List[dict]:
     print(f"TopK Kernel Benchmark Results")
     print(f"GPU: {gpu_name} | SM count: {gpu_props.multi_processor_count}")
     print(f"Score dtype: {args.score_dtype} | Warmup: {args.warmup} | Repeat: {args.repeat}")
+    print(f"Radix bits: {args.radix_bits} ({1 << args.radix_bits} bins) | Sample stride: {args.sample_stride}")
     print("=" * 90)
 
     # Load optional LUT / quantiles
@@ -430,6 +530,7 @@ def run_benchmark(args) -> List[dict]:
                                     args.reserved_bos,
                                     args.reserved_eos,
                                     pages_per_seg,
+                                    args.radix_bits,
                                 )
                                 result = bench_kernel(topk_output_sglang_ori, call_args, args.warmup, args.repeat)
                             elif kernel_name == "sglang_scale":
@@ -448,6 +549,9 @@ def run_benchmark(args) -> List[dict]:
                                     1.0,  # p=1.0 → identity
                                     None,
                                     None,
+                                    False,
+                                    args.sample_stride,
+                                    args.radix_bits,
                                 )
                                 result = bench_kernel(topk_output_sglang, call_args, args.warmup, args.repeat)
                             else:
@@ -461,7 +565,7 @@ def run_benchmark(args) -> List[dict]:
                                     extra_kwargs["mapping_quantiles"] = mapping_quantiles
 
                                 if mode in (3, 6, 7, 9, 10, 13, 14):
-                                    power = _resolve_mode_power(args, mode)
+                                    power = _resolve_mode_hparam(args, mode)
                                 else:
                                     power = 0.5
 
@@ -481,6 +585,8 @@ def run_benchmark(args) -> List[dict]:
                                     extra_kwargs.get("mapping_lut", None),
                                     extra_kwargs.get("mapping_quantiles", None),
                                     is_noscale,
+                                    args.sample_stride,
+                                    args.radix_bits,
                                 )
                                 result = bench_kernel(topk_output_sglang, call_args, args.warmup, args.repeat)
 
@@ -498,116 +604,23 @@ def run_benchmark(args) -> List[dict]:
                                 mname = MAPPING_MODE_NAMES.get(m, f'm{m}')
                                 if m in (3, 6, 7, 9, 10, 13, 14):
                                     pname = {3: "p", 6: "beta", 7: "alpha", 9: "alpha", 10: "alpha", 13: "alpha", 14: "rho"}[m]
-                                    label = f"sglang {mname} ({pname}={_resolve_mode_power(args, m)}){noscale_suffix}"
+                                    label = f"sglang {mname} ({pname}={_resolve_mode_hparam(args, m)}){noscale_suffix}"
                                 else:
                                     label = f"sglang {mname}{noscale_suffix}"
 
-                            # Sub-phase profiling for sglang kernels (skip ori baseline)
-                            if kernel_name not in ("naive", "sglang_ori"):
-                                if kernel_name == "sglang_scale":
-                                    s1_mode, s1_power = 3, 1.0
-                                    s1_lut, s1_q = None, None
-                                    s1_noscale = False
+                            # Counter collection (runs separately from sub-phase profiling)
+                            if kernel_name not in ("naive",) and args.counters:
+                                if kernel_name in ("sglang_ori",):
+                                    c_mode, c_power, c_lut, c_q, c_noscale = 0, 0.5, None, None, False
+                                elif kernel_name == "sglang_scale":
+                                    c_mode, c_power, c_lut, c_q, c_noscale = 3, 1.0, None, None, False
                                 else:
-                                    s1_mode_str = kernel_name.split("_m")[1]
-                                    s1_mode = int(s1_mode_str.split("_")[0])
-                                    s1_noscale = kernel_name.endswith("_noscale")
-                                    if s1_mode in (3, 6, 7, 9, 10, 13, 14):
-                                        s1_power = _resolve_mode_power(args, s1_mode)
-                                    else:
-                                        s1_power = 0.5
-                                    s1_lut = mapping_lut if s1_mode == 1 else None
-                                    s1_q = mapping_quantiles if s1_mode == 2 else None
-
-                                # Histogram only: pre-pass + histogram build
-                                hist_buf = torch.zeros(eff_bs, 256, dtype=torch.int32, device="cuda")
-                                hist_args = (
-                                    inputs["x"],
-                                    inputs["dense_kv_indptr"],
-                                    hist_buf,
-                                    eff_bs,
-                                    args.reserved_bos,
-                                    args.reserved_eos,
-                                    s1_mode,
-                                    s1_power,
-                                    s1_lut,
-                                    s1_q,
-                                    s1_noscale,
-                                )
-                                hist_result = bench_kernel(topk_profile_histogram, hist_args, args.warmup, args.repeat)
-
-                                # Stage1 full: pre-pass + hist + cumsum + route/filter
-                                inputs["sparse_kv_indices"].zero_()
-                                stage1_args = (
-                                    inputs["x"],
-                                    inputs["dense_kv_indptr"],
-                                    inputs["sparse_kv_indptr"],
-                                    inputs["dense_kv_indices"],
-                                    inputs["sparse_kv_indices"],
-                                    eff_bs,
-                                    topk_val,
-                                    args.reserved_bos,
-                                    args.reserved_eos,
-                                    pages_per_seg,
-                                    s1_mode,
-                                    s1_power,
-                                    s1_lut,
-                                    s1_q,
-                                    s1_noscale,
-                                )
-                                stage1_result = bench_kernel(topk_profile_stage1, stage1_args, args.warmup, args.repeat)
-
-                                result['histogram_only_mean_ms'] = hist_result['mean_ms']
-                                result['histogram_only_median_ms'] = hist_result['median_ms']
-                                result['stage1_full_mean_ms'] = stage1_result['mean_ms']
-                                result['stage1_full_median_ms'] = stage1_result['median_ms']
-                                result['route_overhead_mean_ms'] = stage1_result['mean_ms'] - hist_result['mean_ms']
-                                result['route_overhead_median_ms'] = stage1_result['median_ms'] - hist_result['median_ms']
-                                result['stage2_refine_mean_ms'] = result['mean_ms'] - stage1_result['mean_ms']
-                                result['stage2_refine_median_ms'] = result['median_ms'] - stage1_result['median_ms']
-
-                                # Optional counter collection
-                                if args.counters:
-                                    inputs["sparse_kv_indices"].zero_()
-                                    counter_buf = torch.zeros(eff_bs, 6, dtype=torch.int32, device="cuda")
-                                    counter_args = (
-                                        inputs["x"],
-                                        inputs["dense_kv_indptr"],
-                                        inputs["sparse_kv_indptr"],
-                                        inputs["dense_kv_indices"],
-                                        inputs["sparse_kv_indices"],
-                                        counter_buf,
-                                        eff_bs,
-                                        topk_val,
-                                        args.reserved_bos,
-                                        args.reserved_eos,
-                                        pages_per_seg,
-                                        s1_mode,
-                                        s1_power,
-                                        s1_lut,
-                                        s1_q,
-                                        s1_noscale,
-                                    )
-                                    topk_profile_counters(*counter_args)
-                                    torch.cuda.synchronize()
-                                    c = counter_buf.float()
-                                    result['counters'] = {
-                                        'threshold_bin_mean': c[:, 0].mean().item(),
-                                        'num_above_mean': c[:, 1].mean().item(),
-                                        'num_equal_mean': c[:, 2].mean().item(),
-                                        'remaining_k_mean': c[:, 3].mean().item(),
-                                        'refine_rounds_mean': c[:, 4].mean().item(),
-                                        'stage2_input_mean': c[:, 5].mean().item(),
-                                        'threshold_bin_max': c[:, 0].max().item(),
-                                        'num_above_max': c[:, 1].max().item(),
-                                        'num_equal_max': c[:, 2].max().item(),
-                                        'remaining_k_max': c[:, 3].max().item(),
-                                        'refine_rounds_max': c[:, 4].max().item(),
-                                        'stage2_input_max': c[:, 5].max().item(),
-                                    }
-
-                            # Counter collection for kernels skipped by sub-phase profiling
-                            if kernel_name in ("sglang_ori",) and args.counters:
+                                    c_mode_str = kernel_name.split("_m")[1]
+                                    c_mode = int(c_mode_str.split("_")[0])
+                                    c_noscale = kernel_name.endswith("_noscale")
+                                    c_power = _resolve_mode_hparam(args, c_mode) if c_mode in (3,6,7,9,10,13,14) else 0.5
+                                    c_lut = mapping_lut if c_mode == 1 else None
+                                    c_q = mapping_quantiles if c_mode == 2 else None
                                 inputs["sparse_kv_indices"].zero_()
                                 counter_buf = torch.zeros(eff_bs, 6, dtype=torch.int32, device="cuda")
                                 counter_args = (
@@ -622,11 +635,11 @@ def run_benchmark(args) -> List[dict]:
                                     args.reserved_bos,
                                     args.reserved_eos,
                                     pages_per_seg,
-                                    0,     # mode 0 (no mapping) — matches ori behavior
-                                    0.5,
-                                    None,
-                                    None,
-                                    False,
+                                    c_mode,
+                                    c_power,
+                                    c_lut,
+                                    c_q,
+                                    c_noscale,
                                 )
                                 topk_profile_counters(*counter_args)
                                 torch.cuda.synchronize()
@@ -648,6 +661,27 @@ def run_benchmark(args) -> List[dict]:
 
                             kernel_entries.append((label, kernel_name, result))
                             config_results["kernels"][kernel_name] = result
+
+                        # Second pass: sub-phase profiling (histogram_only + stage1_full)
+                        # Run in a subprocess to get a fresh CUDA context, avoiding
+                        # shared memory exhaustion from accumulated kernel registrations.
+                        subphase_modes = []
+                        for label, kernel_name, result in kernel_entries:
+                            if kernel_name in ("naive", "sglang_ori"):
+                                continue
+                            if kernel_name == "sglang_scale":
+                                s1_mode, s1_power, s1_noscale = 3, 1.0, False
+                            else:
+                                s1_mode_str = kernel_name.split("_m")[1]
+                                s1_mode = int(s1_mode_str.split("_")[0])
+                                s1_noscale = kernel_name.endswith("_noscale")
+                                s1_power = _resolve_mode_hparam(args, s1_mode) if s1_mode in (3,6,7,9,10,13,14) else 0.5
+                            subphase_modes.append((kernel_name, s1_mode, s1_power, s1_noscale, result))
+
+                        if subphase_modes:
+                            _run_subphase_profiling(
+                                subphase_modes, inputs, eff_bs, topk_val,
+                                pages_per_seg, args, mapping_lut, mapping_quantiles)
 
                         # Print kernel results sorted by mean latency (ascending)
                         kernel_entries.sort(key=lambda e: e[2]['mean_ms'])
@@ -692,44 +726,13 @@ def run_benchmark(args) -> List[dict]:
                                     f"stage2_input={c['stage2_input_mean']:.0f}"
                                 )
 
-                        # Histogram analysis
+                        # Histogram analysis — uses the SAME inputs as the main benchmark
+                        # so histogram CSV and counters reflect the same data.
                         if args.histogram:
-                            # Build a separate (potentially larger) dataset for histogram profiling
-                            target_pages = (args.histogram_pages
-                                            if args.histogram_pages is not None
-                                            else _histogram_target_pages(pages_per_seg))
+                            hist_inputs = inputs
+                            hist_eff_bs = eff_bs
                             current_pages = eff_bs * pages_per_seg
-                            if target_pages > current_pages:
-                                hist_bs = math.ceil(target_pages / (num_kv_heads * pages_per_seg))
-                                if dist == "real" and real_histogram is not None:
-                                    hist_inputs = make_topk_inputs(
-                                        batch_size=hist_bs, num_kv_heads=num_kv_heads,
-                                        seq_len=seq_len, page_size=args.page_size,
-                                        topk_val=topk_val, reserved_bos=args.reserved_bos,
-                                        reserved_eos=args.reserved_eos, score_dtype=score_dtype,
-                                        distribution="normal",
-                                    )
-                                    total_hist_dense = hist_inputs["eff_batch_size"] * hist_inputs["num_pages_per_seg"]
-                                    hist_inputs["x"] = _scores_from_histogram(real_histogram, total_hist_dense, device="cuda")
-                                else:
-                                    hist_inputs = make_topk_inputs(
-                                        batch_size=hist_bs, num_kv_heads=num_kv_heads,
-                                        seq_len=seq_len, page_size=args.page_size,
-                                        topk_val=topk_val, reserved_bos=args.reserved_bos,
-                                        reserved_eos=args.reserved_eos, score_dtype=score_dtype,
-                                        distribution=dist,
-                                    )
-                                hist_eff_bs = hist_inputs["eff_batch_size"]
-                                actual_pages = hist_eff_bs * pages_per_seg
-                                print(
-                                    f"  histogram dataset  : {actual_pages} pages "
-                                    f"(upscaled from {current_pages} for statistical reliability)"
-                                )
-                            else:
-                                hist_inputs = inputs
-                                hist_eff_bs = eff_bs
-                                actual_pages = current_pages
-                                print(f"  histogram dataset  : {actual_pages} pages")
+                            print(f"  histogram dataset  : {current_pages} pages (same as benchmark)")
 
                             # Raw unmapped histogram
                             histograms = torch.zeros(hist_eff_bs, 256, dtype=torch.int32, device="cuda")
@@ -756,7 +759,7 @@ def run_benchmark(args) -> List[dict]:
                             histograms_results = {}
 
                             # Per-mode histogram analysis (scaled)
-                            modes_to_test = [0, 3, 4, 6, 7, 8, 9, 10, 11]
+                            modes_to_test = [0, 3, 4, 6, 7, 8, 9, 10, 11, 13, 14]
                             if mapping_lut is not None:
                                 modes_to_test.append(1)
                             if mapping_quantiles is not None:
@@ -768,7 +771,7 @@ def run_benchmark(args) -> List[dict]:
 
                                 extra_lut = mapping_lut if mode == 1 else None
                                 extra_q = mapping_quantiles if mode == 2 else None
-                                power = _resolve_mode_power(args, mode) if mode in (3, 6, 7, 9, 10, 13, 14) else 0.5
+                                power = _resolve_mode_hparam(args, mode) if mode in (3, 6, 7, 9, 10, 13, 14) else 0.5
 
                                 topk_profile_histogram(
                                     hist_inputs["x"],
@@ -806,7 +809,7 @@ def run_benchmark(args) -> List[dict]:
                             noscale_modes = [m for m in (3, 6, 7, 9, 10, 13) if m in modes_to_test]
                             for mode in noscale_modes:
                                 ns_hists = torch.zeros(hist_eff_bs, 256, dtype=torch.int32, device="cuda")
-                                power = _resolve_mode_power(args, mode)
+                                power = _resolve_mode_hparam(args, mode)
                                 topk_profile_histogram(
                                     hist_inputs["x"],
                                     hist_inputs["dense_kv_indptr"],
@@ -890,18 +893,24 @@ def main():
     parser.add_argument("--distributions", nargs="+", default=["normal", "lognormal", "uniform"])
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--repeat", type=int, default=100)
-    parser.add_argument("--mapping-power", type=float, default=0.5,
-                        help="Global fallback power parameter for parametric modes (default: 0.5)")
-    parser.add_argument("--mapping-power-3", type=float, default=None,
-                        help="Power exponent p for mode 3 (overrides --mapping-power)")
-    parser.add_argument("--mapping-power-6", type=float, default=None,
-                        help="Beta for mode 6 asinh (overrides --mapping-power)")
-    parser.add_argument("--mapping-power-7", type=float, default=None,
-                        help="Alpha for mode 7 log1p (overrides --mapping-power)")
-    parser.add_argument("--mapping-power-13", type=float, default=None,
-                        help="Alpha for mode 13 exp_stretch (overrides --mapping-power)")
-    parser.add_argument("--mapping-power-14", type=float, default=None,
-                        help="Rho for mode 14 topk_window (overrides --mapping-power)")
+    parser.add_argument("--mapping-hparam", "--mapping-power", type=float, default=0.5,
+                        dest="mapping_hparam",
+                        help="Global fallback hyperparameter for parametric modes (default: 0.5)")
+    parser.add_argument("--mapping-hparam-3", "--mapping-power-3", type=float, default=None,
+                        dest="mapping_hparam_3",
+                        help="Power exponent p for mode 3 (overrides --mapping-hparam)")
+    parser.add_argument("--mapping-hparam-6", "--mapping-power-6", type=float, default=None,
+                        dest="mapping_hparam_6",
+                        help="Beta for mode 6 asinh (overrides --mapping-hparam)")
+    parser.add_argument("--mapping-hparam-7", "--mapping-power-7", type=float, default=None,
+                        dest="mapping_hparam_7",
+                        help="Alpha for mode 7 log1p (overrides --mapping-hparam)")
+    parser.add_argument("--mapping-hparam-13", "--mapping-power-13", type=float, default=None,
+                        dest="mapping_hparam_13",
+                        help="Alpha for mode 13 exp_stretch (overrides --mapping-hparam)")
+    parser.add_argument("--mapping-hparam-14", "--mapping-power-14", type=float, default=None,
+                        dest="mapping_hparam_14",
+                        help="Rho for mode 14 topk_window (overrides --mapping-hparam)")
     parser.add_argument("--autotune-json", type=str, default=None,
                         help="Path to autotune_results.json — extracts best per-mode hyperparameters "
                              "(overrides --mapping-power for modes 3/6/7/13/14)")
@@ -920,6 +929,12 @@ def main():
     parser.add_argument("--counters", action="store_true",
                         help="Collect diagnostic counters (threshold_bin, num_above, num_equal, "
                              "remaining_k, refine_rounds, stage2_input) for each sglang kernel")
+    parser.add_argument("--sample-stride", type=int, default=1,
+                        help="Pre-pass sampling stride for mapped modes (1=full, 4=1/4, 8=1/8). "
+                             "Higher values reduce pre-pass overhead at cost of bin quality (default: 1)")
+    parser.add_argument("--radix-bits", type=int, default=8,
+                        help="Stage 1 radix bits for ori/mode-0 kernel: 4=16 bins, 6=64, 8=256, 9=512, 10=1024 (default: 8). "
+                             "Range: 4-10. Fewer bits = coarser Stage 1 but faster histogram; more bits = finer but slower.")
 
     args = parser.parse_args()
     results = run_benchmark(args)

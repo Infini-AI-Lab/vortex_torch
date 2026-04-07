@@ -30,7 +30,7 @@ enum TopKMappingMode {
     MAPPING_QUANTILE = 2,  // Piecewise-linear quantile mapping
     MAPPING_POWER    = 3,  // Monotonic power transform
     MAPPING_LOG      = 4,  // Log transform
-    MAPPING_INDEX_CACHE = 5,  // Sentinel: reuse previous layer's indices (Python-level skip)
+    // Mode 5 reserved (previously INDEX_CACHE, removed)
     MAPPING_ASINH       = 6,  // asinh(beta * x), beta via power_exp
     MAPPING_LOG1P       = 7,  // sign(x) * log1p(alpha * |x|), alpha via power_exp
     MAPPING_TRUNC8      = 8,  // BF16 upper-8-bit bucketing

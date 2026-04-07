@@ -112,17 +112,17 @@ for r in data:
         if m not in best or r['gini'] < best[m]['gini']:
             best[m] = r
 for m in (3, 6, 7, 9, 10):
-    print(f'BEST_POWER_{m}={best[m][\"param\"]}' if m in best else f'BEST_POWER_{m}=0.5')
+    print(f'BEST_HPARAM_{m}={best[m][\"param\"]}' if m in best else f'BEST_HPARAM_{m}=0.5')
 " "${AUTOTUNE_JSON}")"
-  echo ">>> Autotuned best powers: mode3=${BEST_POWER_3} mode6=${BEST_POWER_6} mode7=${BEST_POWER_7} mode9=${BEST_POWER_9} mode10=${BEST_POWER_10}"
+  echo ">>> Autotuned best powers: mode3=${BEST_HPARAM_3} mode6=${BEST_HPARAM_6} mode7=${BEST_HPARAM_7} mode9=${BEST_HPARAM_9} mode10=${BEST_HPARAM_10}"
   echo ""
 else
   echo ">>> WARNING: ${REAL_HISTOGRAMS} not found, using default power=0.5 for all modes"
-  BEST_POWER_3=0.5
-  BEST_POWER_6=0.5
-  BEST_POWER_7=0.5
-  BEST_POWER_9=0.5
-  BEST_POWER_10=0.5
+  BEST_HPARAM_3=0.5
+  BEST_HPARAM_6=0.5
+  BEST_HPARAM_7=0.5
+  BEST_HPARAM_9=0.5
+  BEST_HPARAM_10=0.5
 fi
 
 # ============================================================
@@ -189,8 +189,8 @@ done
 # Mode 3: power — autotuned best p
 # ============================================================
 for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_3_p${BEST_POWER_3}_${TIMESTAMP}.log"
-  echo ">>> Running mode 3 (power) p=${BEST_POWER_3} (autotuned) for ${algo}"
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_3_p${BEST_HPARAM_3}_${TIMESTAMP}.log"
+  echo ">>> Running mode 3 (power) p=${BEST_HPARAM_3} (autotuned) for ${algo}"
   echo ">>> Saving results to ${OUTFILE}"
   { time python verify_algo.py \
     --trials 8 \
@@ -199,7 +199,7 @@ for algo in "${sparse_algos[@]}"; do
     --model-name Qwen/Qwen3-1.7B \
     --topk-type sglang \
     --topk-mapping-mode 3 \
-    --topk-mapping-power ${BEST_POWER_3} \
+    --topk-mapping-hparam ${BEST_HPARAM_3} \
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done
@@ -208,8 +208,8 @@ done
 # Mode 6: asinh — autotuned best beta
 # ============================================================
 for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_6_beta${BEST_POWER_6}_${TIMESTAMP}.log"
-  echo ">>> Running mode 6 (asinh) beta=${BEST_POWER_6} (autotuned) for ${algo}"
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_6_beta${BEST_HPARAM_6}_${TIMESTAMP}.log"
+  echo ">>> Running mode 6 (asinh) beta=${BEST_HPARAM_6} (autotuned) for ${algo}"
   echo ">>> Saving results to ${OUTFILE}"
   { time python verify_algo.py \
     --trials 8 \
@@ -218,7 +218,7 @@ for algo in "${sparse_algos[@]}"; do
     --model-name Qwen/Qwen3-1.7B \
     --topk-type sglang \
     --topk-mapping-mode 6 \
-    --topk-mapping-power ${BEST_POWER_6} \
+    --topk-mapping-hparam ${BEST_HPARAM_6} \
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done
@@ -227,8 +227,8 @@ done
 # Mode 7: log1p — autotuned best alpha
 # ============================================================
 for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_7_alpha${BEST_POWER_7}_${TIMESTAMP}.log"
-  echo ">>> Running mode 7 (log1p) alpha=${BEST_POWER_7} (autotuned) for ${algo}"
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_7_alpha${BEST_HPARAM_7}_${TIMESTAMP}.log"
+  echo ">>> Running mode 7 (log1p) alpha=${BEST_HPARAM_7} (autotuned) for ${algo}"
   echo ">>> Saving results to ${OUTFILE}"
   { time python verify_algo.py \
     --trials 8 \
@@ -237,7 +237,7 @@ for algo in "${sparse_algos[@]}"; do
     --model-name Qwen/Qwen3-1.7B \
     --topk-type sglang \
     --topk-mapping-mode 7 \
-    --topk-mapping-power ${BEST_POWER_7} \
+    --topk-mapping-hparam ${BEST_HPARAM_7} \
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done
@@ -246,8 +246,8 @@ done
 # Mode 9: erf — autotuned best alpha
 # ============================================================
 for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_9_alpha${BEST_POWER_9}_${TIMESTAMP}.log"
-  echo ">>> Running mode 9 (erf) alpha=${BEST_POWER_9} (autotuned) for ${algo}"
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_9_alpha${BEST_HPARAM_9}_${TIMESTAMP}.log"
+  echo ">>> Running mode 9 (erf) alpha=${BEST_HPARAM_9} (autotuned) for ${algo}"
   echo ">>> Saving results to ${OUTFILE}"
   { time python verify_algo.py \
     --trials 8 \
@@ -256,7 +256,7 @@ for algo in "${sparse_algos[@]}"; do
     --model-name Qwen/Qwen3-1.7B \
     --topk-type sglang \
     --topk-mapping-mode 9 \
-    --topk-mapping-power ${BEST_POWER_9} \
+    --topk-mapping-hparam ${BEST_HPARAM_9} \
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done
@@ -265,8 +265,8 @@ done
 # Mode 10: tanh — autotuned best alpha
 # ============================================================
 for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_10_alpha${BEST_POWER_10}_${TIMESTAMP}.log"
-  echo ">>> Running mode 10 (tanh) alpha=${BEST_POWER_10} (autotuned) for ${algo}"
+  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_10_alpha${BEST_HPARAM_10}_${TIMESTAMP}.log"
+  echo ">>> Running mode 10 (tanh) alpha=${BEST_HPARAM_10} (autotuned) for ${algo}"
   echo ">>> Saving results to ${OUTFILE}"
   { time python verify_algo.py \
     --trials 8 \
@@ -275,7 +275,7 @@ for algo in "${sparse_algos[@]}"; do
     --model-name Qwen/Qwen3-1.7B \
     --topk-type sglang \
     --topk-mapping-mode 10 \
-    --topk-mapping-power ${BEST_POWER_10} \
+    --topk-mapping-hparam ${BEST_HPARAM_10} \
     --mem 0.7 ; } \
     2>&1 | tee "${OUTFILE}"
 done

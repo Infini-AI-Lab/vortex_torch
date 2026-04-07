@@ -18,13 +18,16 @@ PYBIND11_MODULE(vortex_torch_C, m){
               py::arg("mapping_power") = 0.5,
               py::arg("mapping_lut") = py::none(),
               py::arg("mapping_quantiles") = py::none(),
-              py::arg("mapping_noscale") = false);
+              py::arg("mapping_noscale") = false,
+              py::arg("sample_stride") = 1,
+              py::arg("radix_bits") = 8);
         m.def("topk_output_sglang_ori",         &topk_output_sglang_ori,
               py::arg("x"), py::arg("dense_kv_indptr"), py::arg("sparse_kv_indptr"),
               py::arg("dense_kv_indices"), py::arg("sparse_kv_indices"),
               py::arg("eff_batch_size"), py::arg("topk_val"),
               py::arg("reserved_bos"), py::arg("reserved_eos"),
-              py::arg("max_num_pages"));
+              py::arg("max_num_pages"),
+              py::arg("radix_bits") = 8);
         m.def("topk_profile_histogram",        &topk_profile_histogram,
               py::arg("x"), py::arg("dense_kv_indptr"),
               py::arg("histograms"), py::arg("eff_batch_size"),
@@ -34,7 +37,8 @@ PYBIND11_MODULE(vortex_torch_C, m){
               py::arg("mapping_lut") = py::none(),
               py::arg("mapping_quantiles") = py::none(),
               py::arg("mapping_noscale") = false,
-              py::arg("topk_val") = 0);
+              py::arg("topk_val") = 0,
+              py::arg("sample_stride") = 1);
         m.def("topk_profile_stage1",           &topk_profile_stage1,
               py::arg("x"), py::arg("dense_kv_indptr"), py::arg("sparse_kv_indptr"),
               py::arg("dense_kv_indices"), py::arg("sparse_kv_indices"),

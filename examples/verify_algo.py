@@ -119,10 +119,9 @@ mem: float = 0.8,
 kv_cache_dtype: str = "auto",
 topk_type: str = "naive",
 topk_mapping_mode: int = 0,
-topk_mapping_power: float = 0.5,
+topk_mapping_hparam: float = 0.5,
 topk_mapping_lut_path: str = None,
 topk_mapping_quantiles_path: str = None,
-index_cache_shared_layers: list = None,
 disable_cuda_graph: bool = False,
 benchmark: str = "amc23",
 ):
@@ -143,10 +142,9 @@ benchmark: str = "amc23",
                     kv_cache_dtype=kv_cache_dtype,
                     vortex_topk_type=topk_type,
                     vortex_topk_mapping_mode=topk_mapping_mode,
-                    vortex_topk_mapping_power=topk_mapping_power,
+                    vortex_topk_mapping_hparam=topk_mapping_hparam,
                     vortex_topk_mapping_lut_path=topk_mapping_lut_path,
                     vortex_topk_mapping_quantiles_path=topk_mapping_quantiles_path,
-                    vortex_index_cache_shared_layers=index_cache_shared_layers,
                     )
     tokenizer = AutoTokenizer.from_pretrained(model_name) if benchmark != "amc23" else None
     prompts, requests = _load_benchmark(benchmark, trials, tokenizer=tokenizer)
@@ -310,14 +308,15 @@ def parse_args():
         type=int,
         default=0,
         choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 5=index_cache, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window, 13=exp_stretch, 14=topk_window (default: 0).',
+        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window, 13=exp_stretch, 14=topk_window (default: 0).',
     )
 
     parser.add_argument(
-        "--topk-mapping-power",
+        "--topk-mapping-hparam", "--topk-mapping-power",
         type=float,
         default=0.5,
-        help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 6 asinh), alpha (mode 7 log1p), rho tail expansion (mode 12). Default: 0.5.',
+        dest="topk_mapping_hparam",
+        help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 6), alpha (mode 7/9/10/13), rho (mode 12/14). Default: 0.5.',
     )
 
     parser.add_argument(
@@ -335,14 +334,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--index-cache-shared-layers",
-        type=int,
-        nargs="+",
-        default=None,
-        help="Layer IDs that reuse indices from the nearest preceding full layer (skip indexer).",
-    )
-
-    parser.add_argument(
         "--benchmark",
         type=str,
         nargs="+",
@@ -355,12 +346,6 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-
-    # --- Mode 5: Index Cache (default even-layer pattern) ---
-    if args.topk_mapping_mode == 5:
-        if args.index_cache_shared_layers is None:
-            args.index_cache_shared_layers = list(range(2, 28, 2))  # [2,4,6,...,26]
-        args.topk_mapping_mode = 0
 
     for bench_name in args.benchmark:
         if bench_name not in BENCHMARK_REGISTRY:
@@ -380,10 +365,9 @@ if __name__ == "__main__":
             kv_cache_dtype=args.kv_cache_dtype,
             topk_type=args.topk_type,
             topk_mapping_mode=args.topk_mapping_mode,
-            topk_mapping_power=args.topk_mapping_power,
+            topk_mapping_hparam=args.topk_mapping_hparam,
             topk_mapping_lut_path=args.topk_mapping_lut_path,
             topk_mapping_quantiles_path=args.topk_mapping_quantiles_path,
-            index_cache_shared_layers=args.index_cache_shared_layers,
             benchmark=bench_name,
         )
         summary["benchmark"] = bench_name

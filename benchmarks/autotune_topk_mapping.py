@@ -34,7 +34,7 @@ from vortex_torch_C import topk_profile_histogram, topk_profile_counters, topk_o
 
 SWEEP_GRID = {
     # (mode, param_name, param_values)
-    3: ("power_exp", [0.1, 0.25, 0.75, 0.9]),
+    3: ("power_exp", [0.1, 0.25, 0.5, 0.75, 0.9, 2.0, 4.0]),
     6: ("beta", [0.1, 0.5, 1.0, 2.0, 4.0]),
     7: ("alpha", [0.1, 0.5, 0.75, 1.0, 2.0, 4.0, 8.0]),
     9: ("alpha", [0.1, 0.5, 1.0, 2.0, 4.0]),
@@ -55,6 +55,7 @@ NOSCALE_BASELINES = {
     7: ("log1p_noscale", [1.0]),
     9: ("erf_noscale", [1.0]),
     10: ("tanh_noscale", [1.0]),
+    13: ("exp_stretch_noscale", [1.0, 4.0]),
 }
 MODE_NAMES = {
     0: "none",

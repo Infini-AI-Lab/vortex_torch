@@ -247,7 +247,7 @@ class topK(vOp):
         if self.topk_type == "sglang":
             # topk_output_sglang: (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
             mapping_mode = getattr(ctx, 'topk_mapping_mode', 0)
-            mapping_power = getattr(ctx, 'topk_mapping_power', 0.5)
+            mapping_hparam = getattr(ctx, 'topk_mapping_hparam', getattr(ctx, 'topk_mapping_power', 0.5))
             mapping_lut = getattr(ctx, 'topk_mapping_lut', None)
             mapping_quantiles = getattr(ctx, 'topk_mapping_quantiles', None)
             mapping_noscale = getattr(ctx, 'topk_mapping_noscale', False)
@@ -268,7 +268,7 @@ class topK(vOp):
                 ctx.page_reserved_eos,
                 ctx.max_num_pages_per_request,
                 mapping_mode,
-                mapping_power,
+                mapping_hparam,
                 mapping_lut,
                 mapping_quantiles,
                 mapping_noscale,
@@ -320,7 +320,7 @@ class topK(vOp):
                 ctx.page_reserved_bos,
                 ctx.page_reserved_eos,
                 mapping_mode,
-                mapping_power,
+                mapping_hparam,
                 mapping_lut,
                 mapping_quantiles,
                 mapping_noscale,
