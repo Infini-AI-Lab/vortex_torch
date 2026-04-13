@@ -120,8 +120,6 @@ kv_cache_dtype: str = "auto",
 topk_type: str = "naive",
 topk_mapping_mode: int = 0,
 topk_mapping_hparam: float = 0.5,
-topk_mapping_lut_path: str = None,
-topk_mapping_quantiles_path: str = None,
 disable_cuda_graph: bool = False,
 benchmark: str = "amc23",
 ):
@@ -143,8 +141,6 @@ benchmark: str = "amc23",
                     vortex_topk_type=topk_type,
                     vortex_topk_mapping_mode=topk_mapping_mode,
                     vortex_topk_mapping_hparam=topk_mapping_hparam,
-                    vortex_topk_mapping_lut_path=topk_mapping_lut_path,
-                    vortex_topk_mapping_quantiles_path=topk_mapping_quantiles_path,
                     )
     tokenizer = AutoTokenizer.from_pretrained(model_name) if benchmark != "amc23" else None
     prompts, requests = _load_benchmark(benchmark, trials, tokenizer=tokenizer)
@@ -300,15 +296,17 @@ def parse_args():
         "--topk-type",
         type=str,
         default="naive",
-        choices=["naive", "sglang", "sglang_ori"],
-        help='TopK kernel type: "naive" for topk_output, "sglang" for topk_output_sglang, "sglang_ori" for original sglang baseline (default: "naive").',
+        choices=["naive", "sglang", "sglang_fused"],
+        help='TopK kernel type: "naive" (CUB radix), "sglang" (unmapped baseline), "sglang_fused" (fused remap + topk). Default: "naive".',
     )
     parser.add_argument(
         "--topk-mapping-mode",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-        help='TopK mapping mode: 0=none, 1=lut_cdf, 2=quantile, 3=power, 4=log, 6=asinh, 7=log1p, 8=trunc8, 9=erf, 10=tanh, 11=subtract, 12=adaptive_tail_window, 13=exp_stretch, 14=topk_window (default: 0).',
+        choices=[0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13],
+        help='TopK mapping mode for sglang_fused: 0=none, 1=lut_cdf (calibrated), '
+             '2=quantile (calibrated), 3=power, 4=log, 6=asinh, 7=log1p, 8=trunc8, '
+             '9=erf, 10=tanh, 11=subtract, 13=exp_stretch (default: 0).',
     )
 
     parser.add_argument(
@@ -317,20 +315,6 @@ def parse_args():
         default=0.5,
         dest="topk_mapping_hparam",
         help='Hyperparameter for parametric modes: power exponent (mode 3), beta (mode 6), alpha (mode 7/9/10/13), rho (mode 12/14). Default: 0.5.',
-    )
-
-    parser.add_argument(
-        "--topk-mapping-lut-path",
-        type=str,
-        default=None,
-        help="Path to .npy file with uint8[256] LUT for topk mapping mode 1.",
-    )
-
-    parser.add_argument(
-        "--topk-mapping-quantiles-path",
-        type=str,
-        default=None,
-        help="Path to .npy file with float32[256] quantiles for topk mapping mode 2.",
     )
 
     parser.add_argument(
@@ -366,8 +350,6 @@ if __name__ == "__main__":
             topk_type=args.topk_type,
             topk_mapping_mode=args.topk_mapping_mode,
             topk_mapping_hparam=args.topk_mapping_hparam,
-            topk_mapping_lut_path=args.topk_mapping_lut_path,
-            topk_mapping_quantiles_path=args.topk_mapping_quantiles_path,
             benchmark=bench_name,
         )
         summary["benchmark"] = bench_name

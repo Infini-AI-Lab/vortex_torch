@@ -95,17 +95,10 @@ const int64_t       eff_batch_size,
 const int64_t       topk_val,
 const int64_t       reserved_bos,
 const int64_t       reserved_eos,
-const int64_t       max_seq_lengths,
-const int64_t       mapping_mode = 0,
-const double        mapping_power = 0.5,
-std::optional<at::Tensor> mapping_lut = std::nullopt,
-std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false,
-const int64_t       sample_stride = 1,
-const int64_t       radix_bits = 8
+const int64_t       max_seq_lengths
 );
 
-void topk_output_sglang_ori(
+void topk_output_sglang_fused(
 const at::Tensor&   x,
 const at::Tensor&   dense_kv_indptr,
 const at::Tensor&   sparse_kv_indptr,
@@ -116,7 +109,21 @@ const int64_t       topk_val,
 const int64_t       reserved_bos,
 const int64_t       reserved_eos,
 const int64_t       max_num_pages,
-const int64_t       radix_bits = 8
+const int64_t       mapping_mode,
+const double        mapping_power,
+std::optional<at::Tensor> mapping_lut = std::nullopt,
+std::optional<at::Tensor> mapping_quantiles = std::nullopt
+);
+
+void topk_remap_only(
+const at::Tensor&   x,
+const at::Tensor&   dense_kv_indptr,
+at::Tensor&         remapped,
+const int64_t       eff_batch_size,
+const int64_t       reserved_bos,
+const int64_t       reserved_eos,
+const int64_t       mapping_mode,
+const double        mapping_power
 );
 
 void topk_profile_histogram(
@@ -129,28 +136,7 @@ const int64_t       reserved_eos,
 const int64_t       mapping_mode = 0,
 const double        mapping_power = 0.5,
 std::optional<at::Tensor> mapping_lut = std::nullopt,
-std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false,
-const int64_t       topk_val = 0,
-const int64_t       sample_stride = 1
-);
-
-void topk_profile_stage1(
-const at::Tensor&   x,
-const at::Tensor&   dense_kv_indptr,
-const at::Tensor&   sparse_kv_indptr,
-const at::Tensor&   dense_kv_indices,
-at::Tensor&         sparse_kv_indices,
-const int64_t       eff_batch_size,
-const int64_t       topk_val,
-const int64_t       reserved_bos,
-const int64_t       reserved_eos,
-const int64_t       max_num_pages,
-const int64_t       mapping_mode = 0,
-const double        mapping_power = 0.5,
-std::optional<at::Tensor> mapping_lut = std::nullopt,
-std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false
+std::optional<at::Tensor> mapping_quantiles = std::nullopt
 );
 
 void topk_profile_counters(
@@ -168,8 +154,7 @@ const int64_t       max_num_pages,
 const int64_t       mapping_mode = 0,
 const double        mapping_power = 0.5,
 std::optional<at::Tensor> mapping_lut = std::nullopt,
-std::optional<at::Tensor> mapping_quantiles = std::nullopt,
-const bool          mapping_noscale = false
+std::optional<at::Tensor> mapping_quantiles = std::nullopt
 );
 
 void sglang_plan_decode_fa3(

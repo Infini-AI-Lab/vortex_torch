@@ -1,10 +1,9 @@
 import torch
 from typing import Dict, Callable, List, Optional
 from ..abs import vOp
-from vortex_torch_C import topk_output, topk_output_sglang, topk_output_sglang_ori, topk_profile_histogram
+from vortex_torch_C import topk_output, topk_output_sglang, topk_output_sglang_fused, topk_profile_histogram
 from .context import Context
 from ..abs import vTensor, FORMAT
-from ..utils import UNSET
 
 # --- Module-level histogram accumulator for offline calibration ---
 _calibration_histograms: List[torch.Tensor] = []
@@ -91,7 +90,7 @@ class topK(vOp):
         FORMAT.RAGGED: {
             "naive": topk_output,
             "sglang": topk_output_sglang,
-            "sglang_ori": topk_output_sglang_ori,
+            "sglang_fused": topk_output_sglang_fused,
         },
     }
 
@@ -245,17 +244,7 @@ class topK(vOp):
         assert self.impl is not None, f"{prefix}execute called before profile() (impl is None)"
 
         if self.topk_type == "sglang":
-            # topk_output_sglang: (x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices, sparse_kv_indices, ...)
-            mapping_mode = getattr(ctx, 'topk_mapping_mode', 0)
-            mapping_hparam = getattr(ctx, 'topk_mapping_hparam', getattr(ctx, 'topk_mapping_power', 0.5))
-            mapping_lut = getattr(ctx, 'topk_mapping_lut', None)
-            mapping_quantiles = getattr(ctx, 'topk_mapping_quantiles', None)
-            mapping_noscale = getattr(ctx, 'topk_mapping_noscale', False)
-            # UNSET sentinel is not a valid torch.Tensor — coerce to None
-            if mapping_lut is UNSET:
-                mapping_lut = None
-            if mapping_quantiles is UNSET:
-                mapping_quantiles = None
+            # topk_output_sglang: unmapped baseline (no remap).
             self.impl(
                 x,
                 ctx.dense_kv_indptr,
@@ -267,14 +256,14 @@ class topK(vOp):
                 ctx.page_reserved_bos,
                 ctx.page_reserved_eos,
                 ctx.max_num_pages_per_request,
-                mapping_mode,
-                mapping_hparam,
-                mapping_lut,
-                mapping_quantiles,
-                mapping_noscale,
             )
-        elif self.topk_type == "sglang_ori":
-            # topk_output_sglang_ori: same CSR interface, no mapping params
+        elif self.topk_type == "sglang_fused":
+            # topk_output_sglang_fused: single-launch fused remap + topk.
+            mapping_mode = getattr(ctx, 'topk_mapping_mode', 0)
+            mapping_power = getattr(
+                ctx, 'topk_mapping_hparam',
+                getattr(ctx, 'topk_mapping_power', 0.5),
+            )
             self.impl(
                 x,
                 ctx.dense_kv_indptr,
@@ -286,6 +275,8 @@ class topK(vOp):
                 ctx.page_reserved_bos,
                 ctx.page_reserved_eos,
                 ctx.max_num_pages_per_request,
+                int(mapping_mode),
+                float(mapping_power),
             )
         else:
             # topk_output (naive): (x, dense_kv_indptr, dense_kv_indices, sparse_kv_indptr, sparse_kv_indices, ...)
@@ -307,11 +298,19 @@ class topK(vOp):
         # are not permitted while a stream is being captured.
         if (
             getattr(ctx, 'topk_histogram_enabled', False)
-            and self.topk_type == "sglang"
+            and self.topk_type in ("sglang", "sglang_fused")
             and not torch.cuda.is_current_stream_capturing()
         ):
             eff_bs = ctx.batch_size * ctx.num_kv_heads
             self.last_histograms = torch.zeros(eff_bs, 256, dtype=torch.int32, device=x.device)
+            hist_mode = 0
+            hist_power = 0.5
+            if self.topk_type == "sglang_fused":
+                hist_mode = int(getattr(ctx, 'topk_mapping_mode', 0))
+                hist_power = float(getattr(
+                    ctx, 'topk_mapping_hparam',
+                    getattr(ctx, 'topk_mapping_power', 0.5),
+                ))
             topk_profile_histogram(
                 x,
                 ctx.dense_kv_indptr,
@@ -319,12 +318,8 @@ class topK(vOp):
                 eff_bs,
                 ctx.page_reserved_bos,
                 ctx.page_reserved_eos,
-                mapping_mode,
-                mapping_hparam,
-                mapping_lut,
-                mapping_quantiles,
-                mapping_noscale,
-                ctx.topk_val,
+                hist_mode,
+                hist_power,
             )
             # Accumulate histograms for offline calibration
             _calibration_histograms.append(self.last_histograms.cpu().clone())

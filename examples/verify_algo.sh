@@ -24,8 +24,3 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
      --mem 0.7 ; } \
      2>&1 | tee "${OUTFILE}"
  done
-
-  TORCH_CUDA_ARCH_LIST="12.0" \                                                                                                                                                                                                                    
-  MAX_JOBS=64 \                                                                                                                                                                                                                                    
-  pip install -e . --no-build-isolation \                                                                                                                                                                                                          
-    -Ccmake.args="-DENABLE_BELOW_SM90=OFF"  

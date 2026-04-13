@@ -1,370 +1,217 @@
 #!/usr/bin/env bash
+# ============================================================
+# E2E accuracy sweep over the surviving parametric mapping modes.
+# Each mode runs verify_algo.py with the per-mode hyperparameter
+# that autotune_topk_mapping.py picked as having the lowest
+# measured fused-topk-kernel latency.
+#
+# Mapping modes (after the lean refactor):
+#   0: None           — unmapped baseline (no remap)
+#   3: Power          — y = sign(x) * |x|^p
+#   4: Log            — y = sign(x) * log(|x| + 1)    [no knob]
+#   6: Asinh          — y = asinh(beta * x)
+#   7: Log1p          — y = sign(x) * log1p(alpha * |x|)
+#   9: Erf            — y = erf(alpha * x)
+#  10: Tanh           — y = tanh(alpha * x)
+#  13: ExpStretch     — y = exp(alpha * x)
+# ============================================================
 set -e
-# use CUDA_VISIBLE_DEVICES to set the GPU id you want to use
-# Mapping functions:
-# 0: None           — original fp16 bit-pattern bucketing
-# 1: LUT CDF        — LUT-based CDF equalization (calibrated)
-# 2: Quantile       — piecewise-linear quantile mapping (calibrated)
-# 3: Power          — y = sign(x) * |x|^p
-# 4: Log            — y = sign(x) * log(|x| + 1)
-# 5: Index Cache    — reuse previous layer's indices
-# 6: Asinh          — y = asinh(beta * x)
-# 7: Log1p          — y = sign(x) * log1p(alpha * |x|)
-# 8: Trunc8         — bf16 upper-8-bit bucketing
-# 9: Erf            — y = erf(alpha * x)
-# 10: Tanh          — y = tanh(alpha * x)
-# 11: Subtract      — x - pivot (RadiK-style scatter)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
 
 # ── Defaults ──────────────────────────────────────────────────
 GPU_ID=5
 TOPK_VAL=30
-BENCHMARKS="amc23"    # space-separated list, e.g. "amc23 aime24"
+BENCHMARKS="amc23"
+MODEL_NAME="Qwen/Qwen3-1.7B"
+BLOCK_SIZE=16
+BATCH_SIZE=4
+NUM_KV_HEADS=2
+SEQ_LEN=32768
+REAL_HISTOGRAMS=""
+SKIP_AUTOTUNE=0
 
-# ── Parse arguments ───────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --topk-val)   TOPK_VAL="$2"; shift 2 ;;
-    --gpu)        GPU_ID="$2"; shift 2 ;;
-    --benchmark)  BENCHMARKS="$2"; shift 2 ;;
+    --topk-val)        TOPK_VAL="$2"; shift 2 ;;
+    --gpu)             GPU_ID="$2"; shift 2 ;;
+    --benchmark)       BENCHMARKS="$2"; shift 2 ;;
+    --model-name)      MODEL_NAME="$2"; shift 2 ;;
+    --block-size|--page-size) BLOCK_SIZE="$2"; shift 2 ;;
+    --batch-size)      BATCH_SIZE="$2"; shift 2 ;;
+    --num-kv-heads)    NUM_KV_HEADS="$2"; shift 2 ;;
+    --seq-len)         SEQ_LEN="$2"; shift 2 ;;
+    --real-histograms) REAL_HISTOGRAMS="$2"; shift 2 ;;
+    --skip-autotune)   SKIP_AUTOTUNE=1; shift 1 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
 
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 
-sparse_algos=(
-  "block_sparse_attention"
-)
-
-# Path to real-data histograms from calibration (for auto-tuning)
-REAL_HISTOGRAMS="/data/datasets/xinrui/My_Projects/vortex_torch/examples/calibration/raw_histograms.npy"
+sparse_algos=( "block_sparse_attention" )
 
 BENCH_LABEL=$(echo "${BENCHMARKS}" | tr ' ' '_')
-RESULTS_DIR="results/topk${TOPK_VAL}_${BENCH_LABEL}"
+MODEL_SLUG="$(echo "${MODEL_NAME}" | tr '/' '_')"
+RESULTS_DIR="results/topk_mapping_${MODEL_SLUG}_topk${TOPK_VAL}_${BENCH_LABEL}"
 mkdir -p "${RESULTS_DIR}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # ============================================================
-# Step 0: Auto-tune — find best hyperparameters per mode
-# Uses topk_profile_histogram kernel on synthetic data (fast, no model)
+# Step 0: Calibrate (optional) — real-distribution histograms
 # ============================================================
-echo "============================================================"
-echo "Step 0: Auto-tuning hyperparameters (synthetic data)"
-echo "============================================================"
-AUTOTUNE_JSON="${RESULTS_DIR}/autotune_${TIMESTAMP}.json"
-PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
-  --topk-val ${TOPK_VAL} \
-  --batch-size 4 \
-  --seq-len 32768 \
-  --num-kv-heads 2 \
-  --real-histograms "${REAL_HISTOGRAMS}" \
-  --output-json "${AUTOTUNE_JSON}" \
-  2>&1 | tee "${RESULTS_DIR}/autotune_${TIMESTAMP}.log"
-echo ">>> Auto-tune results saved to ${AUTOTUNE_JSON}"
-echo ""
+if [ -z "${REAL_HISTOGRAMS}" ]; then
+  echo "============================================================"
+  echo "Step 0: Calibrating ${MODEL_NAME} for real-distribution histograms"
+  echo "============================================================"
+  CAL_DIR="${RESULTS_DIR}/calibration_${TIMESTAMP}"
+  mkdir -p "${CAL_DIR}"
+  python "${BENCH_DIR}/calibrate_topk.py" \
+    --model-name "${MODEL_NAME}" \
+    --topk-val "${TOPK_VAL}" \
+    --mem 0.7 \
+    --vortex-module-name "${sparse_algos[0]}" \
+    --page-size "${BLOCK_SIZE}" \
+    --output-dir "${CAL_DIR}" \
+    2>&1 | tee "${RESULTS_DIR}/calibrate_${TIMESTAMP}.log"
+  REAL_HISTOGRAMS="${CAL_DIR}/raw_histograms.npy"
+fi
+
+# Pick up lut.npy / quantiles.npy if calibration produced them.
+CALIB_DIR="$(dirname "${REAL_HISTOGRAMS}")"
+LUT_PATH=""
+Q_PATH=""
+[ -f "${CALIB_DIR}/lut.npy" ]       && LUT_PATH="${CALIB_DIR}/lut.npy"
+[ -f "${CALIB_DIR}/quantiles.npy" ] && Q_PATH="${CALIB_DIR}/quantiles.npy"
 
 # ============================================================
-# Extract best per-mode hyperparameters from autotune JSON
+# Step 1: Auto-tune — rank by profiled fused-topk kernel latency
 # ============================================================
+AUTOTUNE_JSON="${RESULTS_DIR}/autotune_${TIMESTAMP}.json"
+if [ "${SKIP_AUTOTUNE}" -eq 0 ]; then
+  echo "============================================================"
+  echo "Step 1: Auto-tuning hyperparameters by fused-topk kernel latency"
+  echo "============================================================"
+  AUTOTUNE_EXTRA=()
+  [ -n "${LUT_PATH}" ] && AUTOTUNE_EXTRA+=(--lut-path "${LUT_PATH}")
+  [ -n "${Q_PATH}" ]   && AUTOTUNE_EXTRA+=(--quantiles-path "${Q_PATH}")
+  PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
+    --topk-val ${TOPK_VAL} \
+    --batch-size ${BATCH_SIZE} \
+    --seq-len ${SEQ_LEN} \
+    --num-kv-heads ${NUM_KV_HEADS} \
+    --page-size ${BLOCK_SIZE} \
+    --real-histograms "${REAL_HISTOGRAMS}" \
+    "${AUTOTUNE_EXTRA[@]}" \
+    --output-json "${AUTOTUNE_JSON}" \
+    2>&1 | tee "${RESULTS_DIR}/autotune_${TIMESTAMP}.log"
+  echo ">>> Auto-tune results saved to ${AUTOTUNE_JSON}"
+fi
+
+# Extract best per-mode hparam (ranked by measured kernel latency, lowest wins)
 eval "$(python3 -c "
 import json, sys
 data = json.load(open(sys.argv[1]))
 best = {}
 for r in data:
     m = r.get('mode')
-    if m in (3, 6, 7, 9, 10, 13, 14):
-        if m not in best or r['gini'] < best[m]['gini']:
-            best[m] = r
-for m in (3, 6, 7, 9, 10, 13, 14):
-    print(f'BEST_HPARAM_{m}={best[m][\"param\"]}' if m in best else f'BEST_HPARAM_{m}=0.5')
+    lat = r.get('latency_ms')
+    if m is None or lat is None: continue
+    if m not in best or lat < best[m]['latency_ms']:
+        best[m] = r
+for m in (3, 6, 7, 9, 10, 11, 13):
+    v = best.get(m, {}).get('param', 0.5)
+    print(f'BEST_HPARAM_{m}={v}')
 " "${AUTOTUNE_JSON}")"
-echo ">>> Autotuned best powers: mode3=${BEST_HPARAM_3} mode6=${BEST_HPARAM_6} mode7=${BEST_HPARAM_7} mode9=${BEST_HPARAM_9} mode10=${BEST_HPARAM_10} mode13=${BEST_HPARAM_13} mode14=${BEST_HPARAM_14}"
+echo ">>> Autotuned hparams (lowest topk kernel latency):"
+echo "    mode3=${BEST_HPARAM_3} mode6=${BEST_HPARAM_6} mode7=${BEST_HPARAM_7}"
+echo "    mode9=${BEST_HPARAM_9} mode10=${BEST_HPARAM_10} mode11=${BEST_HPARAM_11} mode13=${BEST_HPARAM_13}"
 echo ""
 
-# ============================================================
-# Baseline: Original sglang kernel (no remap)
-# ============================================================
-echo "============================================================"
-echo "Baseline: sglang_ori (no remap)"
-echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_ori_${TIMESTAMP}.log"
-  echo ">>> sglang_ori algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang_ori \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify() {
+  # $1=mode $2=hparam $3=label
+  local mode="$1"; local hp="$2"; local label="$3"
+  for algo in "${sparse_algos[@]}"; do
+    local out="${RESULTS_DIR}/topk_mapping_${algo}_${label}_${TIMESTAMP}.log"
+    echo ">>> ${label} algo=${algo}"
+    local extra_args=()
+    if [ "${mode}" -eq 0 ]; then
+      extra_args+=(--topk-type sglang)
+    else
+      extra_args+=(--topk-type sglang_fused --topk-mapping-mode "${mode}" --topk-mapping-hparam "${hp}")
+    fi
+    { time python verify_algo.py \
+      --trials 8 \
+      --topk-val "${TOPK_VAL}" \
+      --vortex-module-name "${algo}" \
+      --model-name "${MODEL_NAME}" \
+      --benchmark ${BENCHMARKS} \
+      --mem 0.7 \
+      "${extra_args[@]}" ; } \
+      2>&1 | tee "${out}"
+  done
+}
 
-# ============================================================
-# Step 1: Mode 3 (power) — autotuned best p
-# ============================================================
 echo "============================================================"
-echo "Step 1: Mode 3 (power) — p=${BEST_HPARAM_3} (autotuned)"
+echo "Baseline: sglang (no remap)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_3_p${BEST_HPARAM_3}_${TIMESTAMP}.log"
-  echo ">>> Mode 3 (power) p=${BEST_HPARAM_3} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 3 \
-    --topk-mapping-hparam ${BEST_HPARAM_3} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 0 0.5 "sglang_m0"
 
-# ============================================================
-# Step 2: Mode 6 (asinh) — autotuned best beta
-# ============================================================
 echo "============================================================"
-echo "Step 2: Mode 6 (asinh) — beta=${BEST_HPARAM_6} (autotuned)"
+echo "Mode 3 (power) — p=${BEST_HPARAM_3} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_6_beta${BEST_HPARAM_6}_${TIMESTAMP}.log"
-  echo ">>> Mode 6 (asinh) beta=${BEST_HPARAM_6} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 6 \
-    --topk-mapping-hparam ${BEST_HPARAM_6} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 3 "${BEST_HPARAM_3}" "sglang_m3_p${BEST_HPARAM_3}"
 
-# ============================================================
-# Step 3: Mode 7 (log1p) — autotuned best alpha
-# ============================================================
 echo "============================================================"
-echo "Step 3: Mode 7 (log1p) — alpha=${BEST_HPARAM_7} (autotuned)"
+echo "Mode 4 (log)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_7_alpha${BEST_HPARAM_7}_${TIMESTAMP}.log"
-  echo ">>> Mode 7 (log1p) alpha=${BEST_HPARAM_7} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 7 \
-    --topk-mapping-hparam ${BEST_HPARAM_7} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 4 0.5 "sglang_m4"
 
-# ============================================================
-# Step 4: Mode 8 (trunc8) — fixed parameter
-# ============================================================
 echo "============================================================"
-echo "Step 4: Mode 8 (trunc8)"
+echo "Mode 6 (asinh) — beta=${BEST_HPARAM_6} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_8_${TIMESTAMP}.log"
-  echo ">>> Mode 8 (trunc8) algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 8 \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 6 "${BEST_HPARAM_6}" "sglang_m6_beta${BEST_HPARAM_6}"
 
-# ============================================================
-# Step 5: Mode 9 (erf) — autotuned best alpha
-# ============================================================
 echo "============================================================"
-echo "Step 5: Mode 9 (erf) — alpha=${BEST_HPARAM_9} (autotuned)"
+echo "Mode 7 (log1p) — alpha=${BEST_HPARAM_7} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_9_alpha${BEST_HPARAM_9}_${TIMESTAMP}.log"
-  echo ">>> Mode 9 (erf) alpha=${BEST_HPARAM_9} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 9 \
-    --topk-mapping-hparam ${BEST_HPARAM_9} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 7 "${BEST_HPARAM_7}" "sglang_m7_alpha${BEST_HPARAM_7}"
 
-# ============================================================
-# Step 6: Mode 10 (tanh) — autotuned best alpha
-# ============================================================
 echo "============================================================"
-echo "Step 6: Mode 10 (tanh) — alpha=${BEST_HPARAM_10} (autotuned)"
+echo "Mode 9 (erf) — alpha=${BEST_HPARAM_9} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_10_alpha${BEST_HPARAM_10}_${TIMESTAMP}.log"
-  echo ">>> Mode 10 (tanh) alpha=${BEST_HPARAM_10} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 10 \
-    --topk-mapping-hparam ${BEST_HPARAM_10} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 9 "${BEST_HPARAM_9}" "sglang_m9_alpha${BEST_HPARAM_9}"
 
-# ============================================================
-# Step 7: Mode 11 (subtract) — fixed parameter
-# ============================================================
 echo "============================================================"
-echo "Step 7: Mode 11 (subtract)"
+echo "Mode 10 (tanh) — alpha=${BEST_HPARAM_10} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_11_${TIMESTAMP}.log"
-  echo ">>> Mode 11 (subtract) algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 11 \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 10 "${BEST_HPARAM_10}" "sglang_m10_alpha${BEST_HPARAM_10}"
 
-# ============================================================
-# Step 8: Mode 12 (adaptive_tail_window), rho=4.0
-# ============================================================
-echo ""
 echo "============================================================"
-echo "Step 8: Mode 12 (adaptive_tail_window), rho=4.0"
+echo "Mode 8 (trunc8)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_12_${TIMESTAMP}.log"
-  echo ">>> Mode 12 (adaptive_tail_window) algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 12 \
-    --topk-mapping-hparam 4.0 \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 8 0.5 "sglang_m8"
 
-# ============================================================
-# Step 9: Mode 13 (exp_stretch) — autotuned best alpha
-# ============================================================
-echo ""
 echo "============================================================"
-echo "Step 9: Mode 13 (exp_stretch) — alpha=${BEST_HPARAM_13} (autotuned)"
+echo "Mode 11 (subtract) — pivot=${BEST_HPARAM_11} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_13_alpha${BEST_HPARAM_13}_${TIMESTAMP}.log"
-  echo ">>> Mode 13 (exp_stretch) alpha=${BEST_HPARAM_13} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 13 \
-    --topk-mapping-hparam ${BEST_HPARAM_13} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 11 "${BEST_HPARAM_11}" "sglang_m11_pivot${BEST_HPARAM_11}"
 
-# ============================================================
-# Step 10: Mode 14 (topk_window) — autotuned best rho
-# ============================================================
-echo ""
 echo "============================================================"
-echo "Step 10: Mode 14 (topk_window) — rho=${BEST_HPARAM_14} (autotuned)"
+echo "Mode 13 (exp_stretch) — alpha=${BEST_HPARAM_13} (autotuned)"
 echo "============================================================"
-for algo in "${sparse_algos[@]}"; do
-  OUTFILE="${RESULTS_DIR}/topk_mapping_${algo}_sglang_14_rho${BEST_HPARAM_14}_${TIMESTAMP}.log"
-  echo ">>> Mode 14 (topk_window) rho=${BEST_HPARAM_14} algo=${algo}"
-  { time python verify_algo.py \
-    --trials 8 \
-    --topk-val ${TOPK_VAL} \
-    --vortex-module-name "${algo}" \
-    --model-name Qwen/Qwen3-1.7B \
-    --topk-type sglang \
-    --topk-mapping-mode 14 \
-    --topk-mapping-hparam ${BEST_HPARAM_14} \
-    --benchmark ${BENCHMARKS} \
-    --mem 0.7 ; } \
-    2>&1 | tee "${OUTFILE}"
-done
+run_verify 13 "${BEST_HPARAM_13}" "sglang_m13_alpha${BEST_HPARAM_13}"
 
-# ============================================================
-# Counter profiling: collect COUNTER_NUM_EQUAL for all modes
-# (single extra kernel call per mode, no overhead on accuracy runs)
-# ============================================================
-echo ""
-echo "============================================================"
-echo "Counter profiling: COUNTER_NUM_EQUAL per mode (topk=${TOPK_VAL})"
-echo "============================================================"
-COUNTER_JSON="${RESULTS_DIR}/counters_${TIMESTAMP}.json"
-PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
-  --batch-sizes 4 \
-  --seq-lens 4096 \
-  --topk-vals ${TOPK_VAL} \
-  --num-kv-heads 2 \
-  --distributions normal \
-  --counters \
-  --real-histograms "${REAL_HISTOGRAMS}" \
-  --autotune-json "${AUTOTUNE_JSON}" \
-  --filter-kernels sglang_ori sglang_m0 sglang_m3 sglang_m6 sglang_m7 sglang_m8 sglang_m9 sglang_m10 sglang_m11 sglang_m13 sglang_m14 \
-  --mapping-hparam-13 ${BEST_HPARAM_13} --mapping-hparam-14 ${BEST_HPARAM_14} \
-  --repeat 5 \
-  --output-json "${COUNTER_JSON}" \
-  2>&1 | tee "${RESULTS_DIR}/counters_${TIMESTAMP}.log"
-echo ">>> Counters saved to ${COUNTER_JSON}"
-
-# ============================================================
-# Summary
-# ============================================================
 echo ""
 echo "============================================================"
 echo "All runs complete. Results in ${RESULTS_DIR}/"
-echo "  Auto-tune:   ${AUTOTUNE_JSON}"
-echo "  Counters:    ${COUNTER_JSON}"
+echo "  Model:      ${MODEL_NAME}"
+echo "  Block size: ${BLOCK_SIZE}"
+echo "  Auto-tune:  ${AUTOTUNE_JSON}"
 echo "  Mode 3 (power):       p     = ${BEST_HPARAM_3} (autotuned)"
 echo "  Mode 6 (asinh):       beta  = ${BEST_HPARAM_6} (autotuned)"
 echo "  Mode 7 (log1p):       alpha = ${BEST_HPARAM_7} (autotuned)"
-echo "  Mode 8 (trunc8):      (fixed)"
 echo "  Mode 9 (erf):         alpha = ${BEST_HPARAM_9} (autotuned)"
 echo "  Mode 10 (tanh):       alpha = ${BEST_HPARAM_10} (autotuned)"
-echo "  Mode 11 (subtract):   (fixed)"
-echo "  Mode 12 (tail_win):   rho   = 4.0"
 echo "  Mode 13 (exp_stretch):alpha = ${BEST_HPARAM_13} (autotuned)"
-echo "  Mode 14 (topk_window):rho   = ${BEST_HPARAM_14} (autotuned)"
 echo "============================================================"

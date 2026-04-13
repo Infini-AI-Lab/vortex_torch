@@ -44,6 +44,14 @@ def main():
                         help="Number of calibration prompts to use (default: 16)")
     parser.add_argument("--output-dir", type=str, default="calibration_output/")
     parser.add_argument("--vortex-module-name", type=str, default="block_sparse_attention")
+    parser.add_argument(
+        "--watchdog-timeout",
+        type=float,
+        default=None,
+        metavar="SEC",
+        help="SGLang scheduler watchdog (seconds). Forward batches must complete within this time. "
+        "Default: engine default (300). Use 0 to disable when using this repo's SGLang fork.",
+    )
     args = parser.parse_args()
 
     # Lazy imports to avoid slow startup when just checking --help
@@ -54,7 +62,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"[calibrate] Launching engine with hit-rate profiling enabled...")
-    llm = sgl.Engine(
+    engine_kwargs = dict(
         model_path=args.model_name,
         disable_cuda_graph=True,
         page_size=args.page_size,
@@ -73,6 +81,9 @@ def main():
         vortex_topk_mapping_mode=0,  # Use mode 0 during calibration
         vortex_topk_histogram=True,  # Enable histogram collection
     )
+    if args.watchdog_timeout is not None:
+        engine_kwargs["watchdog_timeout"] = args.watchdog_timeout
+    llm = sgl.Engine(**engine_kwargs)
 
     # Clear any residual histograms in the worker process
     llm.clear_topk_histograms()
