@@ -89,6 +89,16 @@ __device__ __forceinline__ auto convert_to_uint32(float x) -> uint32_t {
   return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
 }
 
+// Mirror of convert_to_uint8_dense in topk_sglang.cu so that the
+// profile kernel (topk_profile_histogram / topk_profile_counters)
+// reports accurate thr_bin / thr_size / abv_bins / pg/bin for
+// MAPPING_DENSE_MANT. Keep in sync with the production kernel.
+__device__ __forceinline__ auto convert_to_uint8_dense(float x) -> uint8_t {
+  const uint32_t bits = __float_as_uint(x);
+  const uint32_t key  = (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
+  return static_cast<uint8_t>((key >> 16) & 0xFFu);
+}
+
 template <typename T>
 __device__ __forceinline__ float vortex_to_float(T x);
 template <>
@@ -164,6 +174,11 @@ __device__ void fast_topk_profile(
 
   const int tx = threadIdx.x;
 
+  // Mirror of the production kernel: MAPPING_DENSE_MANT bypasses
+  // apply_transform and uses a mantissa-heavy fp32 bit slice for the
+  // Stage-1 bucket.
+  const bool use_dense_bucket = (mapping.mode == MAPPING_DENSE_MANT);
+
   if (mapping.mode == MAPPING_LUT_CDF && mapping.lut != nullptr) {
     if (tx < 256) s_mapping_lut[tx] = mapping.lut[tx];
     __syncthreads();
@@ -178,7 +193,13 @@ __device__ void fast_topk_profile(
 
   for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
     const float raw = vortex_to_float(input[idx + row_start]);
-    const auto bin = compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles);
+    int bin;
+    if (use_dense_bucket) {
+      const float clamped = apply_transform(raw, mapping);  // fmaxf(x, pivot)
+      bin = static_cast<int>(convert_to_uint8_dense(clamped));
+    } else {
+      bin = static_cast<int>(compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+    }
     ::atomicAdd(&p_histogram[bin], 1);
   }
   __syncthreads();
@@ -221,8 +242,13 @@ __device__ void fast_topk_profile(
   if (topk == 0) {
     for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
       const float raw = vortex_to_float(input[idx + row_start]);
-      const auto bin = static_cast<int>(
-          compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      int bin;
+      if (use_dense_bucket) {
+        const float clamped = apply_transform(raw, mapping);
+        bin = static_cast<int>(convert_to_uint8_dense(clamped));
+      } else {
+        bin = static_cast<int>(compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      }
       if (bin > threshold_bin_0) {
         const auto pos = ::atomicAdd(&p_counter, 1);
         index[pos] = idx;
@@ -240,11 +266,13 @@ __device__ void fast_topk_profile(
     if (tx < RADIX + 1) p_histogram[tx] = 0;
     __syncthreads();
 
+    const int sub_bin_offset_start = use_dense_bucket ? 8 : 24;
     for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
       const float raw = vortex_to_float(input[idx + row_start]);
       const float remapped = apply_transform(raw, mapping);
-      const auto bin = static_cast<int>(
-          compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      const auto bin = use_dense_bucket
+          ? static_cast<int>(convert_to_uint8_dense(remapped))
+          : static_cast<int>(compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
       if (bin > threshold_bin_0) {
         const auto pos = ::atomicAdd(&p_counter, 1);
         index[pos] = idx;
@@ -253,7 +281,7 @@ __device__ void fast_topk_profile(
         if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
           p_input_idx[0][pos] = idx;
           const auto b32 = convert_to_uint32(remapped);
-          const auto sub_bin = (b32 >> 24) & 0xFF;
+          const auto sub_bin = (b32 >> sub_bin_offset_start) & 0xFF;
           ::atomicAdd(&p_histogram[sub_bin], 1);
         }
       }
@@ -265,10 +293,15 @@ __device__ void fast_topk_profile(
     }
   }
 
-  // Stage 2 refinement (4 rounds max). Default rounds=4, overwritten on exit.
-  if (tx == 0 && counters) counters[COUNTER_REFINE_ROUNDS] = 4;
+  // Stage 2 refinement. Standard modes run up to 4 rounds (offsets
+  // 24/16/8/0); MAPPING_DENSE_MANT runs up to 2 rounds (offsets 8/0)
+  // because Stage 1 already consumed bits [23:16] of the fp32 key.
+  const int stage2_offset_start = use_dense_bucket ? 8 : 24;
+  const int stage2_max_rounds   = use_dense_bucket ? 2 : 4;
+  if (tx == 0 && counters) counters[COUNTER_REFINE_ROUNDS] = stage2_max_rounds;
 #pragma unroll 4
   for (int round = 0; round < 4; ++round) {
+    if (round >= stage2_max_rounds) break;
     __shared__ int p_last_remain;
     const auto r_idx = round % 2;
     const auto _raw_num_input = p_num_input[r_idx];
@@ -290,7 +323,7 @@ __device__ void fast_topk_profile(
         const auto idx = p_input_idx[r_idx][i];
         const float raw = vortex_to_float(input[idx + row_start]);
         const float remapped = apply_transform(raw, mapping);
-        const auto offset = 24 - round * 8;
+        const auto offset = stage2_offset_start - round * 8;
         const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
         if (bin > threshold_bin) {
           const auto pos = ::atomicAdd(&p_counter, 1);
@@ -308,13 +341,13 @@ __device__ void fast_topk_profile(
         const auto idx = p_input_idx[r_idx][i];
         const float raw = vortex_to_float(input[idx + row_start]);
         const float remapped = apply_transform(raw, mapping);
-        const auto offset = 24 - round * 8;
+        const auto offset = stage2_offset_start - round * 8;
         const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
         if (bin > threshold_bin) {
           const auto pos = ::atomicAdd(&p_counter, 1);
           index[pos] = idx;
         } else if (bin == threshold_bin) {
-          if (round == 3) {
+          if (round == stage2_max_rounds - 1) {
             const auto pos = ::atomicAdd(&p_last_remain, -1);
             if (pos > 0) {
               index[target_k - pos] = idx;
@@ -413,11 +446,18 @@ void TopKProfileHistogram_Kernel(
   if (tx < RADIX) s_histogram[tx] = 0;
   __syncthreads();
 
+  const bool use_dense_bucket = (mapping.mode == MAPPING_DENSE_MANT);
   if (nblk > 0) {
     const ScoreT* __restrict__ score_blk = score + start;
     for (int i = tx; i < nblk; i += BLOCK_SIZE) {
       const float raw = vortex_to_float(score_blk[i]);
-      const auto bin = compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles);
+      int bin;
+      if (use_dense_bucket) {
+        const float clamped = apply_transform(raw, mapping);
+        bin = static_cast<int>(convert_to_uint8_dense(clamped));
+      } else {
+        bin = static_cast<int>(compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      }
       ::atomicAdd(&s_histogram[bin], 1);
     }
   }

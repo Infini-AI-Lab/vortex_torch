@@ -26,6 +26,7 @@
 #       --model-name Qwen/Qwen3-8B --block-size 32
 #   bash run_distribution_analysis_new.sh --gpu 5 \
 #       --real-histograms /path/to/raw_histograms.npy
+#   bash run_distribution_analysis_new.sh --gpu 5 --max-total-tokens 524288
 # ============================================================
 set -euo pipefail
 
@@ -37,6 +38,7 @@ GPU_ID=4
 MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=2048
 MEM=0.7
+MAX_TOTAL_TOKENS=1048576
 ALGO="block_sparse_attention"
 SEQ_LEN=65536
 BLOCK_SIZE=16
@@ -55,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --model-name)      MODEL_NAME="$2"; shift 2 ;;
     --topk-val)        TOPK_VAL="$2"; shift 2 ;;
     --mem)             MEM="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --gpu)             GPU_ID="$2"; shift 2 ;;
     --algo)            ALGO="$2"; shift 2 ;;
     --real-histograms) REAL_HISTOGRAMS="$2"; shift 2 ;;
@@ -97,6 +100,7 @@ echo "  Batch size:      ${BATCH_SIZE}"
 echo "  KV heads:        ${NUM_KV_HEADS}"
 echo "  Distributions:   ${DISTRIBUTIONS}"
 echo "  Mapping modes:   ${MAPPING_MODES}"
+echo "  Max total tokens: ${MAX_TOTAL_TOKENS}  (calibration KV / VTX buffer cap)"
 echo "  GPU:             ${GPU_ID}"
 echo "  Real histograms: ${REAL_HISTOGRAMS:-<will calibrate from ${MODEL_NAME}>}"
 echo "  Output:          ${RUN_DIR}"
@@ -116,6 +120,7 @@ else
     --model-name "${MODEL_NAME}" \
     --topk-val "${TOPK_VAL}" \
     --mem "${MEM}" \
+    --max-total-tokens "${MAX_TOTAL_TOKENS}" \
     --vortex-module-name "${ALGO}" \
     --page-size "${BLOCK_SIZE}" \
     --output-dir "${CALIBRATION_DIR}" \

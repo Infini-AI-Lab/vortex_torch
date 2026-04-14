@@ -43,6 +43,8 @@
 #   bash remap_function_bench.sh --gpu 0 \
 #       --model-name Qwen/Qwen3-8B \
 #       --real-histograms /path/to/calibration/raw_histograms.npy
+#   # Tight GPU: lower calibration KV cap (default 1048576):
+#   bash remap_function_bench_topk30.sh --gpu 0 --max-total-tokens 524288
 # ============================================================
 set -euo pipefail
 
@@ -50,27 +52,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
 
 # ── Defaults ──────────────────────────────────────────────────
-GPU_ID=4
+GPU_ID=5
 MODEL_NAME="Qwen/Qwen3-1.7B"
-TOPK_VAL=2048
+TOPK_VAL=30
 MEM=0.7
+MAX_TOTAL_TOKENS=1048576
 ALGO="block_sparse_attention"
 SAMPLE_STRIDE=1
-SEQ_LEN=65536
+SEQ_LEN=32768
 BLOCK_SIZE=16
-BATCH_SIZE=4
+BATCH_SIZE=1
 NUM_KV_HEADS=8
 DISTRIBUTIONS="normal bucket_uniform"
-# Modes 1 (LUT_CDF) and 2 (Quantile) are evaluated only if calibration
-# produces lut.npy / quantiles.npy. The shell script detects that below.
-MAPPING_MODES="0 1 2 3 6 7 8 9 10 11 13"
+# Modes 1 (LUT_CDF) and 2 (Quantile) are no longer benchmarked — their
+# mapping happens inside compute_stage1_bin, not apply_transform, so
+# split-phase timing isn't meaningful for them.
+MAPPING_MODES="0 3 6 7 8 9 10 11 13 15 16 17 18 19 20"
 # Fallback hparam used only if autotune is explicitly skipped.
 MAPPING_HPARAM=0.5
 REPEAT=100
 WARMUP=20
 # Empty by default — Step 1 will calibrate on the selected model.
 # Pass --real-histograms /path/to/raw_histograms.npy to skip calibration.
-REAL_HISTOGRAMS=""
+REAL_HISTOGRAMS="/home/zhuominc/xinrui_projects/vortex_torch/examples/calibration/raw_histograms.npy"
 SKIP_AUTOTUNE=0
 
 # ── Parse arguments ───────────────────────────────────────────
@@ -79,6 +83,7 @@ while [[ $# -gt 0 ]]; do
     --model-name)       MODEL_NAME="$2"; shift 2 ;;
     --topk-val)         TOPK_VAL="$2"; shift 2 ;;
     --mem)              MEM="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --gpu)              GPU_ID="$2"; shift 2 ;;
     --algo)             ALGO="$2"; shift 2 ;;
     --real-histograms)  REAL_HISTOGRAMS="$2"; shift 2 ;;
@@ -98,6 +103,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+
+# Qwen3-1.7B does not use DeepGEMM (no FP8/MoE path).
+# Disable its JIT to silence "NVCC Compiler not found ... use NVRTC" on Blackwell.
+export SGL_ENABLE_JIT_DEEPGEMM="${SGL_ENABLE_JIT_DEEPGEMM:-true}"
+
+# If DeepGEMM JIT is ever re-enabled, make sure it can find nvcc.
+if [ -z "${DG_JIT_NVCC_COMPILER:-}" ]; then
+  if [ -x /usr/local/cuda/bin/nvcc ]; then
+    export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+    export PATH="${CUDA_HOME}/bin:${PATH}"
+    export DG_JIT_NVCC_COMPILER="${CUDA_HOME}/bin/nvcc"
+  elif command -v nvcc >/dev/null 2>&1; then
+    export DG_JIT_NVCC_COMPILER="$(command -v nvcc)"
+  fi
+fi
 
 # Validate seq_len: need pages/seg > topk_val (3 reserved pages)
 MIN_SEQ_LEN=$(( (TOPK_VAL + 4) * BLOCK_SIZE ))
@@ -126,6 +147,7 @@ echo "  KV heads:        ${NUM_KV_HEADS}"
 echo "  Distributions:   ${DISTRIBUTIONS}"
 echo "  Mapping modes:   ${MAPPING_MODES}"
 echo "  Fallback hparam: ${MAPPING_HPARAM}  (used only when --skip-autotune)"
+echo "  Max total tokens: ${MAX_TOTAL_TOKENS}  (calibration KV / VTX buffer cap)"
 echo "  GPU:             ${GPU_ID}"
 echo "  Sample stride:   ${SAMPLE_STRIDE}"
 echo "  Real histograms: ${REAL_HISTOGRAMS:-<will calibrate from ${MODEL_NAME}>}"
@@ -149,7 +171,9 @@ else
   python "${BENCH_DIR}/calibrate_topk.py" \
     --model-name "${MODEL_NAME}" \
     --topk-val "${TOPK_VAL}" \
+    --page-size "${BLOCK_SIZE}" \
     --mem "${MEM}" \
+    --max-total-tokens "${MAX_TOTAL_TOKENS}" \
     --vortex-module-name "${ALGO}" \
     --output-dir "${CALIBRATION_DIR}" \
     2>&1 | tee "${RUN_DIR}/step1_calibrate.log"
@@ -157,14 +181,8 @@ else
   echo ">>> Step 1: Done. Calibration saved to ${CALIBRATION_DIR}"
 fi
 
-# Calibration may have produced lut.npy / quantiles.npy for modes 1 and 2.
-CALIB_DIR="$(dirname "${REAL_HIST_PATH}")"
-LUT_PATH=""
-Q_PATH=""
-[ -f "${CALIB_DIR}/lut.npy" ]       && LUT_PATH="${CALIB_DIR}/lut.npy"
-[ -f "${CALIB_DIR}/quantiles.npy" ] && Q_PATH="${CALIB_DIR}/quantiles.npy"
-[ -n "${LUT_PATH}" ] && echo "  Calibration LUT:      ${LUT_PATH}"
-[ -n "${Q_PATH}" ]   && echo "  Calibration quantile: ${Q_PATH}"
+# Modes 1 (LUT_CDF) and 2 (Quantile) are dropped from the comparison, so
+# lut.npy / quantiles.npy produced by calibration are no longer consumed.
 
 # ── Step 2: Auto-tune hyperparameters by profiled fused-topk latency ──
 # For every (mode, hparam) combo in the sweep grid, the autotune runs the
@@ -179,9 +197,6 @@ if [ "${SKIP_AUTOTUNE}" -eq 1 ]; then
 else
   echo ""
   echo ">>> Step 2: Auto-tuning hyperparameters by profiled topk kernel latency"
-  AUTOTUNE_EXTRA=()
-  [ -n "${LUT_PATH}" ] && AUTOTUNE_EXTRA+=(--lut-path "${LUT_PATH}")
-  [ -n "${Q_PATH}" ]   && AUTOTUNE_EXTRA+=(--quantiles-path "${Q_PATH}")
   PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/autotune_topk_mapping.py" \
     --batch-size "${BATCH_SIZE}" \
     --num-kv-heads "${NUM_KV_HEADS}" \
@@ -192,7 +207,6 @@ else
     --warmup "${WARMUP}" \
     --repeat "${REPEAT}" \
     --collect-stats \
-    "${AUTOTUNE_EXTRA[@]}" \
     --output-json "${AUTOTUNE_JSON}" \
     2>&1 | tee "${RUN_DIR}/step2_autotune.log"
   echo ">>> Step 2: Done. Autotune results saved to ${AUTOTUNE_JSON}"
@@ -204,8 +218,7 @@ echo ""
 echo ">>> Step 3: Timing remap / topk / fused / baseline with autotuned hparams"
 REMAP_JSON="${RUN_DIR}/remap_bench.json"
 BENCH_EXTRA=()
-[ -n "${LUT_PATH}" ] && BENCH_EXTRA+=(--lut-path "${LUT_PATH}")
-[ -n "${Q_PATH}" ]   && BENCH_EXTRA+=(--quantiles-path "${Q_PATH}")
+[ -n "${REAL_HIST_PATH}" ] && BENCH_EXTRA+=(--real-histograms "${REAL_HIST_PATH}")
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   --remap-bench \
   --batch-sizes "${BATCH_SIZE}" \

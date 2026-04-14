@@ -14,6 +14,12 @@ PYBIND11_MODULE(vortex_torch_C, m){
               py::arg("eff_batch_size"), py::arg("topk_val"),
               py::arg("reserved_bos"), py::arg("reserved_eos"),
               py::arg("max_num_pages"));
+        m.def("topk_output_sglang_ori",         &topk_output_sglang_ori,
+              py::arg("x"), py::arg("dense_kv_indptr"),
+              py::arg("indices_out"),
+              py::arg("eff_batch_size"), py::arg("topk_val"),
+              py::arg("reserved_bos"), py::arg("reserved_eos"),
+              py::arg("max_num_pages"));
         m.def("topk_output_sglang_fused",       &topk_output_sglang_fused,
               py::arg("x"), py::arg("dense_kv_indptr"), py::arg("sparse_kv_indptr"),
               py::arg("dense_kv_indices"), py::arg("sparse_kv_indices"),

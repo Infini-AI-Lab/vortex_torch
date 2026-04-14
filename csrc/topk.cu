@@ -196,8 +196,20 @@ const int64_t     max_num_pages
             reserved_bos,
             reserved_eos
         );
+    } else if (max_num_pages <= 8192){
+        TopKOutput_BF16_Kernel<512, 16><<<nblks, 512, 0, stream>>>(
+            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos
+        );
     } else {
-        TORCH_CHECK(false);
+        TORCH_CHECK(false, "topk_output: max_num_pages=", max_num_pages,
+                    " exceeds the supported template ladder (8192).");
     }
 
 }

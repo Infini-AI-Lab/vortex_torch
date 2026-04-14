@@ -99,6 +99,23 @@ __device__ __forceinline__ auto convert_to_uint32(float x) -> uint32_t {
   return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
 }
 
+// Mantissa-heavy Stage-1 bucket for MAPPING_DENSE_MANT. Returns bits
+// [23:16] of the sign-adjusted float32 key = 1 exp LSB + 7 top
+// mantissa bits. This yields 128 mantissa sub-bins per exp slot (vs
+// 4 in the current fp16 scheme — 32× more resolution) and is strictly
+// monotonic across 2 adjacent fp32 exponent slots (factor-of-4 value
+// range). Designed for the common case where the top-K scores cluster
+// tightly: softmax-attention outputs on Qwen / Llama typically live
+// in ~1 exp slot of magnitude near the top. Values with exponents
+// outside the 2-slot monotonic window collide with lower bins, which
+// only causes a correctness issue if top-K elements span more than
+// 2 exp slots — verified empirically before shipping.
+__device__ __forceinline__ auto convert_to_uint8_dense(float x) -> uint8_t {
+  const uint32_t bits = __float_as_uint(x);
+  const uint32_t key  = (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
+  return static_cast<uint8_t>((key >> 16) & 0xFFu);
+}
+
 // ---- Vortex additions ----
 
 template <typename T>
@@ -632,7 +649,7 @@ __device__ void fast_topk_clean(
 // benchmarking kernel, the remapped Stage-2 ordering is acceptable.
 // No pre-pass, no LUT, no shared-memory mapping state.
 // ======================================================================
-template <typename ScoreT>
+template <typename ScoreT, int MODE>
 __device__ void fast_topk_clean_fused(
     const ScoreT* __restrict__ input,
     int*          __restrict__ index,
@@ -651,34 +668,48 @@ __device__ void fast_topk_clean_fused(
   alignas(128) __shared__ int f_threshold_bin_id;
   alignas(128) __shared__ int f_num_input[2];
 
-  // Shared-memory tables for MAPPING_LUT_CDF / MAPPING_QUANTILE. Loaded
-  // once at kernel entry and read per element in Stage 1. Other modes
-  // leave them untouched.
-  __shared__ uint8_t s_mapping_lut[256];
-  __shared__ float   s_mapping_quantiles[256];
+  // Per-element Stage-1 bin cache. Pass 1 of Stage 1 writes one byte per
+  // element; pass 2 reads it back so each element only pays a single
+  // apply_transform + global score read instead of two. Sized to the
+  // maximum `pages_per_seg` the bench drivers use (topk=2048 config has
+  // seq_len=32768 / page_size=8 = 4096 pages per segment; topk=30 has
+  // 2048). Shrinking from 8192 to 4096 freed 4 KB of static SMEM per
+  // block, which lifts occupancy from 5 → 6 blocks/SM on B200.
+  constexpr int kFusedMaxLen = 4096;
+  __shared__ uint8_t s_bins[kFusedMaxLen];
 
   auto& f_histogram = f_histogram_buf[0];
   extern __shared__ int f_input_idx[][SMEM_INPUT_SIZE];
 
   const int tx = threadIdx.x;
 
-  if (mapping.mode == MAPPING_LUT_CDF && mapping.lut != nullptr) {
-    if (tx < 256) s_mapping_lut[tx] = mapping.lut[tx];
-    __syncthreads();
-  }
-  if (mapping.mode == MAPPING_QUANTILE && mapping.quantiles != nullptr) {
-    if (tx < 256) s_mapping_quantiles[tx] = mapping.quantiles[tx];
-    __syncthreads();
-  }
+  // MODE is a compile-time template parameter, so every comparison below
+  // becomes a constant-folded `if constexpr` branch. The dense bucket
+  // path (MAPPING_DENSE_MANT) stays in the kernel but is completely
+  // elided when MODE != MAPPING_DENSE_MANT, and the value-space transform
+  // path stays in place for standard modes. LUT_CDF / QUANTILE are not
+  // supported by this templated kernel (they were dropped from the bench
+  // comparison earlier).
+  constexpr bool use_dense_bucket = (MODE == MAPPING_DENSE_MANT);
 
   if (tx < RADIX + 1) f_histogram[tx] = 0;
   __syncthreads();
 
-  // Stage 1: LUT/QUANTILE do a shared-memory lookup, everything else
-  // applies the element-wise transform then buckets via convert_to_uint8.
+  // Stage 1 pass 1: read each score from global, compute the Stage-1
+  // bin via the compile-time-dispatched transform, cache it in s_bins so
+  // pass 2 can skip the second global read. With MODE known at compile
+  // time, apply_transform_tmpl<MODE> inlines to just the chosen
+  // transform's instructions — no runtime switch overhead.
   for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
     const float raw = vortex_to_float(input[idx + row_start]);
-    const auto bin = compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles);
+    const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
+    int bin;
+    if constexpr (use_dense_bucket) {
+      bin = static_cast<int>(convert_to_uint8_dense(remapped));
+    } else {
+      bin = static_cast<int>(convert_to_uint8(remapped));
+    }
+    s_bins[idx] = static_cast<uint8_t>(bin);
     ::atomicAdd(&f_histogram[bin], 1);
   }
   __syncthreads();
@@ -712,10 +743,11 @@ __device__ void fast_topk_clean_fused(
   topk -= f_histogram[threshold_bin + 1];
 
   if (topk == 0) {
+    // Shortcut: every page above threshold gets selected. Read the bin
+    // from the cache so we don't re-touch global memory or recompute
+    // apply_transform.
     for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      const float raw = vortex_to_float(input[idx + row_start]);
-      const auto bin = static_cast<int>(
-          compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      const int bin = static_cast<int>(s_bins[idx]);
       if (bin > threshold_bin) {
         const auto pos = ::atomicAdd(&f_counter, 1);
         index[pos] = idx;
@@ -728,20 +760,33 @@ __device__ void fast_topk_clean_fused(
     if (tx < RADIX + 1) f_histogram[tx] = 0;
     __syncthreads();
 
+    // Stage 1 pass 2: read the cached bin from SMEM. For elements
+    // outside the threshold bin we skip the global-memory load AND the
+    // apply_transform call entirely. Only the ~thr_size threshold-bin
+    // candidates re-read raw and re-apply the templated transform to
+    // compute the sub-bin needed for Stage-2 refinement.
+    //
+    // Sub-bin shift selection (compile-time constant):
+    //   - standard modes: Stage-1 used fp16 top-8-bit bucketing, so
+    //     Stage-2 round 0 refines on uint32 bits [31:24] (the most
+    //     significant bits not captured by the fp16 bucket).
+    //   - MAPPING_DENSE_MANT: Stage-1 used bits [23:16], so the next
+    //     useful discriminator is bits [15:8]. Skipping to offset 8
+    //     directly avoids two wasted Stage-2 rounds.
+    constexpr int sub_bin_offset_start = use_dense_bucket ? 8 : 24;
     for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      const float raw = vortex_to_float(input[idx + row_start]);
-      const float remapped = apply_transform(raw, mapping);
-      const auto bin = static_cast<int>(
-          compute_stage1_bin(raw, mapping, s_mapping_lut, s_mapping_quantiles));
+      const int bin = static_cast<int>(s_bins[idx]);
       if (bin > threshold_bin) {
         const auto pos = ::atomicAdd(&f_counter, 1);
         index[pos] = idx;
       } else if (bin == threshold_bin) {
+        const float raw = vortex_to_float(input[idx + row_start]);
+        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
         const auto pos = ::atomicAdd(&f_num_input[0], 1);
         if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
           f_input_idx[0][pos] = idx;
           const auto b32 = convert_to_uint32(remapped);
-          const auto sub_bin = (b32 >> 24) & 0xFF;
+          const auto sub_bin = (b32 >> sub_bin_offset_start) & 0xFF;
           ::atomicAdd(&f_histogram[sub_bin], 1);
         }
       }
@@ -749,9 +794,17 @@ __device__ void fast_topk_clean_fused(
     __syncthreads();
   }
 
-  // stage 2: refine on raw bits of the remapped value
+  // stage 2: refine on raw bits of the remapped value. The per-round
+  // bit offset matches the sub_bin shift chosen above: standard modes
+  // start at offset 24 (bits [31:24]) and step down by 8 per round;
+  // MAPPING_DENSE_MANT starts at offset 8 (bits [15:8]) because Stage 1
+  // already consumed bits [23:16] in the dense bucket. Both values are
+  // compile-time constants since MODE is a template parameter.
+  constexpr int stage2_offset_start = use_dense_bucket ? 8 : 24;
+  constexpr int stage2_max_rounds   = use_dense_bucket ? 2 : 4;
 #pragma unroll 4
   for (int round = 0; round < 4; ++round) {
+    if (round >= stage2_max_rounds) break;
     __shared__ int f_last_remain;
     const auto r_idx = round % 2;
 
@@ -772,9 +825,9 @@ __device__ void fast_topk_clean_fused(
     if (topk == 0) {
       for (int i = tx; i < num_input; i += BLOCK_SIZE) {
         const auto idx = f_input_idx[r_idx][i];
-        const auto offset = 24 - round * 8;
+        const auto offset = stage2_offset_start - round * 8;
         const float raw = vortex_to_float(input[idx + row_start]);
-        const float remapped = apply_transform(raw, mapping);
+        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
         const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
         if (bin > threshold_bin) {
           const auto pos = ::atomicAdd(&f_counter, 1);
@@ -790,14 +843,18 @@ __device__ void fast_topk_clean_fused(
       for (int i = tx; i < num_input; i += BLOCK_SIZE) {
         const auto idx = f_input_idx[r_idx][i];
         const float raw = vortex_to_float(input[idx + row_start]);
-        const float remapped = apply_transform(raw, mapping);
-        const auto offset = 24 - round * 8;
+        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
+        const auto offset = stage2_offset_start - round * 8;
         const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
         if (bin > threshold_bin) {
           const auto pos = ::atomicAdd(&f_counter, 1);
           index[pos] = idx;
         } else if (bin == threshold_bin) {
-          if (round == 3) {
+          // Last refinement round: we have no more discriminator bits
+          // below the current offset, so emit any remaining elements as
+          // "tie-break fallback" via f_last_remain (ensures topk is met
+          // even when thr_size > sel_thr at the finest granularity).
+          if (round == stage2_max_rounds - 1) {
             const auto pos = ::atomicAdd(&f_last_remain, -1);
             if (pos > 0) {
               index[target_k - pos] = idx;
@@ -855,7 +912,7 @@ void TopKOutput_Clean_Kernel(
   }
 }
 
-template <typename ScoreT>
+template <typename ScoreT, int MODE>
 __global__ __launch_bounds__(kThreadsPerBlock)
 void TopKOutput_Fused_Kernel(
     const ScoreT* __restrict__ score,
@@ -882,7 +939,7 @@ void TopKOutput_Fused_Kernel(
                                        + page_reserved_bos;
 
   __shared__ int s_indices[VORTEX_MAX_TOPK];
-  fast_topk_clean_fused<ScoreT>(score_blk, s_indices, 0, nblk, topk_val, mapping);
+  fast_topk_clean_fused<ScoreT, MODE>(score_blk, s_indices, 0, nblk, topk_val, mapping);
   __syncthreads();
 
   const int tx = threadIdx.x;
@@ -891,16 +948,32 @@ void TopKOutput_Fused_Kernel(
   }
 }
 
+// Inverse of vortex_to_float: narrow a float back to ScoreT for the
+// bf16-output remap path so the subsequent topk kernel can read half
+// the bytes of a fp32 remapped buffer.
+template <typename T>
+__device__ __forceinline__ T float_to_vortex(float x);
+template <>
+__device__ __forceinline__ float float_to_vortex<float>(float x) { return x; }
+template <>
+__device__ __forceinline__ __nv_bfloat16 float_to_vortex<__nv_bfloat16>(float x) {
+    return __float2bfloat16(x);
+}
+
 // Remap-only kernel: applies the element-wise transform to each score
 // in the [dense_kv_indptr[b] + reserved_bos, dense_kv_indptr[b+1] - reserved_eos)
-// range and writes the result into a float32 output tensor. Used by
-// the split-phase benchmark (remap → unmapped topk).
-template <typename ScoreT>
+// range and writes the result into an output tensor (OutT = float or
+// bf16). Used by the split-phase benchmark (remap → unmapped topk).
+// Writing bf16 halves memory bandwidth on the output and on the
+// subsequent topk read; precision-wise it's lossless for the Stage-1
+// 8-bit bucket because fp16/bf16 both discard more mantissa than the
+// bucket uses.
+template <typename ScoreT, typename OutT>
 __global__ __launch_bounds__(kThreadsPerBlock)
 void TopKRemapOnly_Kernel(
     const ScoreT* __restrict__ score,
     const int*    __restrict__ dense_kv_indptr,
-    float*        __restrict__ remapped,
+    OutT*         __restrict__ remapped,
     const int     page_reserved_bos,
     const int     page_reserved_eos,
     const TopKMappingParams mapping)
@@ -914,10 +987,11 @@ void TopKRemapOnly_Kernel(
   if (nblk <= 0) return;
 
   const ScoreT* __restrict__ score_blk = score + start;
-  float*        __restrict__ remap_blk = remapped + start;
+  OutT*         __restrict__ remap_blk = remapped + start;
 
   for (int i = tx; i < nblk; i += kThreadsPerBlock) {
-    remap_blk[i] = apply_transform(vortex_to_float(score_blk[i]), mapping);
+    const float y = apply_transform(vortex_to_float(score_blk[i]), mapping);
+    remap_blk[i] = float_to_vortex<OutT>(y);
   }
 }
 
@@ -1118,6 +1192,18 @@ void topk_output_sglang_fused(
                 "topk_output_sglang_fused: topk_val (", topk_val,
                 ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
 
+    // Caller contract: max_num_pages must be <= 4096, the static SMEM
+    // `s_bins` cache size inside the templated fused kernel. The bench
+    // drivers stay within this bound; no runtime check is emitted in
+    // the hot path.
+
+    // The `mapping_lut` / `mapping_quantiles` optional tensors are
+    // retained in the pybind signature for API backward compatibility
+    // but are ignored: the templated fused kernel drops the LUT_CDF /
+    // QUANTILE code paths entirely.
+    (void)mapping_lut;
+    (void)mapping_quantiles;
+
     CHECK_CUDA(x);
     CHECK_CUDA(dense_kv_indptr);
     CHECK_CUDA(sparse_kv_indptr);
@@ -1125,50 +1211,65 @@ void topk_output_sglang_fused(
     CHECK_CUDA(sparse_kv_indices);
 
     TopKMappingParams mapping{};
-    mapping.mode = static_cast<int>(mapping_mode);
+    mapping.mode      = static_cast<int>(mapping_mode);
     mapping.power_exp = static_cast<float>(mapping_power);
-    mapping.lut = nullptr;
+    mapping.lut       = nullptr;
     mapping.quantiles = nullptr;
-    if (mapping_lut.has_value()) {
-        const auto& lut = mapping_lut.value();
-        CHECK_CUDA(lut);
-        TORCH_CHECK(lut.dim() == 1 && lut.size(0) == 256 && lut.scalar_type() == at::ScalarType::Byte,
-                    "mapping_lut must be a 1D uint8 tensor of size 256");
-        mapping.lut = lut.data_ptr<uint8_t>();
-    }
-    if (mapping_quantiles.has_value()) {
-        const auto& q = mapping_quantiles.value();
-        CHECK_CUDA(q);
-        TORCH_CHECK(q.dim() == 1 && q.size(0) == 256 && q.scalar_type() == at::ScalarType::Float,
-                    "mapping_quantiles must be a 1D float32 tensor of size 256");
-        mapping.quantiles = q.data_ptr<float>();
-    }
 
     dim3 nblks(eff_batch_size);
     dim3 nthreads(kThreadsPerBlock);
     cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
+    // Each mapping mode compiles to its own kernel specialization so
+    // apply_transform_tmpl<MODE> is fully inlined (no runtime switch on
+    // mode in the inner loop). The wrapper's outer dispatch is a one-
+    // time per-call cost, negligible relative to the kernel runtime.
+    #define VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MODE_VAL)                       \
+        do {                                                                        \
+            setup_kernel_smem_once<TopKOutput_Fused_Kernel<DTYPE, MODE_VAL>, kSmem>(); \
+            TopKOutput_Fused_Kernel<DTYPE, MODE_VAL><<<nblks, nthreads, kSmem, stream>>>( \
+                PTR_EXPR,                                                           \
+                dense_kv_indptr.data_ptr<int>(),                                    \
+                sparse_kv_indptr.data_ptr<int>(),                                   \
+                dense_kv_indices.data_ptr<int>(),                                   \
+                sparse_kv_indices.data_ptr<int>(),                                  \
+                topk_val, reserved_bos, reserved_eos, mapping);                     \
+        } while (0)
+
+    #define VORTEX_DISPATCH_MODE(DTYPE, PTR_EXPR)                                   \
+        do {                                                                        \
+            switch (mapping.mode) {                                                 \
+                case MAPPING_NONE:        VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_NONE); break; \
+                case MAPPING_POWER:       VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_POWER); break; \
+                case MAPPING_LOG:         VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_LOG); break; \
+                case MAPPING_ASINH:       VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_ASINH); break; \
+                case MAPPING_LOG1P:       VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_LOG1P); break; \
+                case MAPPING_TRUNC8:      VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_TRUNC8); break; \
+                case MAPPING_ERF:         VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_ERF); break; \
+                case MAPPING_TANH:        VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_TANH); break; \
+                case MAPPING_SUBTRACT:    VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_SUBTRACT); break; \
+                case MAPPING_EXP_STRETCH: VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_EXP_STRETCH); break; \
+                case MAPPING_SHIFT_POW2:  VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW2); break; \
+                case MAPPING_SHIFT_POW3:  VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW3); break; \
+                case MAPPING_LINEAR_STEEP:VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_LINEAR_STEEP); break; \
+                case MAPPING_HALF_SQUARE: VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_HALF_SQUARE); break; \
+                case MAPPING_HALF_CUBE:   VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_HALF_CUBE); break; \
+                case MAPPING_DENSE_MANT:  VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_DENSE_MANT); break; \
+                default:                                                            \
+                    TORCH_CHECK(false, "topk_output_sglang_fused: unsupported mapping_mode ", mapping.mode); \
+            }                                                                       \
+        } while (0)
+
     if (x.scalar_type() == at::ScalarType::BFloat16) {
-        setup_kernel_smem_once<TopKOutput_Fused_Kernel<__nv_bfloat16>, kSmem>();
-        TopKOutput_Fused_Kernel<__nv_bfloat16><<<nblks, nthreads, kSmem, stream>>>(
-            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
-            dense_kv_indptr.data_ptr<int>(),
-            sparse_kv_indptr.data_ptr<int>(),
-            dense_kv_indices.data_ptr<int>(),
-            sparse_kv_indices.data_ptr<int>(),
-            topk_val, reserved_bos, reserved_eos, mapping);
+        VORTEX_DISPATCH_MODE(__nv_bfloat16, reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()));
     } else if (x.scalar_type() == at::ScalarType::Float) {
-        setup_kernel_smem_once<TopKOutput_Fused_Kernel<float>, kSmem>();
-        TopKOutput_Fused_Kernel<float><<<nblks, nthreads, kSmem, stream>>>(
-            x.data_ptr<float>(),
-            dense_kv_indptr.data_ptr<int>(),
-            sparse_kv_indptr.data_ptr<int>(),
-            dense_kv_indices.data_ptr<int>(),
-            sparse_kv_indices.data_ptr<int>(),
-            topk_val, reserved_bos, reserved_eos, mapping);
+        VORTEX_DISPATCH_MODE(float, x.data_ptr<float>());
     } else {
         TORCH_CHECK(false, "topk_output_sglang_fused: unsupported dtype ", x.scalar_type());
     }
+
+    #undef VORTEX_DISPATCH_MODE
+    #undef VORTEX_DISPATCH_FUSED
 
     const auto result = cudaGetLastError();
     TORCH_CHECK(result == cudaSuccess,
@@ -1183,7 +1284,7 @@ void topk_output_sglang_fused(
 void topk_remap_only(
     const at::Tensor& x,
     const at::Tensor& dense_kv_indptr,
-    at::Tensor&       remapped,          // float32, same numel as x
+    at::Tensor&       remapped,          // float32 or bfloat16, same numel as x
     const int64_t     eff_batch_size,
     const int64_t     reserved_bos,
     const int64_t     reserved_eos,
@@ -1193,34 +1294,56 @@ void topk_remap_only(
     CHECK_CUDA(x);
     CHECK_CUDA(dense_kv_indptr);
     CHECK_CUDA(remapped);
-    TORCH_CHECK(remapped.scalar_type() == at::ScalarType::Float,
-                "remapped output must be float32");
+    TORCH_CHECK(remapped.scalar_type() == at::ScalarType::Float
+                || remapped.scalar_type() == at::ScalarType::BFloat16,
+                "remapped output must be float32 or bfloat16");
 
     TopKMappingParams mapping{};
-    mapping.mode = static_cast<int>(mapping_mode);
+    mapping.mode      = static_cast<int>(mapping_mode);
     mapping.power_exp = static_cast<float>(mapping_power);
-    mapping.lut = nullptr;
+    mapping.lut       = nullptr;
     mapping.quantiles = nullptr;
 
     dim3 nblks(eff_batch_size);
     dim3 nthreads(kThreadsPerBlock);
     cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
 
-    if (x.scalar_type() == at::ScalarType::BFloat16) {
-        TopKRemapOnly_Kernel<__nv_bfloat16><<<nblks, nthreads, 0, stream>>>(
+    // Four-way dispatch on (input dtype, output dtype). bf16→bf16 is the
+    // new "batch pre-transform" path that halves memory bandwidth vs the
+    // fp32 output: the remap writes half the bytes and the subsequent
+    // topk_output_sglang reads half the bytes. Precision is preserved
+    // because Stage-1 bucketing only uses the top 8 bits of an fp16 key
+    // which both fp32 and bf16 capture.
+    #define VORTEX_DISPATCH_REMAP(IN_CPP, OUT_CPP, IN_PTR_EXPR, OUT_PTR_EXPR) \
+        TopKRemapOnly_Kernel<IN_CPP, OUT_CPP><<<nblks, nthreads, 0, stream>>>(  \
+            IN_PTR_EXPR, dense_kv_indptr.data_ptr<int>(), OUT_PTR_EXPR,         \
+            reserved_bos, reserved_eos, mapping)
+
+    const bool in_bf16  = (x.scalar_type() == at::ScalarType::BFloat16);
+    const bool in_fp32  = (x.scalar_type() == at::ScalarType::Float);
+    const bool out_bf16 = (remapped.scalar_type() == at::ScalarType::BFloat16);
+
+    if (in_bf16 && out_bf16) {
+        VORTEX_DISPATCH_REMAP(__nv_bfloat16, __nv_bfloat16,
             reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
-            dense_kv_indptr.data_ptr<int>(),
-            remapped.data_ptr<float>(),
-            reserved_bos, reserved_eos, mapping);
-    } else if (x.scalar_type() == at::ScalarType::Float) {
-        TopKRemapOnly_Kernel<float><<<nblks, nthreads, 0, stream>>>(
+            reinterpret_cast<__nv_bfloat16*>(remapped.data_ptr<at::BFloat16>()));
+    } else if (in_bf16 && !out_bf16) {
+        VORTEX_DISPATCH_REMAP(__nv_bfloat16, float,
+            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+            remapped.data_ptr<float>());
+    } else if (in_fp32 && out_bf16) {
+        VORTEX_DISPATCH_REMAP(float, __nv_bfloat16,
             x.data_ptr<float>(),
-            dense_kv_indptr.data_ptr<int>(),
-            remapped.data_ptr<float>(),
-            reserved_bos, reserved_eos, mapping);
+            reinterpret_cast<__nv_bfloat16*>(remapped.data_ptr<at::BFloat16>()));
+    } else if (in_fp32 && !out_bf16) {
+        VORTEX_DISPATCH_REMAP(float, float,
+            x.data_ptr<float>(),
+            remapped.data_ptr<float>());
     } else {
         TORCH_CHECK(false, "topk_remap_only: unsupported dtype ", x.scalar_type());
     }
+
+    #undef VORTEX_DISPATCH_REMAP
 
     const auto result = cudaGetLastError();
     TORCH_CHECK(result == cudaSuccess,

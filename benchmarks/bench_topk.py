@@ -23,13 +23,24 @@ import numpy as np
 import torch
 
 from vortex_torch_C import (
-    topk_output,
-    topk_output_sglang,          # unmapped baseline
-    topk_output_sglang_fused,    # fused remap + topk
-    topk_remap_only,             # standalone remap
+    topk_output,                 # full CUB BlockRadixSort topk (max 4096 pages/seg)
+    topk_output_sglang,          # 2-stage radix approximate topk (unmapped baseline)
+    topk_output_sglang_fused,    # fused remap + 2-stage radix topk
+    topk_output_sglang_ori,      # original SGLang reference kernel
+    topk_remap_only,             # standalone value-space remap
     topk_profile_histogram,
     topk_profile_counters,
 )
+
+# topk_output's template ladder tops out at 8192 pages per segment
+# (see topk.cu::topk_output, branches up to <= 8192). Runs larger than
+# that hit TORCH_CHECK(false).
+TOPK_OUTPUT_MAX_PAGES = 8192
+
+# The ori kernel has TopK baked in at compile time. If setup.py was built
+# with a different value, calls will fail; this is the topk_val that
+# matches the current build of topk_sglang_ori.cu.
+TOPK_ORI_BAKED_IN = 30
 
 
 MAPPING_MODE_NAMES = {
@@ -45,30 +56,134 @@ MAPPING_MODE_NAMES = {
     10: "Tanh",
     11: "Subtract",
     13: "ExpStretch",
+    15: "ShiftPow2",
+    16: "ShiftPow3",
+    17: "LinearSteep",
+    18: "HalfSquare",
+    19: "HalfCube",
+    20: "DenseMant",
 }
+
+# Modes whose value-space transform is a real apply_transform() pass. Modes
+# 1 (LUT_CDF), 2 (QUANTILE) and 8 (TRUNC8) apply their mapping inside
+# compute_stage1_bin, not apply_transform — so `topk_remap_only` cannot
+# reproduce them (the fp32 buffer would just contain the raw values). For
+# those modes the split-phase numbers are N/A; only the fused kernel is a
+# meaningful reference.
+ARITHMETIC_MODES = {0, 3, 4, 6, 7, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20}
+
+
+_AUTOTUNE_TIE_TOLERANCE_MS = 0.0002  # ≈ CUDA event noise floor at this kernel size
 
 
 def _load_autotune_hparams(path: str) -> Dict[int, float]:
     """Load per-mode best hyperparameters from an autotune_results.json.
 
     The JSON is produced by autotune_topk_mapping.py and contains a list of
-    {mode, param, latency_ms, ...} entries. For each mode we pick the entry
-    with the lowest measured latency and return {mode: best_param}.
+    {mode, param, latency_ms, num_equal_mean, selected_from_thr_mean, ...}
+    entries. For each mode we group all sweep entries, find the lowest
+    latency, then break ties (within `_AUTOTUNE_TIE_TOLERANCE_MS`) by:
 
-    Modes with no parametric sweep (0=None, 4=Log) return a dummy 0.5; the
-    caller should override to taste.
+    1. Smallest `num_equal_mean` (= thr_size). Stage-2 cost is O(thr_size),
+       so a smaller threshold bin is a better proxy for real fused
+       latency than the noisy `latency_ms` measurement.
+    2. Smallest `selected_from_thr_mean`. How many pages the topk has to
+       pull from the threshold bin during refinement.
+    3. Lowest `latency_ms` again (final fallback).
+
+    Modes with no parametric sweep (0=None, 4=Log) return a dummy 0.5;
+    the caller should override to taste.
     """
     with open(path) as f:
         data = json.load(f)
-    best: Dict[int, dict] = {}
+    grouped: Dict[int, list] = {}
     for r in data:
         m = r.get("mode")
         lat = r.get("latency_ms")
         if m is None or lat is None:
             continue
-        if m not in best or lat < best[m]["latency_ms"]:
-            best[m] = r
+        grouped.setdefault(m, []).append(r)
+
+    best: Dict[int, dict] = {}
+    for m, entries in grouped.items():
+        min_lat = min(e["latency_ms"] for e in entries)
+        contenders = [
+            e for e in entries
+            if e["latency_ms"] - min_lat <= _AUTOTUNE_TIE_TOLERANCE_MS
+        ]
+        # Tie-breakers: lowest num_equal_mean, then lowest sel_thr,
+        # then lowest latency. Missing diagnostic fields → +inf so they
+        # lose tie-breaks (we still keep them as fallback candidates).
+        def _rank_key(e):
+            return (
+                e.get("num_equal_mean", float("inf")),
+                e.get("selected_from_thr_mean", float("inf")),
+                e["latency_ms"],
+            )
+        best[m] = min(contenders, key=_rank_key)
+
     return {m: float(r["param"]) for m, r in best.items()}
+
+
+def _key_to_fp16(key: int) -> np.float16:
+    """Invert convert_to_uint8's sign-flip for a single 16-bit key."""
+    bits = (key & 0x7FFF) if key >= 0x8000 else ((~key) & 0xFFFF)
+    return np.array([bits], dtype=np.uint16).view(np.float16)[0]
+
+
+def build_bin_range_table():
+    """Per-bin (lo, hi) fp16 value tables for the 256 Stage-1 radix bins.
+
+    Shared by the real-distribution samplers in bench_topk.py and
+    autotune_topk_mapping.py so both scripts generate identical inputs.
+    """
+    all_bits = np.arange(65536, dtype=np.uint16)
+    all_fp16 = all_bits.view(np.float16)
+    keys = np.where(
+        (all_bits & 0x8000).astype(bool),
+        (~all_bits).astype(np.uint16),
+        all_bits | np.uint16(0x8000),
+    )
+    bins = (keys >> 8).astype(np.uint8)
+    all_f32 = all_fp16.astype(np.float32)
+    valid = np.isfinite(all_f32)
+    bin_lo = np.full(256, np.inf, dtype=np.float32)
+    bin_hi = np.full(256, -np.inf, dtype=np.float32)
+    for b in range(256):
+        mask = (bins == b) & valid
+        if mask.any():
+            vals = all_f32[mask]
+            bin_lo[b] = vals.min()
+            bin_hi[b] = vals.max()
+    empty = bin_lo > bin_hi
+    for b in np.where(empty)[0]:
+        val = float(_key_to_fp16((int(b) << 8) | 0x80))
+        bin_lo[b] = val
+        bin_hi[b] = val
+    return bin_lo, bin_hi
+
+
+def scores_from_histogram(
+    histogram: np.ndarray,
+    total_pages: int,
+    device: str = "cuda",
+    score_dtype: torch.dtype = torch.bfloat16,
+) -> torch.Tensor:
+    """Sample `total_pages` scores whose Stage-1 bucket distribution matches
+    the given 256-bin histogram (produced by calibration). Each bucket is
+    sampled uniformly over the fp16 range that maps into it."""
+    bin_lo, bin_hi = build_bin_range_table()
+    counts = histogram.astype(np.float64)
+    total = counts.sum()
+    if total == 0:
+        return torch.zeros(total_pages, 1, 1, dtype=score_dtype, device=device)
+    probs = counts / total
+    bin_indices = np.random.choice(256, size=total_pages, p=probs)
+    lo = bin_lo[bin_indices]
+    hi = bin_hi[bin_indices]
+    rand = np.random.uniform(0, 1, size=total_pages).astype(np.float32)
+    scores_f32 = lo + rand * (hi - lo)
+    return torch.from_numpy(scores_f32).to(score_dtype).reshape(total_pages, 1, 1).to(device)
 
 
 def make_topk_inputs(
@@ -81,9 +196,15 @@ def make_topk_inputs(
     reserved_eos: int,
     score_dtype: torch.dtype,
     distribution: str = "normal",
+    real_histogram: np.ndarray = None,
     device: str = "cuda",
 ) -> dict:
-    """Synthesize CSR-formatted paged attention inputs for kernel timing."""
+    """Synthesize CSR-formatted paged attention inputs for kernel timing.
+
+    When `real_histogram` is provided, scores are drawn from that 256-bin
+    distribution (ignoring `distribution`) so the benchmark sees the same
+    Stage-1 bucket distribution as the calibrated model.
+    """
     eff_batch_size = batch_size * num_kv_heads
     num_pages_per_seg = math.ceil(seq_len / page_size)
     total_dense_pages = eff_batch_size * num_pages_per_seg
@@ -101,23 +222,24 @@ def make_topk_inputs(
     dense_kv_indices = torch.arange(total_dense_pages, dtype=torch.int32, device=device)
     sparse_kv_indices = torch.zeros(total_sparse_pages, dtype=torch.int32, device=device)
 
-    if distribution == "normal":
-        x = torch.randn(total_dense_pages, 1, 1, device=device)
+    if real_histogram is not None:
+        x = scores_from_histogram(real_histogram, total_dense_pages, device=device,
+                                  score_dtype=score_dtype)
+    elif distribution == "normal":
+        x = torch.randn(total_dense_pages, 1, 1, device=device).to(score_dtype)
     elif distribution == "lognormal":
-        x = torch.randn(total_dense_pages, 1, 1, device=device).exp()
+        x = torch.randn(total_dense_pages, 1, 1, device=device).exp().to(score_dtype)
     elif distribution == "uniform":
-        x = torch.rand(total_dense_pages, 1, 1, device=device)
+        x = torch.rand(total_dense_pages, 1, 1, device=device).to(score_dtype)
     elif distribution == "bucket_uniform":
         # Uniform across all 256 fp16 radix buckets. Random uint16 bit
         # patterns → interpret as fp16. NaN/Inf patterns collapse to ±0.
         raw_bits = torch.randint(0, 65536, (total_dense_pages,), dtype=torch.int32, device=device)
         abs_bits = raw_bits & 0x7FFF
         raw_bits[abs_bits >= 0x7C00] = raw_bits[abs_bits >= 0x7C00] & 0x8000
-        x = raw_bits.to(torch.int16).view(torch.float16).float().reshape(total_dense_pages, 1, 1)
+        x = raw_bits.to(torch.int16).view(torch.float16).float().reshape(total_dense_pages, 1, 1).to(score_dtype)
     else:
         raise ValueError(f"Unknown distribution: {distribution}")
-
-    x = x.to(score_dtype)
 
     return {
         "x": x,
@@ -185,10 +307,9 @@ def compute_histogram_stats(histograms: torch.Tensor) -> dict:
 
 
 def _collect_threshold_stats(inputs, topk_val, pages_per_seg, args, mode: int, power: float) -> dict:
-    """Run topk_profile_counters once and aggregate threshold-bin stats.
-
-    Profile kernel is invoked AFTER all latency measurements have finished,
-    so the counter writes never contaminate timing.
+    """Run topk_profile_counters + topk_profile_histogram once and aggregate
+    threshold-bin / bucket-distribution stats. Profile kernels run AFTER all
+    latency measurements, so their writes never contaminate timing.
     """
     eff_bs = inputs["eff_batch_size"]
     counter_buf = torch.zeros(eff_bs, 6, dtype=torch.int32, device="cuda")
@@ -214,6 +335,40 @@ def _collect_threshold_stats(inputs, topk_val, pages_per_seg, args, mode: int, p
     )
     torch.cuda.synchronize()
     c = counter_buf.float()
+
+    # Run the 256-bin histogram profile to compute the rank_target_bins
+    # metric: how many bins ABOVE the threshold bin (i.e. the bins whose
+    # pages are selected without Stage-2 refinement) actually contain
+    # selected pages, and the mean pages-per-such-bin.
+    hist_buf = torch.zeros(eff_bs, 256, dtype=torch.int32, device="cuda")
+    topk_profile_histogram(
+        inputs["x"],
+        inputs["dense_kv_indptr"],
+        hist_buf,
+        eff_bs,
+        args.reserved_bos,
+        args.reserved_eos,
+        mode,
+        power,
+        lut_t,
+        q_t,
+    )
+    torch.cuda.synchronize()
+
+    thr_idx = counter_buf[:, 0].to(torch.int64)  # [eff_bs]
+    hist = hist_buf.to(torch.int64)               # [eff_bs, 256]
+    bin_ids = torch.arange(256, device="cuda", dtype=torch.int64).unsqueeze(0)  # [1, 256]
+    above_mask = bin_ids > thr_idx.unsqueeze(1)   # [eff_bs, 256]
+    above_populated = ((hist > 0) & above_mask).sum(dim=1).float()  # bins >thr with any pages
+    pages_above = (hist * above_mask.to(torch.int64)).sum(dim=1).float()  # total pages in those bins
+    # Mean pages per populated above-threshold bin (per-segment, then
+    # averaged). Guard against divide-by-zero.
+    pages_per_bin = torch.where(
+        above_populated > 0,
+        pages_above / above_populated,
+        torch.zeros_like(above_populated),
+    )
+
     # Selected from threshold bin = topk_val - num_above (clamped >= 0).
     sel_from_thr = (float(topk_val) - c[:, 1]).clamp(min=0.0)
     return {
@@ -225,6 +380,9 @@ def _collect_threshold_stats(inputs, topk_val, pages_per_seg, args, mode: int, p
         "selected_from_thr_mean":  sel_from_thr.mean().item(),
         "selected_from_thr_max":   sel_from_thr.max().item(),
         "refine_rounds_mean": c[:, 4].mean().item(),
+        # Rank-target metrics: how the top pages are actually spread.
+        "above_bins_mean":       above_populated.mean().item(),
+        "pages_per_above_bin_mean": pages_per_bin.mean().item(),
     }
 
 
@@ -241,6 +399,7 @@ def _resolve_hparam(args, mode: int) -> float:
 def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
                             distribution, modes: List[int]) -> dict:
     """Time baseline, fused, and split-phase for each mode at one config."""
+    real_hist = getattr(args, "_real_histogram", None) if distribution == "real" else None
     inputs = make_topk_inputs(
         batch_size=batch_size,
         num_kv_heads=num_kv_heads,
@@ -250,13 +409,17 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         reserved_bos=args.reserved_bos,
         reserved_eos=args.reserved_eos,
         score_dtype=torch.bfloat16,
-        distribution=distribution,
+        distribution=distribution if distribution != "real" else "normal",
+        real_histogram=real_hist,
     )
     eff_bs = inputs["eff_batch_size"]
     pages_per_seg = inputs["num_pages_per_seg"]
     total_dense = inputs["x"].numel()
 
-    # Baseline: unmapped topk.
+    # Baseline = unmapped topk_output_sglang (CUB two-stage radix, the
+    # kernel every mapped mode's split-phase ends up calling). This is
+    # the `base_us` column and also what the `None` row reports, so
+    # None's topk_us == base_us by construction.
     baseline_args = (
         inputs["x"],
         inputs["dense_kv_indptr"],
@@ -268,7 +431,55 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
     inputs["sparse_kv_indices"].zero_()
     baseline = bench_kernel(topk_output_sglang, baseline_args, args.warmup, args.repeat)
 
+    # Optional extra row: the full CUB BlockRadixSort topk from topk.cu.
+    # This is a "true naive" — exact sort, no bucketing tricks — for A/B
+    # against the 2-stage approximate baseline. Only runs when pages_per_seg
+    # fits the kernel's template ladder (<= TOPK_OUTPUT_MAX_PAGES = 4096).
+    naive_ms = None
+    if pages_per_seg <= TOPK_OUTPUT_MAX_PAGES:
+        naive_args = (
+            inputs["x"],
+            inputs["dense_kv_indptr"],
+            inputs["dense_kv_indices"],   # NOTE: topk_output arg order differs
+            inputs["sparse_kv_indptr"],   #       from topk_output_sglang
+            inputs["sparse_kv_indices"],
+            eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+        )
+        inputs["sparse_kv_indices"].zero_()
+        naive_ms = bench_kernel(
+            topk_output, naive_args, args.warmup, args.repeat
+        )["mean_ms"]
+
+    # Optional extra row: the original SGLang kernel from topk_sglang_ori.cu,
+    # compiled with TopK=TOPK_ORI_BAKED_IN. Only runs when topk_val matches
+    # that constant; otherwise the row is skipped with a warning. It is NOT
+    # used as the baseline — this is a separate A/B point so you can see the
+    # ori-vs-naive gap at a glance.
+    sglang_ori_ms = None
+    if topk_val == TOPK_ORI_BAKED_IN:
+        ori_indices = torch.empty(eff_bs, TOPK_ORI_BAKED_IN,
+                                  dtype=torch.int32, device="cuda")
+        ori_args = (
+            inputs["x"],
+            inputs["dense_kv_indptr"],
+            ori_indices,
+            eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+        )
+        sglang_ori_ms = bench_kernel(
+            topk_output_sglang_ori, ori_args, args.warmup, args.repeat
+        )["mean_ms"]
+
     # Pre-allocate the float32 buffer used for the split-phase (remap → baseline).
+    # Split-phase remapped buffer is **float32** to preserve Stage-2
+    # refinement precision. The fused kernel computes transforms in
+    # fp32 internally (so its Stage-2 sub-bin keys carry transform-
+    # dependent bits in positions [15:0]); a narrower remapped buffer
+    # (bf16 or fp16) would zero those bits on round-trip and change
+    # the Stage-2 tie-break ordering vs the fused path. fp32 is the
+    # only lossless choice. The kernel supports bf16 output too (see
+    # topk_remap_only's dispatch table) for experimental paths, but we
+    # don't use it here because correctness matters more than the
+    # small memory-bandwidth win.
     remapped = torch.empty(total_dense, dtype=torch.float32, device="cuda").reshape(inputs["x"].shape)
 
     config = {
@@ -279,10 +490,87 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         "distribution": distribution,
         "pages_per_seg": pages_per_seg,
         "baseline_ms": baseline["mean_ms"],
+        "naive_ms": naive_ms,
+        "sglang_ori_ms": sglang_ori_ms,
         "modes": [],
     }
 
+    # Naive row — full CUB BlockRadixSort from topk.cu. No mapping, no
+    # remap, no fused. Only populated when pages_per_seg fits the kernel.
+    if naive_ms is not None:
+        config["modes"].append({
+            "mode": -2,            # sentinel so ranking/autotune skip it
+            "mode_name": "Naive",
+            "power": 0.5,
+            "remap_ms": None,
+            "topk_after_remap_ms": naive_ms,
+            "split_total_ms": None,
+            "fused_ms": None,
+            "threshold_bin_mean": 0.0,
+            "threshold_bin_max": 0.0,
+            "num_above_mean": 0.0,
+            "threshold_bin_size_mean": 0.0,
+            "threshold_bin_size_max": 0.0,
+            "selected_from_thr_mean": 0.0,
+            "selected_from_thr_max": 0.0,
+            "refine_rounds_mean": 0.0,
+            "above_bins_mean": 0.0,
+            "pages_per_above_bin_mean": 0.0,
+        })
+
+    # The None row is a pass-through to the naive baseline: no remap, no
+    # fused, and topk_us == base_us by construction. Distribution metrics
+    # are populated by running the profile kernels with mode=0 so the user
+    # can see the unmapped Stage-1 bucket layout as a reference.
+    none_stats = _collect_threshold_stats(
+        inputs, topk_val, pages_per_seg, args, mode=0, power=0.5
+    )
+    config["modes"].append({
+        "mode": 0,
+        "mode_name": "None",
+        "power": 0.5,
+        "remap_ms": None,
+        "topk_after_remap_ms": baseline["mean_ms"],
+        "split_total_ms": None,
+        "fused_ms": None,
+        **none_stats,
+    })
+
+    # Extra row for the original SGLang kernel — only populated when the
+    # build's baked-in TopK matches topk_val. Also a pass-through (no
+    # remap, no fused); topk_us is the ori kernel latency.
+    if sglang_ori_ms is not None:
+        config["modes"].append({
+            "mode": -1,           # sentinel so ranking/autotune skip it
+            "mode_name": "sglang_ori",
+            "power": 0.5,
+            "remap_ms": None,
+            "topk_after_remap_ms": sglang_ori_ms,
+            "split_total_ms": None,
+            "fused_ms": None,
+            "threshold_bin_mean": 0.0,
+            "threshold_bin_max": 0.0,
+            "num_above_mean": 0.0,
+            "threshold_bin_size_mean": 0.0,
+            "threshold_bin_size_max": 0.0,
+            "selected_from_thr_mean": 0.0,
+            "selected_from_thr_max": 0.0,
+            "refine_rounds_mean": 0.0,
+            "above_bins_mean": 0.0,
+            "pages_per_above_bin_mean": 0.0,
+        })
+    else:
+        print(f"[bench-remap] sglang_ori row SKIPPED: topk_val={topk_val} != "
+              f"TOPK_ORI_BAKED_IN ({TOPK_ORI_BAKED_IN}). Rebuild topk_sglang_ori.cu "
+              f"with a matching TopK to enable the row.")
+
     for mode in modes:
+        # Mode 0 is already emitted as the `None` row above (pass-through
+        # to the ori baseline with no remap/fused). Skip to avoid a
+        # duplicate row and a spurious fused-mode-0 measurement.
+        if mode == 0:
+            continue
+
         power = _resolve_hparam(args, mode)
 
         lut_t = getattr(args, "_mapping_lut", None) if mode == 1 else None
@@ -299,30 +587,43 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         inputs["sparse_kv_indices"].zero_()
         fused = bench_kernel(topk_output_sglang_fused, fused_args, args.warmup, args.repeat)
 
-        # Split-phase timing: first the standalone remap, then the unmapped
-        # topk on the remapped buffer.
-        remap_args = (
-            inputs["x"],
-            inputs["dense_kv_indptr"],
-            remapped,
-            eff_bs, args.reserved_bos, args.reserved_eos,
-            mode, power,
-        )
-        remap_only = bench_kernel(topk_remap_only, remap_args, args.warmup, args.repeat)
+        # Split-phase timing is only meaningful for arithmetic modes.
+        # MAPPING_LUT_CDF / QUANTILE / TRUNC8 apply their mapping inside
+        # compute_stage1_bin, which topk_remap_only cannot reproduce, so we
+        # report N/A for the split-phase fields and rely on the fused kernel
+        # as the only valid reference latency.
+        if mode in ARITHMETIC_MODES:
+            remap_args = (
+                inputs["x"],
+                inputs["dense_kv_indptr"],
+                remapped,
+                eff_bs, args.reserved_bos, args.reserved_eos,
+                mode, power,
+            )
+            remap_only = bench_kernel(topk_remap_only, remap_args, args.warmup, args.repeat)
 
-        split_topk_args = (
-            remapped,
-            inputs["dense_kv_indptr"],
-            inputs["sparse_kv_indptr"],
-            inputs["dense_kv_indices"],
-            inputs["sparse_kv_indices"],
-            eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
-        )
-        # Run remap once so the buffer is populated for warmup of topk-on-remapped.
-        topk_remap_only(*remap_args)
-        torch.cuda.synchronize()
-        inputs["sparse_kv_indices"].zero_()
-        split_topk = bench_kernel(topk_output_sglang, split_topk_args, args.warmup, args.repeat)
+            # Populate the remapped buffer once so the unfused-topk warmup
+            # iterations don't read stale data.
+            topk_remap_only(*remap_args)
+            torch.cuda.synchronize()
+            split_topk_args = (
+                remapped,
+                inputs["dense_kv_indptr"],
+                inputs["sparse_kv_indptr"],
+                inputs["dense_kv_indices"],
+                inputs["sparse_kv_indices"],
+                eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+            )
+            inputs["sparse_kv_indices"].zero_()
+            split_topk = bench_kernel(topk_output_sglang, split_topk_args, args.warmup, args.repeat)
+
+            remap_ms = remap_only["mean_ms"]
+            topk_after_remap_ms = split_topk["mean_ms"]
+            split_total_ms = remap_ms + topk_after_remap_ms
+        else:
+            remap_ms = None
+            topk_after_remap_ms = None
+            split_total_ms = None
 
         # Counter collection is run AFTER all timing measurements for this mode
         # so it cannot affect the timings.
@@ -332,9 +633,9 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
             "mode": mode,
             "mode_name": MAPPING_MODE_NAMES.get(mode, f"m{mode}"),
             "power": power,
-            "remap_ms": remap_only["mean_ms"],
-            "topk_after_remap_ms": split_topk["mean_ms"],
-            "split_total_ms": remap_only["mean_ms"] + split_topk["mean_ms"],
+            "remap_ms": remap_ms,
+            "topk_after_remap_ms": topk_after_remap_ms,
+            "split_total_ms": split_total_ms,
             "fused_ms": fused["mean_ms"],
             **stats,
         }
@@ -345,8 +646,9 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
 
 def _print_remap_table(results: List[dict]) -> None:
     header = (
-        f"{'mode':<12s}  {'remap_us':>9s}  {'topk_us':>9s}  {'split_us':>9s}  "
-        f"{'fused_us':>9s}  {'base_us':>9s}  {'thr_bin':>7s}  {'thr_size':>8s}  {'sel_thr':>7s}"
+        f"{'mode':<14s}  {'remap_ms':>9s}  {'topk_ms':>9s}  {'split_ms':>9s}  "
+        f"{'fused_ms':>9s}  {'base_ms':>9s}  {'thr_bin':>7s}  {'thr_size':>8s}  "
+        f"{'sel_thr':>7s}  {'abv_bins':>8s}  {'pg/bin':>7s}"
     )
     for cfg in results:
         banner = (
@@ -355,36 +657,65 @@ def _print_remap_table(results: List[dict]) -> None:
             f"dist={cfg['distribution']} pages_per_seg={cfg['pages_per_seg']}]"
         )
         print(banner)
-        print("  Baseline: mapping_mode=0 (raw fp16 bucketing)")
+        extra_notes = []
+        if cfg.get("naive_ms") is not None:
+            extra_notes.append("Naive row = topk.cu (CUB full sort)")
+        if cfg.get("sglang_ori_ms") is not None:
+            extra_notes.append("sglang_ori row = topk_sglang_ori.cu")
+        notes_str = ""
+        if extra_notes:
+            notes_str = "  |  " + "  |  ".join(extra_notes)
+        print(f"  Baseline: topk_sglang.cu (CUB two-stage){notes_str}")
         print(header)
         print("-" * len(header))
-        base_us = cfg["baseline_ms"] * 1000.0
+        base_ms = cfg["baseline_ms"]
         for row in cfg["modes"]:
-            label = f"{row['mode_name']}(p={row['power']})" if row["mode"] != 0 else "None"
+            if row["mode"] == 0:
+                label = "None"
+            elif row["mode"] == -1:
+                label = row.get("mode_name", "sglang_ori")
+            elif row["mode"] == -2:
+                label = row.get("mode_name", "Naive")
+            else:
+                label = f"{row['mode_name']}(p={row['power']})"
+            def _fmt(v):
+                return f"{v:9.4f}" if v is not None else f"{'N/A':>9s}"
+            fused_str = _fmt(row.get("fused_ms"))
             print(
-                f"{label:<12s}  "
-                f"{row['remap_ms'] * 1000.0:9.2f}  "
-                f"{row['topk_after_remap_ms'] * 1000.0:9.2f}  "
-                f"{row['split_total_ms'] * 1000.0:9.2f}  "
-                f"{row['fused_ms'] * 1000.0:9.2f}  "
-                f"{base_us:9.2f}  "
+                f"{label:<14s}  "
+                f"{_fmt(row['remap_ms'])}  "
+                f"{_fmt(row['topk_after_remap_ms'])}  "
+                f"{_fmt(row['split_total_ms'])}  "
+                f"{fused_str}  "
+                f"{base_ms:9.4f}  "
                 f"{row['threshold_bin_mean']:7.1f}  "
                 f"{row['threshold_bin_size_mean']:8.1f}  "
-                f"{row['selected_from_thr_mean']:7.1f}"
+                f"{row['selected_from_thr_mean']:7.1f}  "
+                f"{row.get('above_bins_mean', 0.0):8.1f}  "
+                f"{row.get('pages_per_above_bin_mean', 0.0):7.1f}"
             )
 
 
 def _run_remap_bench(args) -> None:
     modes = [int(m) for m in args.mapping_modes]
-    if 0 not in modes:
-        modes = [0] + modes
+    # Mode 0 is emitted as the "None" row from _remap_bench_one_config
+    # itself (pass-through to the ori baseline). Drop any user-supplied 0
+    # to avoid a duplicate row.
+    modes = [m for m in modes if m != 0]
+
+    distributions = list(args.distributions)
+    if getattr(args, "_real_histogram", None) is not None:
+        if "real" not in distributions:
+            distributions.append("real")
+        print(f"[remap-bench] 'real' distribution enabled "
+              f"(histogram total count = {int(args._real_histogram.sum())})")
 
     results = []
     for bs in args.batch_sizes:
         for heads in args.num_kv_heads:
             for seq_len in args.seq_lens:
                 for topk_val in args.topk_vals:
-                    for dist in args.distributions:
+                    for dist in distributions:
                         cfg = _remap_bench_one_config(
                             args, bs, heads, seq_len, topk_val, dist, modes,
                         )
@@ -401,17 +732,23 @@ def _run_remap_bench(args) -> None:
 def _run_latency_sweep(args) -> None:
     """Simple baseline-vs-fused latency sweep (no split-phase, no counters)."""
     modes = [int(m) for m in args.mapping_modes]
+    distributions = list(args.distributions)
+    if getattr(args, "_real_histogram", None) is not None and "real" not in distributions:
+        distributions.append("real")
     results = []
     for bs in args.batch_sizes:
         for heads in args.num_kv_heads:
             for seq_len in args.seq_lens:
                 for topk_val in args.topk_vals:
-                    for dist in args.distributions:
+                    for dist in distributions:
+                        real_hist = args._real_histogram if dist == "real" else None
                         inputs = make_topk_inputs(
                             batch_size=bs, num_kv_heads=heads, seq_len=seq_len,
                             page_size=args.page_size, topk_val=topk_val,
                             reserved_bos=args.reserved_bos, reserved_eos=args.reserved_eos,
-                            score_dtype=torch.bfloat16, distribution=dist,
+                            score_dtype=torch.bfloat16,
+                            distribution=dist if dist != "real" else "normal",
+                            real_histogram=real_hist,
                         )
                         eff_bs = inputs["eff_batch_size"]
                         pages_per_seg = inputs["num_pages_per_seg"]
@@ -469,7 +806,14 @@ def main():
     p.add_argument("--topk-vals", type=int, nargs="+", default=[30])
     p.add_argument("--distributions", type=str, nargs="+",
                    default=["normal"],
-                   choices=["normal", "lognormal", "uniform", "bucket_uniform"])
+                   choices=["normal", "lognormal", "uniform", "bucket_uniform", "real"],
+                   help="Synthetic distributions. Use 'real' (or --real-histograms) to "
+                        "sample scores from a calibrated raw_histograms.npy.")
+    p.add_argument("--real-histograms", type=str, default=None,
+                   help="Path to raw_histograms.npy from calibrate_topk.py. When set, a "
+                        "'real' distribution is appended to the sweep so every "
+                        "(mode, hparam) combo is also timed on the calibrated score "
+                        "distribution.")
     p.add_argument("--mapping-modes", type=int, nargs="+",
                    default=[0, 3, 6, 7],
                    help="Mapping modes to sweep (0=None, 3=Power, 6=Asinh, 7=Log1p, etc.)")
@@ -502,6 +846,13 @@ def main():
         print(f"[autotune] using best-latency hyperparameters from {args.autotune_json}:")
         for m, v in sorted(args._autotune_hparams.items()):
             print(f"  mode {m:>2d} -> {v}")
+
+    args._real_histogram = None
+    if args.real_histograms:
+        raw = np.load(args.real_histograms)
+        args._real_histogram = raw.sum(axis=0) if raw.ndim > 1 else raw
+        print(f"[real] loaded calibrated histogram from {args.real_histograms} "
+              f"(shape={raw.shape} → [256] aggregate)")
 
     args._mapping_lut = None
     args._mapping_quantiles = None

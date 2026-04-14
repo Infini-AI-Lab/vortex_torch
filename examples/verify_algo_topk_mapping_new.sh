@@ -28,6 +28,7 @@ BLOCK_SIZE=16
 BATCH_SIZE=4
 NUM_KV_HEADS=2
 SEQ_LEN=32768
+MAX_TOTAL_TOKENS=1048576
 REAL_HISTOGRAMS=""
 SKIP_AUTOTUNE=0
 
@@ -42,6 +43,7 @@ while [[ $# -gt 0 ]]; do
     --num-kv-heads)    NUM_KV_HEADS="$2"; shift 2 ;;
     --seq-len)         SEQ_LEN="$2"; shift 2 ;;
     --real-histograms) REAL_HISTOGRAMS="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --skip-autotune)   SKIP_AUTOTUNE=1; shift 1 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -63,6 +65,7 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 if [ -z "${REAL_HISTOGRAMS}" ]; then
   echo "============================================================"
   echo "Step 0: Calibrating ${MODEL_NAME} for real-distribution histograms"
+  echo "  Max total tokens (KV / VTX cap): ${MAX_TOTAL_TOKENS}"
   echo "============================================================"
   CAL_DIR="${RESULTS_DIR}/calibration_${TIMESTAMP}"
   mkdir -p "${CAL_DIR}"
@@ -70,6 +73,7 @@ if [ -z "${REAL_HISTOGRAMS}" ]; then
     --model-name "${MODEL_NAME}" \
     --topk-val "${TOPK_VAL}" \
     --mem 0.7 \
+    --max-total-tokens "${MAX_TOTAL_TOKENS}" \
     --vortex-module-name "${sparse_algos[0]}" \
     --page-size "${BLOCK_SIZE}" \
     --output-dir "${CAL_DIR}" \

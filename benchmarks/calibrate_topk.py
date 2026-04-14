@@ -38,6 +38,17 @@ def main():
     parser.add_argument("--topk-val", type=int, default=30)
     parser.add_argument("--page-size", type=int, default=16)
     parser.add_argument("--mem", type=float, default=0.7)
+    parser.add_argument(
+        "--max-total-tokens",
+        type=int,
+        default=1048576,
+        help="Hard cap on KV pool token slots (ServerArgs.max_total_tokens). "
+        "Block-sparse profiling uses a small bytes/token estimate, so the auto "
+        "budget can be huge on large GPUs; VTXGraphAttnBackend then allocates "
+        "dense bf16 sparse_prefill K/V buffers proportional to this cap (~4 KiB per "
+        "token per buffer). For offline calibration, a few hundred K1M tokens "
+        "is usually enough.",
+    )
     parser.add_argument("--kv-cache-dtype", type=str, default="auto")
     parser.add_argument("--topk-type", type=str, default="sglang")
     parser.add_argument("--num-prompts", type=int, default=16,
@@ -76,6 +87,7 @@ def main():
         vortex_module_name=args.vortex_module_name,
         vortex_max_seq_lens=12288,
         mem_fraction_static=args.mem,
+        max_total_tokens=args.max_total_tokens,
         kv_cache_dtype=args.kv_cache_dtype,
         vortex_topk_type=args.topk_type,
         vortex_topk_mapping_mode=0,  # Use mode 0 during calibration

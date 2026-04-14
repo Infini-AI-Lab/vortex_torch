@@ -22,6 +22,7 @@
 #       --real-histograms /path/to/calibration_dir/raw_histograms.npy
 #   bash run_distribution_analysis.sh --gpu 5 --block-size 16
 #   bash run_distribution_analysis.sh --watchdog-timeout 0   # disable calibrate watchdog (fork)
+#   bash run_distribution_analysis.sh --max-total-tokens 1048576  # cap KV / VTX buffers during calibrate
 # Models (default: 1.7B + 4B). Override with repeated --model-name:
 #   bash run_distribution_analysis.sh --model-name Qwen/Qwen3-1.7B --model-name Qwen/Qwen3-4B
 # ============================================================
@@ -52,6 +53,7 @@ MODEL_NAMES=( "Qwen/Qwen3-1.7B" "Qwen/Qwen3-4B" )
 MODEL_NAMES_USER_SET=0
 TOPK_VAL=30
 MEM=0.7
+MAX_TOTAL_TOKENS=1048576
 ALGO="block_sparse_attention"
 RADIX_BITS=8
 SAMPLE_STRIDE=1
@@ -76,6 +78,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --topk-val)         TOPK_VAL="$2"; shift 2 ;;
     --mem)              MEM="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --gpu)              GPU_ID="$2"; shift 2 ;;
     --algo)             ALGO="$2"; shift 2 ;;
     --real-histograms)  REAL_HISTOGRAMS="$2"; shift 2 ;;
@@ -117,6 +120,7 @@ echo "  Block size:      ${BLOCK_SIZE} (--page-size in benchmarks)"
 echo "  GPU:             ${GPU_ID}"
 echo "  Radix bits:      ${RADIX_BITS} ($(( 1 << RADIX_BITS )) bins)"
 echo "  Sample stride:   ${SAMPLE_STRIDE}"
+echo "  Max total tokens: ${MAX_TOTAL_TOKENS}  (calibration KV / VTX buffer cap)"
 if [ "${HAS_WATCHDOG_TIMEOUT}" -eq 1 ]; then
   echo "  Watchdog (cal):  ${WATCHDOG_TIMEOUT}s (0 = off, vortex SGLang fork)"
 else
@@ -154,6 +158,7 @@ for MODEL_NAME in "${MODEL_NAMES[@]}"; do
       --model-name "${MODEL_NAME}" \
       --topk-val "${TOPK_VAL}" \
       --mem "${MEM}" \
+      --max-total-tokens "${MAX_TOTAL_TOKENS}" \
       --vortex-module-name "${ALGO}" \
       --page-size "${BLOCK_SIZE}" \
       --output-dir "${CALIBRATION_DIR}" \

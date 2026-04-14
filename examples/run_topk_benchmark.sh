@@ -21,6 +21,7 @@
 #   bash run_topk_benchmark.sh --gpu 0
 #   bash run_topk_benchmark.sh --gpu 0 --model-name Qwen/Qwen3-8B \
 #        --block-size 32 --topk-val 512
+#   bash run_topk_benchmark.sh --gpu 0 --max-total-tokens 1048576
 # ============================================================
 set -euo pipefail
 
@@ -33,6 +34,7 @@ MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=30
 TRIALS=8
 MEM=0.7
+MAX_TOTAL_TOKENS=1048576
 ALGO="block_sparse_attention"
 BLOCK_SIZE=16
 BATCH_SIZE=4
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --topk-val)        TOPK_VAL="$2"; shift 2 ;;
     --trials)          TRIALS="$2"; shift 2 ;;
     --mem)             MEM="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --gpu)             GPU_ID="$2"; shift 2 ;;
     --algo)            ALGO="$2"; shift 2 ;;
     --benchmark)       BENCHMARKS="$2"; shift 2 ;;
@@ -84,6 +87,7 @@ echo "  Seq len:    ${SEQ_LEN}"
 echo "  Batch size: ${BATCH_SIZE}"
 echo "  KV heads:   ${NUM_KV_HEADS}"
 echo "  Trials:     ${TRIALS}"
+echo "  Max total tokens: ${MAX_TOTAL_TOKENS}  (calibration KV / VTX buffer cap)"
 echo "  GPU:        ${GPU_ID}"
 echo "  Output:     ${RUN_DIR}"
 echo "============================================================"
@@ -101,6 +105,7 @@ else
     --model-name "${MODEL_NAME}" \
     --topk-val "${TOPK_VAL}" \
     --mem "${MEM}" \
+    --max-total-tokens "${MAX_TOTAL_TOKENS}" \
     --vortex-module-name "${ALGO}" \
     --page-size "${BLOCK_SIZE}" \
     --output-dir "${CALIBRATION_DIR}" \

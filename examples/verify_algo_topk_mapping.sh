@@ -26,6 +26,7 @@ BLOCK_SIZE=16
 BATCH_SIZE=4
 NUM_KV_HEADS=2
 SEQ_LEN=32768
+MAX_TOTAL_TOKENS=1048576
 REAL_HISTOGRAMS=""
 SKIP_AUTOTUNE=0
 
@@ -40,6 +41,7 @@ while [[ $# -gt 0 ]]; do
     --num-kv-heads)    NUM_KV_HEADS="$2"; shift 2 ;;
     --seq-len)         SEQ_LEN="$2"; shift 2 ;;
     --real-histograms) REAL_HISTOGRAMS="$2"; shift 2 ;;
+    --max-total-tokens) MAX_TOTAL_TOKENS="$2"; shift 2 ;;
     --skip-autotune)   SKIP_AUTOTUNE=1; shift 1 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
@@ -80,12 +82,14 @@ done
 # ============================================================
 if [ -z "${REAL_HISTOGRAMS}" ]; then
   CALIBRATION_DIR="${RESULTS_DIR}/calibration_${TIMESTAMP}"
+  echo ">>> Max total tokens (KV / VTX cap): ${MAX_TOTAL_TOKENS}"
   for algo in "${sparse_algos[@]}"; do
     echo ">>> Calibrating ${MODEL_NAME} for ${algo}..."
     python "${BENCH_DIR}/calibrate_topk.py" \
       --model-name "${MODEL_NAME}" \
       --topk-val "${TOPK_VAL}" \
       --mem 0.7 \
+      --max-total-tokens "${MAX_TOTAL_TOKENS}" \
       --vortex-module-name "${algo}" \
       --page-size "${BLOCK_SIZE}" \
       --output-dir "${CALIBRATION_DIR}" \
