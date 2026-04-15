@@ -82,16 +82,20 @@ const int   page_reserved_eos
     #pragma unroll
     for (int i = 0; i < ITEM_PER_THREAD; ++i){
 
-        int16_t w = ((tx_offset + i) < eff_batch_size) ? 
-            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i] 
+        int16_t w = ((tx_offset + i) < eff_batch_size) ?
+            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i]
             - page_reserved_bos - page_reserved_eos): 0;
-    
-        page_count[i] = (w > topk_val) ? w : 0;
+
+        // See note in Sgl_Decode_Plan_Workload_Kernel: we used to skip slots
+        // where w ≤ topk_val, but downstream (GeMV / topK / histogram) has no
+        // matching skip, so it read uninitialised scores and silently
+        // produced all-zero results. Emit workloads for every slot with w > 0.
+        page_count[i] = (w > 0) ? w : 0;
         chunked_page_count_prefix_sum[i + 1] =  int((page_count[i] + max_chunk_size - 1) / max_chunk_size);
     }
 
     BlockScanInt(temp.scan_int).InclusiveSum(chunked_page_count_prefix_sum, chunked_page_count_prefix_sum);
-    
+
     if (tx == 1023){
         *winfo_num_workload = chunked_page_count_prefix_sum[ITEM_PER_THREAD];
         *winfo_chunk_size = max_chunk_size;
@@ -218,16 +222,22 @@ const int page_reserved_eos
     #pragma unroll
     for (int i = 0; i < ITEM_PER_THREAD; ++i){
 
-        int16_t w = ((tx_offset + i) < eff_batch_size) ? 
-            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i] 
+        int16_t w = ((tx_offset + i) < eff_batch_size) ?
+            (dense_kv_indptr[tx_offset+i+1] - dense_kv_indptr[tx_offset+i]
             - page_reserved_bos - page_reserved_eos): 0;
-    
-        page_count[i] = (w > topk_val) ? w : 0;
+
+        // Previously: (w > topk_val) ? w : 0, which skipped scoring on slots
+        // where the dense page count is already ≤ topk_val. Downstream (GeMV,
+        // topK, histogram profiling) does NOT have a matching skip, so it
+        // would read uninitialised scores and silently return garbage (all
+        // zero). Emit workloads for every slot with w > 0 so scoring always
+        // runs; when w ≤ topk_val the topK degenerates to "select all w".
+        page_count[i] = (w > 0) ? w : 0;
         chunked_page_count_prefix_sum[i + 1] =  int((page_count[i] + max_chunk_size - 1) / max_chunk_size);
     }
 
     BlockScanInt(temp.scan_int).InclusiveSum(chunked_page_count_prefix_sum, chunked_page_count_prefix_sum);
-    
+
     if (tx == 1023){
         *winfo_num_workloads = chunked_page_count_prefix_sum[ITEM_PER_THREAD];
         *winfo_chunk_size = max_chunk_size;

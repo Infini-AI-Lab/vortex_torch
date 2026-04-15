@@ -17,6 +17,7 @@ Usage:
 import argparse
 import json
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -46,8 +47,16 @@ def main():
         "Block-sparse profiling uses a small bytes/token estimate, so the auto "
         "budget can be huge on large GPUs; VTXGraphAttnBackend then allocates "
         "dense bf16 sparse_prefill K/V buffers proportional to this cap (~4 KiB per "
-        "token per buffer). For offline calibration, a few hundred K1M tokens "
+        "token per buffer). For offline calibration, a few hundred K to 1M tokens "
         "is usually enough.",
+    )
+    parser.add_argument(
+        "--min-free-disk-gb",
+        type=float,
+        default=20.0,
+        help="Abort if the filesystem for --output-dir (and HF cache, typically the same) "
+        "has less than this many GiB free. First-time model downloads need many GiB. "
+        "Set to 0 to disable.",
     )
     parser.add_argument("--kv-cache-dtype", type=str, default="auto")
     parser.add_argument("--topk-type", type=str, default="sglang")
@@ -64,6 +73,30 @@ def main():
         "Default: engine default (300). Use 0 to disable when using this repo's SGLang fork.",
     )
     args = parser.parse_args()
+
+    # Classic HTTP downloads avoid XET chunk reconstruction ("Background writer channel
+    # closed") that often surfaces when the disk is full or nearly full.
+    if "HF_HUB_DISABLE_XET" not in os.environ:
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
+
+    if args.min_free_disk_gb > 0:
+        check_path = os.path.abspath(args.output_dir)
+        while check_path and not os.path.isdir(check_path):
+            parent = os.path.dirname(check_path)
+            if parent == check_path:
+                check_path = os.getcwd()
+                break
+            check_path = parent
+        usage = shutil.disk_usage(check_path)
+        free_gb = usage.free / (1024.0**3)
+        if free_gb < args.min_free_disk_gb:
+            raise SystemExit(
+                f"[calibrate] ERROR: Only {free_gb:.1f} GiB free on filesystem containing "
+                f"{args.output_dir!r} (checked from {check_path!r}). "
+                f"Need at least ~{args.min_free_disk_gb} GiB for Hugging Face weights, hub cache, "
+                f"and logs. Free disk space or point HF_HOME at a larger disk. "
+                f"To skip this check: --min-free-disk-gb 0"
+            )
 
     # Lazy imports to avoid slow startup when just checking --help
     import sglang as sgl
@@ -134,6 +167,28 @@ def main():
     # Stack all histograms: each is [eff_bs, 256], concatenate along batch dim
     all_hists = torch.cat(histograms, dim=0).numpy()  # [total_samples, 256]
     print(f"[calibrate] Total histogram samples: {all_hists.shape[0]}")
+
+    # Regression guard: refuse to save a collapsed histogram. A healthy
+    # calibration touches tens to hundreds of bins; if almost everything lands
+    # in a single bin, the scoring pipeline silently produced zero scores
+    # (see the Sgl_Decode_Plan_Workload_Kernel `w > topk_val` bug fixed in
+    # csrc/utils_sglang.cu). Saving 20+ GB of all-zeros wastes disk and poisons
+    # downstream benches, so fail loudly here.
+    _pooled = all_hists.sum(axis=0).astype(np.float64)
+    _total = float(_pooled.sum())
+    if _total > 0:
+        _top_frac = float(_pooled.max()) / _total
+        _nz_bins = int((_pooled > 0).sum())
+        if _top_frac > 0.95 or _nz_bins < 5:
+            llm.shutdown()
+            raise SystemExit(
+                f"[calibrate] ERROR: degenerate histogram — top bin holds "
+                f"{_top_frac:.2%} of mass, only {_nz_bins}/256 bins nonzero. "
+                f"The scoring pipeline is likely not running (check "
+                f"winfo_num_workloads in plan_decode, or `w > topk_val` in "
+                f"Sgl_Decode_Plan_Workload_Kernel). Refusing to save to avoid "
+                f"writing a useless multi-GB file."
+            )
 
     # --- Generate LUT (mode 1) ---
     # Aggregate histogram across all samples

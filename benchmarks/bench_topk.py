@@ -397,8 +397,15 @@ def _resolve_hparam(args, mode: int) -> float:
 
 
 def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
-                            distribution, modes: List[int]) -> dict:
-    """Time baseline, fused, and split-phase for each mode at one config."""
+                            distribution, modes: List[int],
+                            head_label: str = "all") -> dict:
+    """Time baseline, fused, and split-phase for each mode at one config.
+
+    `head_label` is metadata: ``"all"`` for the aggregated table (default),
+    or a stringified head index ``"0".."N-1"`` for per-head benches. The
+    caller is responsible for setting ``args._real_histogram`` to the
+    head-sliced sub-histogram before invoking this function in per-head mode.
+    """
     real_hist = getattr(args, "_real_histogram", None) if distribution == "real" else None
     inputs = make_topk_inputs(
         batch_size=batch_size,
@@ -489,6 +496,7 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         "topk_val": topk_val,
         "distribution": distribution,
         "pages_per_seg": pages_per_seg,
+        "head": head_label,
         "baseline_ms": baseline["mean_ms"],
         "naive_ms": naive_ms,
         "sglang_ori_ms": sglang_ori_ms,
@@ -644,17 +652,27 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
     return config
 
 
+# Stage-2 working-set cap, matches SMEM_INPUT_SIZE in fast_topk_clean_fused
+# (32 KB dynamic smem / 2 ping-pong buffers / 4 bytes per int = 4096).
+_STAGE2_SMEM_CAP = 4096
+
+
 def _print_remap_table(results: List[dict]) -> None:
+    # The printed table only carries metrics that participate in the
+    # fused-kernel cost model. All purely-informational columns
+    # (thr_bin / sel_thr / abv_bins / pg/bin) were dropped — they're
+    # still in the JSON for downstream tools, just not in the table.
     header = (
         f"{'mode':<14s}  {'remap_ms':>9s}  {'topk_ms':>9s}  {'split_ms':>9s}  "
-        f"{'fused_ms':>9s}  {'base_ms':>9s}  {'thr_bin':>7s}  {'thr_size':>8s}  "
-        f"{'sel_thr':>7s}  {'abv_bins':>8s}  {'pg/bin':>7s}"
+        f"{'fused_ms':>9s}  {'base_ms':>9s}  "
+        f"{'s1p2_load':>9s}  {'eff_thr':>7s}  {'rounds':>6s}  {'s2_work':>8s}"
     )
     for cfg in results:
         banner = (
             f"\n[batch={cfg['batch_size']} heads={cfg['num_kv_heads']} "
             f"seq_len={cfg['seq_len']} topk={cfg['topk_val']} "
-            f"dist={cfg['distribution']} pages_per_seg={cfg['pages_per_seg']}]"
+            f"dist={cfg['distribution']} pages_per_seg={cfg['pages_per_seg']} "
+            f"head={cfg.get('head', 'all')}]"
         )
         print(banner)
         extra_notes = []
@@ -666,6 +684,12 @@ def _print_remap_table(results: List[dict]) -> None:
         if extra_notes:
             notes_str = "  |  " + "  |  ".join(extra_notes)
         print(f"  Baseline: topk_sglang.cu (CUB two-stage){notes_str}")
+        print(
+            f"  s1p2_load = thr_size (uncapped global re-reads in Stage-1 pass 2)   "
+            f"eff_thr = min(thr_size, {_STAGE2_SMEM_CAP})   "
+            f"rounds = stage-2 passes (1..4)   "
+            f"s2_work = rounds * eff_thr"
+        )
         print(header)
         print("-" * len(header))
         base_ms = cfg["baseline_ms"]
@@ -681,6 +705,11 @@ def _print_remap_table(results: List[dict]) -> None:
             def _fmt(v):
                 return f"{v:9.4f}" if v is not None else f"{'N/A':>9s}"
             fused_str = _fmt(row.get("fused_ms"))
+            thr_size  = row.get("threshold_bin_size_mean", 0.0)
+            rounds    = row.get("refine_rounds_mean", 0.0)
+            eff_thr   = min(thr_size, float(_STAGE2_SMEM_CAP))
+            s2_work   = rounds * eff_thr
+            s1p2_load = thr_size  # alias: same number, named for the cost-model role
             print(
                 f"{label:<14s}  "
                 f"{_fmt(row['remap_ms'])}  "
@@ -688,12 +717,75 @@ def _print_remap_table(results: List[dict]) -> None:
                 f"{_fmt(row['split_total_ms'])}  "
                 f"{fused_str}  "
                 f"{base_ms:9.4f}  "
-                f"{row['threshold_bin_mean']:7.1f}  "
-                f"{row['threshold_bin_size_mean']:8.1f}  "
-                f"{row['selected_from_thr_mean']:7.1f}  "
-                f"{row.get('above_bins_mean', 0.0):8.1f}  "
-                f"{row.get('pages_per_above_bin_mean', 0.0):7.1f}"
+                f"{s1p2_load:9.0f}  "
+                f"{eff_thr:7.0f}  "
+                f"{rounds:6.2f}  "
+                f"{s2_work:8.0f}"
             )
+
+
+def _combine_per_head_cfgs(per_head_cfgs: List[dict]) -> dict:
+    """Combine a list of per-head cfg dicts (same shape, head='0','1',...)
+    into a single aggregated cfg tagged head='all', by averaging every
+    numeric field. This is used when --per-head-bench is on so the
+    aggregated row reflects the realistic per-head behaviour rather than
+    a separate kernel launch on an averaged histogram.
+
+    Assumes every cfg has the same `modes` list in the same order — which
+    holds because all per-head sub-runs use identical (batch, heads, seq,
+    topk, page_size, reserved, mapping_modes) parameters and therefore
+    take the same code paths through `_remap_bench_one_config`.
+    """
+    assert per_head_cfgs, "_combine_per_head_cfgs called with empty list"
+    base = per_head_cfgs[0]
+    n_modes = len(base["modes"])
+    # Sanity: same shape.
+    for c in per_head_cfgs[1:]:
+        assert len(c["modes"]) == n_modes, (
+            f"per-head cfgs disagree on mode count: {n_modes} vs {len(c['modes'])}"
+        )
+
+    def _mean_or_none(vals):
+        vs = [v for v in vals if v is not None]
+        return (sum(vs) / len(vs)) if vs else None
+
+    combined: Dict = {
+        "batch_size":   base["batch_size"],
+        "num_kv_heads": base["num_kv_heads"],
+        "seq_len":      base["seq_len"],
+        "topk_val":     base["topk_val"],
+        "distribution": base["distribution"],
+        "pages_per_seg": base["pages_per_seg"],
+        "head":         "all",
+        "baseline_ms":  _mean_or_none([c.get("baseline_ms")  for c in per_head_cfgs]),
+        "naive_ms":     _mean_or_none([c.get("naive_ms")     for c in per_head_cfgs]),
+        "sglang_ori_ms": _mean_or_none([c.get("sglang_ori_ms") for c in per_head_cfgs]),
+        "modes": [],
+    }
+
+    # Numeric fields per mode row that we average; non-numeric fields (mode,
+    # mode_name, power) are copied from the first cfg since they're identical
+    # across heads by construction.
+    NUMERIC_KEYS = (
+        "remap_ms", "topk_after_remap_ms", "split_total_ms", "fused_ms",
+        "threshold_bin_mean", "threshold_bin_max",
+        "num_above_mean",
+        "threshold_bin_size_mean", "threshold_bin_size_max",
+        "selected_from_thr_mean", "selected_from_thr_max",
+        "refine_rounds_mean",
+        "above_bins_mean", "pages_per_above_bin_mean",
+    )
+    for mi in range(n_modes):
+        sample = base["modes"][mi]
+        merged = {
+            "mode":      sample["mode"],
+            "mode_name": sample["mode_name"],
+            "power":     sample["power"],
+        }
+        for key in NUMERIC_KEYS:
+            merged[key] = _mean_or_none([c["modes"][mi].get(key) for c in per_head_cfgs])
+        combined["modes"].append(merged)
+    return combined
 
 
 def _run_remap_bench(args) -> None:
@@ -710,14 +802,68 @@ def _run_remap_bench(args) -> None:
         print(f"[remap-bench] 'real' distribution enabled "
               f"(histogram total count = {int(args._real_histogram.sum())})")
 
+    if getattr(args, "per_head_bench", False):
+        if getattr(args, "_real_histograms_raw", None) is None:
+            raise SystemExit(
+                "[bench-remap] --per-head-bench requires --real-histograms with a 2D raw file."
+            )
+        if not args.num_kv_heads or any(h <= 0 for h in args.num_kv_heads):
+            raise SystemExit("[bench-remap] --per-head-bench requires --num-kv-heads > 0.")
+        # When the user passes multiple --num-kv-heads values we slice by the
+        # first one (the others are degenerate for per-head reporting since
+        # the histogram file has a fixed head count).
+        per_head_count = int(args.num_kv_heads[0])
+
     results = []
+    # When --per-head-bench is on, each "real"-distribution aggregate is
+    # built by averaging the 8 per-head measurements (NOT by running an
+    # extra kernel on an averaged histogram). This grouping keeps the
+    # per-head cfgs that should fold into each (bs, heads, seq, topk)
+    # aggregate point.
+    per_head_groups: dict = {}
+
+    # ---- Per-head tables (printed first) ----
+    if getattr(args, "per_head_bench", False):
+        raw = args._real_histograms_raw
+        saved_agg = args._real_histogram
+        try:
+            for h in range(per_head_count):
+                # Slice rows belonging to head `h`. Rows are interleaved as
+                # row_idx % num_kv_heads = head_idx, so this strided slice
+                # collects all (call, batch, h) triples across the file.
+                args._real_histogram = raw[h::per_head_count].sum(axis=0)
+                for bs in args.batch_sizes:
+                    for heads in args.num_kv_heads:
+                        for seq_len in args.seq_lens:
+                            for topk_val in args.topk_vals:
+                                cfg = _remap_bench_one_config(
+                                    args, bs, heads, seq_len, topk_val, "real", modes,
+                                    head_label=str(h),
+                                )
+                                results.append(cfg)
+                                per_head_groups.setdefault(
+                                    (bs, heads, seq_len, topk_val), []
+                                ).append(cfg)
+        finally:
+            args._real_histogram = saved_agg
+
+    # ---- Aggregated tables (printed last) ----
     for bs in args.batch_sizes:
         for heads in args.num_kv_heads:
             for seq_len in args.seq_lens:
                 for topk_val in args.topk_vals:
                     for dist in distributions:
+                        if dist == "real" and getattr(args, "per_head_bench", False):
+                            cfgs = per_head_groups.get((bs, heads, seq_len, topk_val), [])
+                            if cfgs:
+                                # Combine the per-head cfgs into a single
+                                # aggregated row — no extra kernel launch.
+                                cfg = _combine_per_head_cfgs(cfgs)
+                                results.append(cfg)
+                                continue
                         cfg = _remap_bench_one_config(
                             args, bs, heads, seq_len, topk_val, dist, modes,
+                            head_label="all",
                         )
                         results.append(cfg)
 
@@ -838,6 +984,13 @@ def main():
     p.add_argument("--output-json", type=str, default=None)
     p.add_argument("--remap-bench", action="store_true",
                    help="Run the split-phase remap/topk/fused/baseline benchmark.")
+    p.add_argument("--per-head-bench", action="store_true",
+                   help="In addition to the aggregated 'real'-distribution table, also "
+                        "run the remap-bench once per KV head: slice the calibrated "
+                        "histogram into one sub-histogram per head (using "
+                        "row_idx %% num_kv_heads = head_idx), bench each, and print one "
+                        "table per head followed by the aggregated table. Requires "
+                        "--real-histograms (with a 2D raw file) and --num-kv-heads.")
     args = p.parse_args()
 
     args._autotune_hparams = {}
@@ -848,9 +1001,14 @@ def main():
             print(f"  mode {m:>2d} -> {v}")
 
     args._real_histogram = None
+    args._real_histograms_raw = None
     if args.real_histograms:
-        raw = np.load(args.real_histograms)
+        # mmap_mode='r' keeps the (potentially 20+ GB) raw file off-heap; we
+        # only materialise per-head sums when --per-head-bench is set.
+        raw = np.load(args.real_histograms, mmap_mode='r')
         args._real_histogram = raw.sum(axis=0) if raw.ndim > 1 else raw
+        if raw.ndim > 1:
+            args._real_histograms_raw = raw
         print(f"[real] loaded calibrated histogram from {args.real_histograms} "
               f"(shape={raw.shape} → [256] aggregate)")
 

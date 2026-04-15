@@ -52,7 +52,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
 
 # ── Defaults ──────────────────────────────────────────────────
-GPU_ID=5
+GPU_ID=1
 MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=30
 MEM=0.7
@@ -61,20 +61,20 @@ ALGO="block_sparse_attention"
 SAMPLE_STRIDE=1
 SEQ_LEN=32768
 BLOCK_SIZE=16
-BATCH_SIZE=1
+BATCH_SIZE=4
 NUM_KV_HEADS=8
 DISTRIBUTIONS="normal bucket_uniform"
 # Modes 1 (LUT_CDF) and 2 (Quantile) are no longer benchmarked — their
 # mapping happens inside compute_stage1_bin, not apply_transform, so
 # split-phase timing isn't meaningful for them.
-MAPPING_MODES="0 3 6 7 8 9 10 11 13 15 16 17 18 19 20"
+MAPPING_MODES="0 3 6 7 9 10 11 13 15 16 17 18 19 20"
 # Fallback hparam used only if autotune is explicitly skipped.
 MAPPING_HPARAM=0.5
 REPEAT=100
 WARMUP=20
 # Empty by default — Step 1 will calibrate on the selected model.
 # Pass --real-histograms /path/to/raw_histograms.npy to skip calibration.
-REAL_HISTOGRAMS="/home/zhuominc/xinrui_projects/vortex_torch/examples/calibration/raw_histograms.npy"
+REAL_HISTOGRAMS="/var/tmp/zhuominc/vortex_torch/calibration/raw_histograms_qwen3-4B.npy"
 SKIP_AUTOTUNE=0
 
 # ── Parse arguments ───────────────────────────────────────────
@@ -135,6 +135,18 @@ MODEL_SLUG="$(echo "${MODEL_NAME}" | tr '/' '_')"
 RUN_DIR="${RESULTS_DIR}/remap_bench_${MODEL_SLUG}_topk${TOPK_VAL}_bs${BLOCK_SIZE}_${TIMESTAMP}"
 mkdir -p "${RUN_DIR}"
 
+# Calibration artifacts live on /var/tmp (large disk), keyed by model.
+# Example: /var/tmp/zhuominc/vortex_torch/calibration/raw_histograms_qwen3-1.7B.npy
+CALIBRATION_BASE="/var/tmp/zhuominc/vortex_torch/calibration"
+MODEL_TAG="$(echo "${MODEL_NAME##*/}" | sed 's/^Q/q/')"
+DEFAULT_REAL_HIST="${CALIBRATION_BASE}/raw_histograms_${MODEL_TAG}.npy"
+mkdir -p "${CALIBRATION_BASE}"
+
+# If no explicit --real-histograms and a cached file exists, reuse it.
+if [ -z "${REAL_HISTOGRAMS}" ] && [ -f "${DEFAULT_REAL_HIST}" ]; then
+  REAL_HISTOGRAMS="${DEFAULT_REAL_HIST}"
+fi
+
 echo "============================================================"
 echo "Remap Function Benchmark"
 echo "  Model:           ${MODEL_NAME}"
@@ -166,7 +178,7 @@ if [ -n "${REAL_HISTOGRAMS}" ]; then
 else
   echo ""
   echo ">>> Step 1: Calibrating ${MODEL_NAME} — collecting real topk histograms"
-  CALIBRATION_DIR="${RUN_DIR}/calibration"
+  CALIBRATION_DIR="${CALIBRATION_BASE}/staging_${MODEL_TAG}_topk${TOPK_VAL}_bs${BLOCK_SIZE}_${TIMESTAMP}"
   mkdir -p "${CALIBRATION_DIR}"
   python "${BENCH_DIR}/calibrate_topk.py" \
     --model-name "${MODEL_NAME}" \
@@ -177,8 +189,11 @@ else
     --vortex-module-name "${ALGO}" \
     --output-dir "${CALIBRATION_DIR}" \
     2>&1 | tee "${RUN_DIR}/step1_calibrate.log"
-  REAL_HIST_PATH="${CALIBRATION_DIR}/raw_histograms.npy"
-  echo ">>> Step 1: Done. Calibration saved to ${CALIBRATION_DIR}"
+  # Promote raw_histograms.npy to the shared per-model cache path.
+  mv -f "${CALIBRATION_DIR}/raw_histograms.npy" "${DEFAULT_REAL_HIST}"
+  REAL_HIST_PATH="${DEFAULT_REAL_HIST}"
+  echo ">>> Step 1: Done. raw_histograms -> ${REAL_HIST_PATH}"
+  echo ">>> Step 1: Staging dir (lut/quantiles/logs): ${CALIBRATION_DIR}"
 fi
 
 # Modes 1 (LUT_CDF) and 2 (Quantile) are dropped from the comparison, so
@@ -221,6 +236,7 @@ BENCH_EXTRA=()
 [ -n "${REAL_HIST_PATH}" ] && BENCH_EXTRA+=(--real-histograms "${REAL_HIST_PATH}")
 PYTHONPATH="${SCRIPT_DIR}/.." python "${BENCH_DIR}/bench_topk.py" \
   --remap-bench \
+  --per-head-bench \
   --batch-sizes "${BATCH_SIZE}" \
   --num-kv-heads "${NUM_KV_HEADS}" \
   --seq-lens "${SEQ_LEN}" \

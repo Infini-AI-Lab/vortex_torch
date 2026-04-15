@@ -50,6 +50,15 @@ constexpr size_t kSmem = 48 * 1024;  // bytes
 constexpr size_t kSmem = 8 * 1024 * sizeof(uint32_t);  // 32KB (bytes)
 #endif
 
+// Fused-kernel dynamic smem ceiling. The fused kernel uses `kSmem` bytes for
+// f_input_idx (2 × SMEM_INPUT_SIZE ints) AND an extra `max_num_pages` bytes
+// for s_bins (one uint8_t per page). Ceiling of 96 KB covers max_num_pages up
+// to 65536 and fits the opt-in dynamic-smem limits on every target in
+// setup.py (sm_86 ≥99KB, sm_89 100KB, sm_90 228KB, sm_100a/120 ≥100KB).
+// Only `topk_output_sglang_fused` uses this ceiling; the other kernels keep
+// kSmem as their dynamic-smem budget.
+constexpr size_t kFusedSmemMax = 96 * 1024;
+
 struct FastTopKParams {
   const float* __restrict__ input;         // [B, input_stride]
   const int32_t* __restrict__ row_starts;  // [B]
@@ -670,16 +679,23 @@ __device__ void fast_topk_clean_fused(
 
   // Per-element Stage-1 bin cache. Pass 1 of Stage 1 writes one byte per
   // element; pass 2 reads it back so each element only pays a single
-  // apply_transform + global score read instead of two. Sized to the
-  // maximum `pages_per_seg` the bench drivers use (topk=2048 config has
-  // seq_len=32768 / page_size=8 = 4096 pages per segment; topk=30 has
-  // 2048). Shrinking from 8192 to 4096 freed 4 KB of static SMEM per
-  // block, which lifts occupancy from 5 → 6 blocks/SM on B200.
-  constexpr int kFusedMaxLen = 4096;
-  __shared__ uint8_t s_bins[kFusedMaxLen];
+  // apply_transform + global score read instead of two.
+  //
+  // s_bins lives in DYNAMIC shared memory, placed immediately after the
+  // f_input_idx[2][SMEM_INPUT_SIZE] 2D array in the same extern __shared__
+  // region. The host launch reserves `kSmem + max_num_pages` dynamic bytes
+  // (see `topk_output_sglang_fused`) so every block has `max_num_pages`
+  // bytes available past f_input_idx's 32 KB span. Per-block `length`
+  // (from dense_kv_indptr) is ≤ max_num_pages, so indexing stays in bounds.
+  //
+  // This layout keeps smem usage at kSmem + 4 KB for the existing
+  // pages_per_seg ≤ 4096 regimes (identical to the old 32 KB dynamic +
+  // 4 KB static) and only grows when the caller asks for a larger
+  // pages_per_seg — no occupancy regression on small configs.
 
   auto& f_histogram = f_histogram_buf[0];
   extern __shared__ int f_input_idx[][SMEM_INPUT_SIZE];
+  uint8_t* const s_bins = reinterpret_cast<uint8_t*>(&f_input_idx[2][0]);
 
   const int tx = threadIdx.x;
 
@@ -1192,10 +1208,20 @@ void topk_output_sglang_fused(
                 "topk_output_sglang_fused: topk_val (", topk_val,
                 ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
 
-    // Caller contract: max_num_pages must be <= 4096, the static SMEM
-    // `s_bins` cache size inside the templated fused kernel. The bench
-    // drivers stay within this bound; no runtime check is emitted in
-    // the hot path.
+    // Dynamic-smem layout for the fused kernel:
+    //   [ f_input_idx (2 × SMEM_INPUT_SIZE × sizeof(int) = kSmem bytes)
+    //     s_bins      (bins_bytes = align_up(max_num_pages, 16)) ]
+    // The per-launch smem request equals the total of both. It must fit
+    // under kFusedSmemMax, which setup_kernel_smem_once opted this kernel
+    // into via cudaFuncSetAttribute(MaxDynamicSharedMemorySize, ...).
+    const size_t bins_bytes = (static_cast<size_t>(max_num_pages) + size_t(15)) & ~size_t(15);
+    const size_t smem_bytes = kSmem + bins_bytes;
+    TORCH_CHECK(smem_bytes <= kFusedSmemMax,
+                "topk_output_sglang_fused: max_num_pages (", max_num_pages,
+                ") exceeds the fused kernel's dynamic smem ceiling. "
+                "Requested smem=", smem_bytes, " bytes, ceiling=", kFusedSmemMax,
+                " bytes. Raise kFusedSmemMax (and verify GPU opt-in limits) or "
+                "reduce pages_per_seg.");
 
     // The `mapping_lut` / `mapping_quantiles` optional tensors are
     // retained in the pybind signature for API backward compatibility
@@ -1226,8 +1252,8 @@ void topk_output_sglang_fused(
     // time per-call cost, negligible relative to the kernel runtime.
     #define VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MODE_VAL)                       \
         do {                                                                        \
-            setup_kernel_smem_once<TopKOutput_Fused_Kernel<DTYPE, MODE_VAL>, kSmem>(); \
-            TopKOutput_Fused_Kernel<DTYPE, MODE_VAL><<<nblks, nthreads, kSmem, stream>>>( \
+            setup_kernel_smem_once<TopKOutput_Fused_Kernel<DTYPE, MODE_VAL>, kFusedSmemMax>(); \
+            TopKOutput_Fused_Kernel<DTYPE, MODE_VAL><<<nblks, nthreads, smem_bytes, stream>>>( \
                 PTR_EXPR,                                                           \
                 dense_kv_indptr.data_ptr<int>(),                                    \
                 sparse_kv_indptr.data_ptr<int>(),                                   \
