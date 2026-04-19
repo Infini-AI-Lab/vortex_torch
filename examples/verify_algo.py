@@ -303,10 +303,12 @@ def parse_args():
         "--topk-mapping-mode",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13],
+        choices=[0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20],
         help='TopK mapping mode for sglang_fused: 0=none, 1=lut_cdf (calibrated), '
              '2=quantile (calibrated), 3=power, 4=log, 6=asinh, 7=log1p, 8=trunc8, '
-             '9=erf, 10=tanh, 11=subtract, 13=exp_stretch (default: 0).',
+             '9=erf, 10=tanh, 11=subtract, 13=exp_stretch, 15=shift_pow2, '
+             '16=shift_pow3, 17=linear_steep, 18=half_square, 19=half_cube, '
+             '20=dense_mant (default: 0).',
     )
 
     parser.add_argument(
@@ -326,11 +328,20 @@ def parse_args():
              "Use multiple values to run several benchmarks sequentially (default: amc23).",
     )
 
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        default=None,
+        help="Optional path. When set, a JSON list of per-benchmark summary dicts is "
+             "dumped here after all benchmarks finish. Used by the ablation wrappers.",
+    )
+
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
 
+    all_summaries = []
     for bench_name in args.benchmark:
         if bench_name not in BENCHMARK_REGISTRY:
             print(f"WARNING: Unknown benchmark '{bench_name}', skipping. Available: {list(BENCHMARK_REGISTRY.keys())}")
@@ -353,6 +364,20 @@ if __name__ == "__main__":
             benchmark=bench_name,
         )
         summary["benchmark"] = bench_name
+        summary["model_name"] = args.model_name
+        summary["topk_val"] = args.topk_val
+        summary["page_size"] = args.page_size
+        summary["topk_type"] = args.topk_type
+        summary["topk_mapping_mode"] = args.topk_mapping_mode
+        summary["topk_mapping_hparam"] = args.topk_mapping_hparam
+        summary["full_attention"] = bool(args.full_attention)
         print(summary)
+        all_summaries.append(summary)
+
+    if args.output_json:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output_json)) or ".", exist_ok=True)
+        with open(args.output_json, "w") as f:
+            json.dump(all_summaries, f, indent=2)
+        print(f"\n[verify_algo] summary JSON written to {args.output_json}")
 
     exit(0)
