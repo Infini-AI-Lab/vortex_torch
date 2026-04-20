@@ -30,17 +30,16 @@ PYBIND11_MODULE(vortex_torch_C, m){
               py::arg("mapping_power"),
               py::arg("mapping_lut") = py::none(),
               py::arg("mapping_quantiles") = py::none());
-        m.def("topk_output_sglang_parallel",    &topk_output_sglang_parallel,
-              py::arg("x"), py::arg("dense_kv_indptr"), py::arg("sparse_kv_indptr"),
-              py::arg("dense_kv_indices"), py::arg("sparse_kv_indices"),
-              py::arg("eff_batch_size"), py::arg("topk_val"),
-              py::arg("reserved_bos"), py::arg("reserved_eos"),
-              py::arg("max_num_pages"),
-              py::arg("num_splits"),
-              py::arg("mapping_mode"),
-              py::arg("mapping_power"),
-              py::arg("mapping_lut") = py::none(),
-              py::arg("mapping_quantiles") = py::none());
+        m.def("fast_fused_topk_merge",          &fast_fused_topk_merge,
+              py::arg("score"), py::arg("global_topk_indices"),
+              py::arg("batch_size"), py::arg("num_chunks"),
+              py::arg("chunk_size"), py::arg("topk_val"),
+              py::arg("mapping_mode"), py::arg("mapping_power"));
+        m.def("fast_cluster_topk_merge",        &fast_cluster_topk_merge,
+              py::arg("score"), py::arg("global_topk_indices"),
+              py::arg("batch_size"), py::arg("num_chunks"),
+              py::arg("chunk_size"), py::arg("topk_val"),
+              py::arg("mapping_mode"), py::arg("mapping_power"));
         m.def("topk_remap_only",                &topk_remap_only,
               py::arg("x"), py::arg("dense_kv_indptr"),
               py::arg("remapped"),

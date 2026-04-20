@@ -706,7 +706,8 @@ __device__ void fast_topk_clean_fused(
   // path stays in place for standard modes. LUT_CDF / QUANTILE are not
   // supported by this templated kernel (they were dropped from the bench
   // comparison earlier).
-  constexpr bool use_dense_bucket = (MODE == MAPPING_DENSE_MANT);
+  // MAPPING_DENSE_MANT has been retired; always use the fp16 bucket.
+  constexpr bool use_dense_bucket = false;
 
   if (tx < RADIX + 1) f_histogram[tx] = 0;
   __syncthreads();
@@ -1280,7 +1281,6 @@ void topk_output_sglang_fused(
                 case MAPPING_LINEAR_STEEP:VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_LINEAR_STEEP); break; \
                 case MAPPING_HALF_SQUARE: VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_HALF_SQUARE); break; \
                 case MAPPING_HALF_CUBE:   VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_HALF_CUBE); break; \
-                case MAPPING_DENSE_MANT:  VORTEX_DISPATCH_FUSED(DTYPE, PTR_EXPR, MAPPING_DENSE_MANT); break; \
                 default:                                                            \
                     TORCH_CHECK(false, "topk_output_sglang_fused: unsupported mapping_mode ", mapping.mode); \
             }                                                                       \

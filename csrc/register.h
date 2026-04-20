@@ -126,22 +126,33 @@ std::optional<at::Tensor> mapping_lut = std::nullopt,
 std::optional<at::Tensor> mapping_quantiles = std::nullopt
 );
 
-void topk_output_sglang_parallel(
-const at::Tensor&   x,
-const at::Tensor&   dense_kv_indptr,
-const at::Tensor&   sparse_kv_indptr,
-const at::Tensor&   dense_kv_indices,
-at::Tensor&         sparse_kv_indices,
-const int64_t       eff_batch_size,
+// Two-stage parallel TopK. See csrc/topk_sglang_parallel.cu.
+//   score:               [batch_size, num_chunks, chunk_size]  bfloat16 or float32
+//   global_topk_indices: [batch_size, topk_val]                int32  (output)
+// Caller must ensure num_chunks * topk_val <= 8192 (merge smem cap).
+void fast_fused_topk_merge(
+const at::Tensor&   score,
+at::Tensor&         global_topk_indices,
+const int64_t       batch_size,
+const int64_t       num_chunks,
+const int64_t       chunk_size,
 const int64_t       topk_val,
-const int64_t       reserved_bos,
-const int64_t       reserved_eos,
-const int64_t       max_num_pages,
-const int64_t       num_splits,
 const int64_t       mapping_mode,
-const double        mapping_power,
-std::optional<at::Tensor> mapping_lut = std::nullopt,
-std::optional<at::Tensor> mapping_quantiles = std::nullopt
+const double        mapping_power
+);
+
+// Hopper TBC+DSMEM fused TopK merge. See csrc/topk_sglang_cluster.cu.
+// Same signature as fast_fused_topk_merge; num_chunks is the cluster
+// size and is capped at 8 (portable TBC). Requires sm_90+.
+void fast_cluster_topk_merge(
+const at::Tensor&   score,
+at::Tensor&         global_topk_indices,
+const int64_t       batch_size,
+const int64_t       num_chunks,
+const int64_t       chunk_size,
+const int64_t       topk_val,
+const int64_t       mapping_mode,
+const double        mapping_power
 );
 
 void topk_remap_only(

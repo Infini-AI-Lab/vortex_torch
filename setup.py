@@ -21,6 +21,7 @@ setup(
                 'csrc/topk_sglang_profile.cu',
                 'csrc/topk_sglang_ori.cu',
                 'csrc/topk_sglang_parallel.cu',
+                'csrc/topk_sglang_cluster.cu',
             ],
             include_dirs=['csrc'],
             extra_compile_args={

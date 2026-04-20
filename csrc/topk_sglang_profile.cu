@@ -177,16 +177,9 @@ __device__ void fast_topk_profile(
   // Mirror of the production kernel: MAPPING_DENSE_MANT bypasses
   // apply_transform and uses a mantissa-heavy fp32 bit slice for the
   // Stage-1 bucket.
-  const bool use_dense_bucket = (mapping.mode == MAPPING_DENSE_MANT);
-
-  if (mapping.mode == MAPPING_LUT_CDF && mapping.lut != nullptr) {
-    if (tx < 256) s_mapping_lut[tx] = mapping.lut[tx];
-    __syncthreads();
-  }
-  if (mapping.mode == MAPPING_QUANTILE && mapping.quantiles != nullptr) {
-    if (tx < 256) s_mapping_quantiles[tx] = mapping.quantiles[tx];
-    __syncthreads();
-  }
+  // MAPPING_DENSE_MANT / MAPPING_LUT_CDF / MAPPING_QUANTILE have been
+  // retired; every mode uses the standard fp16 bucket.
+  const bool use_dense_bucket = false;
 
   if (tx < RADIX + 1) p_histogram[tx] = 0;
   __syncthreads();
@@ -434,19 +427,11 @@ void TopKProfileHistogram_Kernel(
   const int end   = dense_kv_indptr[bx + 1] - page_reserved_eos;
   const int nblk  = end - start;
 
-  if (mapping.mode == MAPPING_LUT_CDF && mapping.lut != nullptr) {
-    if (tx < 256) s_mapping_lut[tx] = mapping.lut[tx];
-    __syncthreads();
-  }
-  if (mapping.mode == MAPPING_QUANTILE && mapping.quantiles != nullptr) {
-    if (tx < 256) s_mapping_quantiles[tx] = mapping.quantiles[tx];
-    __syncthreads();
-  }
-
   if (tx < RADIX) s_histogram[tx] = 0;
   __syncthreads();
 
-  const bool use_dense_bucket = (mapping.mode == MAPPING_DENSE_MANT);
+  // MAPPING_DENSE_MANT / MAPPING_LUT_CDF / MAPPING_QUANTILE retired.
+  const bool use_dense_bucket = false;
   if (nblk > 0) {
     const ScoreT* __restrict__ score_blk = score + start;
     for (int i = tx; i < nblk; i += BLOCK_SIZE) {

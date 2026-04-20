@@ -23,8 +23,8 @@
 
 enum TopKMappingMode {
     MAPPING_NONE     = 0,  // identity (no remap)
-    MAPPING_LUT_CDF  = 1,  // bin lookup: new_bin = lut[convert_to_uint8(x)]
-    MAPPING_QUANTILE = 2,  // binary search over 256 calibrated quantile thresholds
+    // MAPPING_LUT_CDF  = 1,  // bin lookup: new_bin = lut[convert_to_uint8(x)]
+    // MAPPING_QUANTILE = 2,  // binary search over 256 calibrated quantile thresholds
     MAPPING_POWER    = 3,  // sign(x) * |x|^p
     MAPPING_LOG      = 4,  // sign(x) * log(|x| + 1)
     MAPPING_ASINH    = 6,  // asinh(beta * x)
@@ -50,7 +50,7 @@ enum TopKMappingMode {
     // per exponent slot instead of 4. Zero per-element compute overhead;
     // the "remap" is the bucket change. Monotonic within 2 adjacent
     // fp32 exponent slots.
-    MAPPING_DENSE_MANT   = 20, // identity; bucketing handled in fused kernel
+    // MAPPING_DENSE_MANT   = 20, // identity; bucketing handled in fused kernel
 };
 
 struct TopKMappingParams {
@@ -152,14 +152,10 @@ __device__ __forceinline__ float apply_transform_tmpl(float x, float p) {
     else if constexpr (MODE == MAPPING_LINEAR_STEEP) return transform_linear_steep(x, p);
     else if constexpr (MODE == MAPPING_HALF_SQUARE)  return transform_half_square(x, p);
     else if constexpr (MODE == MAPPING_HALF_CUBE)    return transform_half_cube(x, p);
-    else if constexpr (MODE == MAPPING_DENSE_MANT)   return fmaxf(x, p);
     else                                             return x;  // NONE / TRUNC8
 }
 
 // Pure element-wise dispatcher. Returns the *float value* after the transform.
-// For bin-selection modes (LUT_CDF / QUANTILE) this is identity: the mapping
-// happens in compute_stage1_bin() below instead of via a float transform, so
-// Stage-2 tie-breaking uses the raw score bits for those modes.
 __device__ __forceinline__ float apply_transform(float x, const TopKMappingParams& params) {
     switch (params.mode) {
         case MAPPING_POWER:        return transform_power(x, params.power_exp);
@@ -175,23 +171,15 @@ __device__ __forceinline__ float apply_transform(float x, const TopKMappingParam
         case MAPPING_LINEAR_STEEP: return transform_linear_steep(x, params.power_exp);
         case MAPPING_HALF_SQUARE:  return transform_half_square(x, params.power_exp);
         case MAPPING_HALF_CUBE:    return transform_half_cube(x, params.power_exp);
-        // MAPPING_DENSE_MANT clamps small/negative values to `power_exp`
-        // (default 0.5) so the subsequent dense bit bucket in the fused
-        // kernel sees a narrow 1–2 exponent window of positive values.
-        // Values at/below the clamp all hash to the lowest bin, which
-        // is always below the topk threshold in practice.
-        case MAPPING_DENSE_MANT:   return fmaxf(x, params.power_exp);
-        case MAPPING_LUT_CDF:
-        case MAPPING_QUANTILE:
         case MAPPING_TRUNC8:
-        default:                   return x;  // NONE / TRUNC8 / LUT_CDF / QUANTILE
+        default:                   return x;  // NONE / TRUNC8
     }
 }
 
-// Whether the mapping mode is a direct bin-selection function (LUT_CDF /
-// QUANTILE). These modes need per-block shared-memory tables.
-__device__ __forceinline__ bool mapping_uses_table(int mode) {
-    return mode == MAPPING_LUT_CDF || mode == MAPPING_QUANTILE;
+// Bin-selection table modes (LUT_CDF / QUANTILE) have been retired.
+// This helper is kept for ABI compat with callers that still invoke it.
+__device__ __forceinline__ bool mapping_uses_table(int /*mode*/) {
+    return false;
 }
 
 // Binary search over a sorted [256] quantile table. Returns the largest
@@ -212,21 +200,14 @@ __device__ __forceinline__ uint8_t quantile_bin_lookup(
 // Forward decl so compute_stage1_bin can call it. Defined in the enclosing TU.
 __device__ __forceinline__ uint8_t convert_to_uint8(float x);
 
-// Compute the Stage-1 bin for a raw score under any mapping mode. LUT_CDF /
-// QUANTILE use the shared-memory tables loaded at the kernel entry; every
-// other mode falls back to convert_to_uint8(apply_transform(x)).
+// Compute the Stage-1 bin for a raw score. LUT_CDF / QUANTILE modes
+// have been removed; every mode now goes through the element-wise
+// apply_transform + convert_to_uint8.
 __device__ __forceinline__ uint8_t compute_stage1_bin(
     float raw,
     const TopKMappingParams& params,
-    const uint8_t* __restrict__ s_lut,
-    const float*   __restrict__ s_quantiles)
+    const uint8_t* __restrict__ /*s_lut*/,
+    const float*   __restrict__ /*s_quantiles*/)
 {
-    switch (params.mode) {
-        case MAPPING_LUT_CDF:
-            return s_lut[convert_to_uint8(raw)];
-        case MAPPING_QUANTILE:
-            return quantile_bin_lookup(raw, s_quantiles);
-        default:
-            return convert_to_uint8(apply_transform(raw, params));
-    }
+    return convert_to_uint8(apply_transform(raw, params));
 }

@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCH_DIR="${SCRIPT_DIR}/../benchmarks"
 
 # ── Defaults ──────────────────────────────────────────────────
-GPU_ID=4
+GPU_ID=7
 MODEL_NAME="Qwen/Qwen3-1.7B"
 TOPK_VAL=2048
 MEM=0.7

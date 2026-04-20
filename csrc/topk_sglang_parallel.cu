@@ -1,32 +1,37 @@
 /**
- * Vortex TopK parallel kernel (single-kernel, last-CTA-wins merge).
+ * Vortex TopK — single-kernel parallel+merge pipeline.
  *
- * Motivation: the single-CTA fused kernel in topk_sglang.cu pins each
- * batch segment to one CTA, which underutilises the GPU for small
- * effective batch sizes (e.g. bs=4 on H100 leaves ~97% of SMs idle).
+ * ONE kernel launch. Per-chunk selection and cross-chunk merge both run
+ * inside the same grid-(N, Batch) launch. The last-arriving CTA for
+ * each batch (detected by a program-lifetime __device__ done-counter +
+ * atomicInc wrap-around) carries out the merge — no second launch, no
+ * per-call cudaMemset for barrier state.
  *
- * This kernel launches `num_splits * eff_batch_size` CTAs in a single
- * launch. CTAs sharing the same `bx` (batch index) partition that
- * batch's score range `num_splits` ways and each compute a per-partition
- * top-K via the same two-stage radix the fused kernel uses. Partial
- * results are written into a per-batch workspace.
+ * Correctness:
+ *   Stage 1 per-chunk uses ONE 8-bit radix histogram + ONE 8-bit
+ *   refinement round on the threshold bin (16 bits of selection
+ *   precision). For bf16 input (8 mantissa bits effective), this is
+ *   lossless — two items with the same 16-bit key are bit-identical as
+ *   bf16 values.
  *
- * Merge is done WITHOUT a second kernel launch. Each CTA, after
- * finishing its partition's top-K, does `atomicAdd(&done_counter[bx],
- * 1)`. The CTA whose atomicAdd returns `num_splits - 1` is the last
- * one to arrive for batch bx, and it alone carries out the merge:
- * reads the `num_splits * topk_val` candidates from the workspace,
- * runs a small two-stage radix on the already-remapped keys, writes
- * final top-K page IDs to sparse_kv_indices.
+ *   Stage 2 merge operates on N*K pre-remapped keys in shared memory
+ *   and uses the same 8-bit-hist + 8-bit-refine pattern, which is
+ *   strictly sufficient to pick the correct top-K from the union.
  *
- * Correctness: per-partition top-K is a conservative upper bound on
- * the global top-K (worst case: all top-K items land in one
- * partition). Every global top-K item is therefore guaranteed to be
- * in some partition's top-K, and the merge picks the final top-K
- * from the union — sorted-scores match the fused kernel exactly.
- * Tie-breaking can differ because radix tie-breaks depend on atomic
- * race order.
+ * Low-overhead primitives:
+ *   - Warp-level ballot+popc compaction on the "bin > threshold" path
+ *     so each warp issues ONE atomicAdd on the block counter instead
+ *     of one per thread.
+ *   - Program-lifetime __device__ done-counter sized for realistic
+ *     batch×head counts; atomicInc wraps back to 0 at num_chunks so
+ *     there's no memset on the hot path.
+ *   - Vectorised float4/int4 loads from global → smem in the merge.
+ *
+ * Supported mapping modes (IDs from csrc/topk_mapping.cuh):
+ *   3=POWER, 6=ASINH, 7=LOG1P, 9=ERF, 10=TANH, 11=SUBTRACT,
+ *   13=EXP_STRETCH, 15=SHIFT_POW2, 16=SHIFT_POW3, 17=LINEAR_STEEP.
  */
+
 #include <ATen/core/TensorBase.h>
 #include <ATen/core/TensorBody.h>
 #include <ATen/cuda/CUDAContext.h>
@@ -46,51 +51,40 @@
 
 namespace {
 
-// ---- Launch constants (match topk_sglang.cu) --------------------------------
+// ---- Launch constants ------------------------------------------------------
 
-constexpr int kThreadsPerBlock = 1024;
+constexpr int    kThreadsPerBlock = 1024;
+constexpr int    kWarpSize        = 32;
+constexpr int    RADIX            = 256;
+constexpr size_t kMaxDynSmem      = 96 * 1024;
+constexpr int    VORTEX_MAX_TOPK  = 2048;
 
-#ifdef USE_ROCM
-#ifdef SGL_TOPK_DYNAMIC_SMEM_BYTES
-constexpr size_t kSmem = static_cast<size_t>(SGL_TOPK_DYNAMIC_SMEM_BYTES);
-#else
-constexpr size_t kSmem = 48 * 1024;
-#endif
-#else
-constexpr size_t kSmem = 8 * 1024 * sizeof(uint32_t);   // 32 KB
-#endif
+// Stage-2 holds N*K (key, idx) pairs in smem = 8 B/item.
+constexpr int    kMergeCap        = 8192;
 
-constexpr size_t kFusedSmemMax = 96 * 1024;             // combined kernel dynamic smem ceiling
-constexpr int    VORTEX_MAX_TOPK = 2048;
+// Max batch the single kernel can sequence. Sized for realistic
+// bs×heads (decode). __device__ globals are zero-initialised at
+// program start; atomicInc wrap-around keeps each entry at 0 between
+// launches, so no host-side memset on the hot path.
+constexpr int    kMaxBatch        = 8192;
+__device__ unsigned int g_done_counter[kMaxBatch];
 
-// ---- Program-lifetime done-counter array ----------------------------------
-// Used by the last-CTA-wins barrier. __device__ linkage → zero-initialised at
-// program startup. atomicInc(ptr, num_splits-1) cycles each entry back to 0
-// after every launch, so we never pay a cudaMemset on entry to the host fn.
-// Sized for the largest realistic effective batch we'd ever run through the
-// parallel kernel (decode bs×heads). Host validates the cap.
-constexpr int kMaxParallelEffBs = 8192;
-__device__ int g_parallel_done_counter[kMaxParallelEffBs];
+// ---- Device helpers --------------------------------------------------------
 
-// ---- Device helpers (duplicated from topk_sglang.cu) -----------------------
+__device__ __forceinline__ uint32_t convert_to_uint32(float x) {
+  uint32_t bits = __float_as_uint(x);
+  return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
+}
 
-__device__ __forceinline__ auto convert_to_uint8(float x) -> uint8_t {
+// Required symbol for topk_mapping.cuh's compute_stage1_bin. Not used
+// directly by the kernel body here, but the header includes a forward
+// declaration that resolves against this definition at link time.
+__device__ __forceinline__ uint8_t convert_to_uint8(float x) {
   __half h = __float2half_rn(x);
   uint16_t bits = __half_as_ushort(h);
   uint16_t key = (bits & 0x8000) ? static_cast<uint16_t>(~bits)
                                  : static_cast<uint16_t>(bits | 0x8000);
   return static_cast<uint8_t>(key >> 8);
-}
-
-__device__ __forceinline__ auto convert_to_uint32(float x) -> uint32_t {
-  uint32_t bits = __float_as_uint(x);
-  return (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
-}
-
-__device__ __forceinline__ auto convert_to_uint8_dense(float x) -> uint8_t {
-  const uint32_t bits = __float_as_uint(x);
-  const uint32_t key  = (bits & 0x80000000u) ? ~bits : (bits | 0x80000000u);
-  return static_cast<uint8_t>((key >> 16) & 0xFFu);
 }
 
 template <typename T>
@@ -105,554 +99,399 @@ __device__ __forceinline__ float vortex_to_float<__nv_bfloat16>(__nv_bfloat16 x)
 #include "topk_mapping.cuh"
 
 // ============================================================================
-// fast_topk_partition<ScoreT, MODE>
-//
-// Per-partition two-stage radix. Same algorithm as the fused kernel's
-// fast_topk_clean_fused in topk_sglang.cu, with identical mapping-mode
-// dispatch and bucket selection. Returns slice-local indices of the
-// top `target_k` elements in `index`.
-//
-// Reuses the caller-provided extern shared memory region `f_input_idx`
-// (2 × SMEM_INPUT_SIZE ints) and the `s_bins` byte cache immediately
-// after it. The caller also supplies the static histogram / counter
-// storage through the template's body — each device-function-private
-// __shared__ declaration gets its own offset, but total static smem
-// stays small enough to fit comfortably alongside the dynamic region.
+// 8-step suffix cumsum over 256 bins. After the call s_hist[0][i] is
+// the count of items with bin >= i (monotone non-increasing).
 // ============================================================================
-template <typename ScoreT, int MODE>
-__device__ void fast_topk_partition(
-    const ScoreT* __restrict__ input,
-    int*          __restrict__ index,
-    int*          __restrict__ f_input_idx_raw,   // 2 × SMEM_INPUT_SIZE ints
-    uint8_t*      __restrict__ s_bins,            // `length` bytes
-    int           row_start,
-    int           length,
-    int           target_k,
-    const TopKMappingParams mapping)
-{
-  int topk = target_k;
-  constexpr auto BLOCK_SIZE = 1024;
-  constexpr auto RADIX = 256;
-  constexpr auto SMEM_INPUT_SIZE = kSmem / (2 * sizeof(int));
-
-  alignas(128) __shared__ int f_histogram_buf[2][RADIX + 128];
-  alignas(128) __shared__ int f_counter;
-  alignas(128) __shared__ int f_threshold_bin_id;
-  alignas(128) __shared__ int f_num_input[2];
-
-  auto& f_histogram = f_histogram_buf[0];
-
-  // Treat the caller's extern-smem region as two banks of SMEM_INPUT_SIZE ints.
-  auto f_input_idx = [&](int bank, int pos) -> int& {
-    return f_input_idx_raw[bank * SMEM_INPUT_SIZE + pos];
-  };
-
+__device__ __forceinline__ void run_cumsum_256(int s_hist[2][RADIX + 128]) {
   const int tx = threadIdx.x;
-
-  constexpr bool use_dense_bucket = (MODE == MAPPING_DENSE_MANT);
-
-  if (tx < RADIX + 1) f_histogram[tx] = 0;
-  __syncthreads();
-
-  // Stage 1 pass 1: bin every element and cache the bin in s_bins so
-  // pass 2 doesn't re-load scores or re-apply the mapping.
-  for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-    const float raw = vortex_to_float(input[idx + row_start]);
-    const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-    int bin;
-    if constexpr (use_dense_bucket) bin = static_cast<int>(convert_to_uint8_dense(remapped));
-    else                            bin = static_cast<int>(convert_to_uint8(remapped));
-    s_bins[idx] = static_cast<uint8_t>(bin);
-    ::atomicAdd(&f_histogram[bin], 1);
-  }
-  __syncthreads();
-
-  const auto run_cumsum = [&] {
 #pragma unroll 8
-    for (int i = 0; i < 8; ++i) {
-      static_assert(1 << 8 == RADIX);
-      if (C10_LIKELY(tx < RADIX)) {
-        const auto j = 1 << i;
-        const auto k = i & 1;
-        auto value = f_histogram_buf[k][tx];
-        if (tx < RADIX - j) value += f_histogram_buf[k][tx + j];
-        f_histogram_buf[k ^ 1][tx] = value;
-      }
-      __syncthreads();
-    }
-  };
-
-  run_cumsum();
-  if (tx < RADIX && f_histogram[tx] > topk && f_histogram[tx + 1] <= topk) {
-    f_threshold_bin_id = tx;
-    f_num_input[0] = 0;
-    f_counter = 0;
-  }
-  __syncthreads();
-
-  const auto threshold_bin = f_threshold_bin_id;
-  topk -= f_histogram[threshold_bin + 1];
-
-  if (topk == 0) {
-    for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      const int bin = static_cast<int>(s_bins[idx]);
-      if (bin > threshold_bin) {
-        const auto pos = ::atomicAdd(&f_counter, 1);
-        index[pos] = idx;
-      }
+  for (int i = 0; i < 8; ++i) {
+    static_assert(1 << 8 == RADIX);
+    if (C10_LIKELY(tx < RADIX)) {
+      const int j = 1 << i;
+      const int k = i & 1;
+      int value = s_hist[k][tx];
+      if (tx < RADIX - j) value += s_hist[k][tx + j];
+      s_hist[k ^ 1][tx] = value;
     }
     __syncthreads();
-    return;
-  } else {
-    __syncthreads();
-    if (tx < RADIX + 1) f_histogram[tx] = 0;
-    __syncthreads();
-
-    constexpr int sub_bin_offset_start = use_dense_bucket ? 8 : 24;
-    for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      const int bin = static_cast<int>(s_bins[idx]);
-      if (bin > threshold_bin) {
-        const auto pos = ::atomicAdd(&f_counter, 1);
-        index[pos] = idx;
-      } else if (bin == threshold_bin) {
-        const float raw = vortex_to_float(input[idx + row_start]);
-        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-        const auto pos = ::atomicAdd(&f_num_input[0], 1);
-        if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
-          f_input_idx(0, pos) = idx;
-          const auto b32 = convert_to_uint32(remapped);
-          const auto sub_bin = (b32 >> sub_bin_offset_start) & 0xFF;
-          ::atomicAdd(&f_histogram[sub_bin], 1);
-        }
-      }
-    }
-    __syncthreads();
-  }
-
-  constexpr int stage2_offset_start = use_dense_bucket ? 8 : 24;
-  constexpr int stage2_max_rounds   = use_dense_bucket ? 2 : 4;
-#pragma unroll 4
-  for (int round = 0; round < 4; ++round) {
-    if (round >= stage2_max_rounds) break;
-    __shared__ int f_last_remain;
-    const auto r_idx = round % 2;
-
-    const auto _raw_num_input = f_num_input[r_idx];
-    const auto num_input = (_raw_num_input < int(SMEM_INPUT_SIZE)) ? _raw_num_input
-                                                                  : int(SMEM_INPUT_SIZE);
-    run_cumsum();
-    if (tx < RADIX && f_histogram[tx] > topk && f_histogram[tx + 1] <= topk) {
-      f_threshold_bin_id = tx;
-      f_num_input[r_idx ^ 1] = 0;
-      f_last_remain = topk - f_histogram[tx + 1];
-    }
-    __syncthreads();
-
-    const auto threshold_bin = f_threshold_bin_id;
-    topk -= f_histogram[threshold_bin + 1];
-
-    if (topk == 0) {
-      for (int i = tx; i < num_input; i += BLOCK_SIZE) {
-        const auto idx = f_input_idx(r_idx, i);
-        const auto offset = stage2_offset_start - round * 8;
-        const float raw = vortex_to_float(input[idx + row_start]);
-        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-        const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
-        if (bin > threshold_bin) {
-          const auto pos = ::atomicAdd(&f_counter, 1);
-          index[pos] = idx;
-        }
-      }
-      __syncthreads();
-      break;
-    } else {
-      __syncthreads();
-      if (tx < RADIX + 1) f_histogram[tx] = 0;
-      __syncthreads();
-      for (int i = tx; i < num_input; i += BLOCK_SIZE) {
-        const auto idx = f_input_idx(r_idx, i);
-        const float raw = vortex_to_float(input[idx + row_start]);
-        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-        const auto offset = stage2_offset_start - round * 8;
-        const auto bin = (convert_to_uint32(remapped) >> offset) & 0xFF;
-        if (bin > threshold_bin) {
-          const auto pos = ::atomicAdd(&f_counter, 1);
-          index[pos] = idx;
-        } else if (bin == threshold_bin) {
-          if (round == stage2_max_rounds - 1) {
-            const auto pos = ::atomicAdd(&f_last_remain, -1);
-            if (pos > 0) index[target_k - pos] = idx;
-          } else {
-            const auto pos = ::atomicAdd(&f_num_input[r_idx ^ 1], 1);
-            if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
-              f_input_idx(r_idx ^ 1, pos) = idx;
-              const auto b32 = convert_to_uint32(remapped);
-              const auto sub_bin = (b32 >> (offset - 8)) & 0xFF;
-              ::atomicAdd(&f_histogram[sub_bin], 1);
-            }
-          }
-        }
-      }
-      __syncthreads();
-    }
   }
 }
 
 // ============================================================================
-// fast_topk_merge<MODE>
+// Warp-level ballot+popc compaction.
 //
-// Run by the last-arriving CTA of each batch. Input is the combined
-// candidate list (`num_splits * topk_val` float keys + int indices,
-// with idx==-1 marking sentinel slots). Reuses the same extern-smem
-// region `s_input_idx_raw` that Phase 1 used — its earlier contents
-// are dead at this point. Output: top-`target_k` positions into
-// `index`, indexing the combined candidate list.
-//
-// Bucketing matches the fused kernel's bucketing for the given MODE
-// so the merged top-K is lossless modulo atomic tie-break order.
+// Every participating thread offers a boolean `selected`. Exactly ONE
+// atomicAdd per warp — issued by the first active lane — reserves
+// `warp_count` slots; other selected lanes derive their slot via a
+// popc prefix sum. Safe when called from inside a divergent region
+// (uses __activemask(), not a fixed all-ones mask).
 // ============================================================================
-template <int MODE>
-__device__ void fast_topk_merge(
-    const float* __restrict__ input,
-    const int*   __restrict__ valid_mask,
-    int*         __restrict__ index,
-    int*         __restrict__ s_input_idx_raw,   // 2 × SMEM_INPUT_SIZE ints
-    int          row_start,
-    int          length,
-    int          target_k)
-{
-  int topk = target_k;
-  constexpr auto BLOCK_SIZE = 1024;
-  constexpr auto RADIX = 256;
-  constexpr auto SMEM_INPUT_SIZE = kSmem / (2 * sizeof(int));
-  constexpr bool use_dense_bucket = (MODE == MAPPING_DENSE_MANT);
-  constexpr int  stage2_offset_start = use_dense_bucket ? 8 : 24;
-  constexpr int  stage2_max_rounds   = use_dense_bucket ? 2 : 4;
+__device__ __forceinline__ int warp_compact_slot(bool selected, int* s_counter) {
+  const uint32_t mask         = __activemask();
+  const uint32_t ballot       = __ballot_sync(mask, selected);
+  const int      lane         = threadIdx.x & (kWarpSize - 1);
+  const int      warp_count   = __popc(ballot);
+  const int      rank_in_warp = __popc(ballot & ((1u << lane) - 1u));
 
-  alignas(128) __shared__ int s_histogram_buf[2][RADIX + 128];
-  alignas(128) __shared__ int s_counter;
-  alignas(128) __shared__ int s_threshold_bin_id;
-  alignas(128) __shared__ int s_num_input[2];
-
-  auto& s_histogram = s_histogram_buf[0];
-  auto s_input_idx = [&](int bank, int pos) -> int& {
-    return s_input_idx_raw[bank * SMEM_INPUT_SIZE + pos];
-  };
-
-  const int tx = threadIdx.x;
-
-  if (tx < RADIX + 1) s_histogram[tx] = 0;
-  __syncthreads();
-
-  for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-    if (valid_mask[idx + row_start] < 0) continue;   // sentinel; skip
-    const float v = input[idx + row_start];
-    int bin;
-    if constexpr (use_dense_bucket) bin = static_cast<int>(convert_to_uint8_dense(v));
-    else                            bin = static_cast<int>(convert_to_uint8(v));
-    ::atomicAdd(&s_histogram[bin], 1);
+  const int first_lane = __ffs(mask) - 1;
+  int base = 0;
+  if (lane == first_lane) {
+    base = (warp_count > 0) ? ::atomicAdd(s_counter, warp_count) : 0;
   }
-  __syncthreads();
-
-  const auto run_cumsum = [&] {
-#pragma unroll 8
-    for (int i = 0; i < 8; ++i) {
-      static_assert(1 << 8 == RADIX);
-      if (C10_LIKELY(tx < RADIX)) {
-        const auto j = 1 << i;
-        const auto k = i & 1;
-        auto value = s_histogram_buf[k][tx];
-        if (tx < RADIX - j) value += s_histogram_buf[k][tx + j];
-        s_histogram_buf[k ^ 1][tx] = value;
-      }
-      __syncthreads();
-    }
-  };
-
-  run_cumsum();
-  if (tx < RADIX && s_histogram[tx] > topk && s_histogram[tx + 1] <= topk) {
-    s_threshold_bin_id = tx;
-    s_num_input[0] = 0;
-    s_counter = 0;
-  }
-  __syncthreads();
-
-  const auto threshold_bin = s_threshold_bin_id;
-  topk -= s_histogram[threshold_bin + 1];
-
-  if (topk == 0) {
-    for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      if (valid_mask[idx + row_start] < 0) continue;
-      const float v = input[idx + row_start];
-      int bin;
-      if constexpr (use_dense_bucket) bin = static_cast<int>(convert_to_uint8_dense(v));
-      else                            bin = static_cast<int>(convert_to_uint8(v));
-      if (bin > threshold_bin) {
-        const auto pos = ::atomicAdd(&s_counter, 1);
-        index[pos] = idx;
-      }
-    }
-    __syncthreads();
-    return;
-  } else {
-    __syncthreads();
-    if (tx < RADIX + 1) s_histogram[tx] = 0;
-    __syncthreads();
-
-    for (int idx = tx; idx < length; idx += BLOCK_SIZE) {
-      if (valid_mask[idx + row_start] < 0) continue;
-      const auto raw_input = input[idx + row_start];
-      int bin;
-      if constexpr (use_dense_bucket) bin = static_cast<int>(convert_to_uint8_dense(raw_input));
-      else                            bin = static_cast<int>(convert_to_uint8(raw_input));
-      if (bin > threshold_bin) {
-        const auto pos = ::atomicAdd(&s_counter, 1);
-        index[pos] = idx;
-      } else if (bin == threshold_bin) {
-        const auto pos = ::atomicAdd(&s_num_input[0], 1);
-        if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
-          s_input_idx(0, pos) = idx;
-          const auto b32 = convert_to_uint32(raw_input);
-          const auto sub_bin = (b32 >> stage2_offset_start) & 0xFF;
-          ::atomicAdd(&s_histogram[sub_bin], 1);
-        }
-      }
-    }
-    __syncthreads();
-  }
-
-#pragma unroll 4
-  for (int round = 0; round < 4; ++round) {
-    if (round >= stage2_max_rounds) break;
-    __shared__ int s_last_remain;
-    const auto r_idx = round % 2;
-
-    const auto _raw_num_input = s_num_input[r_idx];
-    const auto num_input = (_raw_num_input < int(SMEM_INPUT_SIZE)) ? _raw_num_input
-                                                                  : int(SMEM_INPUT_SIZE);
-    run_cumsum();
-    if (tx < RADIX && s_histogram[tx] > topk && s_histogram[tx + 1] <= topk) {
-      s_threshold_bin_id = tx;
-      s_num_input[r_idx ^ 1] = 0;
-      s_last_remain = topk - s_histogram[tx + 1];
-    }
-    __syncthreads();
-
-    const auto threshold_bin = s_threshold_bin_id;
-    topk -= s_histogram[threshold_bin + 1];
-
-    if (topk == 0) {
-      for (int i = tx; i < num_input; i += BLOCK_SIZE) {
-        const auto idx = s_input_idx(r_idx, i);
-        const auto offset = stage2_offset_start - round * 8;
-        const auto bin = (convert_to_uint32(input[idx + row_start]) >> offset) & 0xFF;
-        if (bin > threshold_bin) {
-          const auto pos = ::atomicAdd(&s_counter, 1);
-          index[pos] = idx;
-        }
-      }
-      __syncthreads();
-      break;
-    } else {
-      __syncthreads();
-      if (tx < RADIX + 1) s_histogram[tx] = 0;
-      __syncthreads();
-      for (int i = tx; i < num_input; i += BLOCK_SIZE) {
-        const auto idx = s_input_idx(r_idx, i);
-        const auto raw_input = input[idx + row_start];
-        const auto offset = stage2_offset_start - round * 8;
-        const auto bin = (convert_to_uint32(raw_input) >> offset) & 0xFF;
-        if (bin > threshold_bin) {
-          const auto pos = ::atomicAdd(&s_counter, 1);
-          index[pos] = idx;
-        } else if (bin == threshold_bin) {
-          if (round == stage2_max_rounds - 1) {
-            const auto pos = ::atomicAdd(&s_last_remain, -1);
-            if (pos > 0) index[target_k - pos] = idx;
-          } else {
-            const auto pos = ::atomicAdd(&s_num_input[r_idx ^ 1], 1);
-            if (C10_LIKELY(pos < SMEM_INPUT_SIZE)) {
-              s_input_idx(r_idx ^ 1, pos) = idx;
-              const auto b32 = convert_to_uint32(raw_input);
-              const auto sub_bin = (b32 >> (offset - 8)) & 0xFF;
-              ::atomicAdd(&s_histogram[sub_bin], 1);
-            }
-          }
-        }
-      }
-      __syncthreads();
-    }
-  }
+  base = __shfl_sync(mask, base, first_lane);
+  return selected ? (base + rank_in_warp) : -1;
 }
 
 // ============================================================================
-// Combined kernel.
+// Combined kernel — Stage 1 (per-chunk) + barrier + Stage 2 (merge).
 //
-// Grid: (num_splits, eff_batch_size). Every CTA:
-//   1. Computes its partition's top-K (fast_topk_partition).
-//   2. Writes (remapped key, batch-local idx) pairs + sentinels to the
-//      per-batch workspace slot.
-//   3. __threadfence() to publish the writes, then atomicAdd on the
-//      per-batch done-counter. The CTA whose atomicAdd returns
-//      num_splits - 1 is the last one for this batch.
-//   4. If last: run the merge (fast_topk_merge) on the combined
-//      num_splits*topk_val candidates and write final page IDs to
-//      sparse_kv_indices. Other CTAs exit.
+// Grid   = (Batch, N).  One CTA per (batch, chunk).
+// Block  = kThreadsPerBlock = 1024.
+//
+// Shared-memory layout (reused across phases):
+//   Phase 1 needs:
+//     s_remapped[chunk_size]  (float)  — cached apply_transform output.
+//     s_bins[chunk_size]      (uint8)  — cached coarse bin.
+//   Merge needs:
+//     s_scores[N*K]           (float)  — pair buffer, loaded vectorised.
+//     s_indices[N*K]          (int32)  — pair buffer.
+//   kSmemBytes is sized to host max of both.
+//
+// Sync between phases:
+//   After Phase 1's workspace writes, __threadfence() publishes them,
+//   then thread 0 does `atomicInc(&g_done_counter[bx], N-1)` which
+//   cycles 0→1→…→N-1→0 so no reset is needed between calls. The CTA
+//   whose returned `old == N-1` is the last one — it falls through
+//   into the merge; other CTAs return.
 // ============================================================================
 template <typename ScoreT, int MODE>
 __global__ __launch_bounds__(kThreadsPerBlock)
-void TopKOutput_Parallel_Kernel(
-    const ScoreT* __restrict__ score,
-    const int*    __restrict__ dense_kv_indptr,
-    const int*    __restrict__ sparse_kv_indptr,
-    const int*    __restrict__ dense_kv_indices,
-    int*          __restrict__ sparse_kv_indices,
-    float*        __restrict__ partial_keys,   // [eff_bs * num_splits * topk_val]
-    int*          __restrict__ partial_idx,    // [eff_bs * num_splits * topk_val]
-    const int     topk_val,
-    const int     num_splits,
-    const int     page_reserved_bos,
-    const int     page_reserved_eos,
-    const int     chunk_bytes,                 // smem bytes reserved for s_bins
-    const TopKMappingParams mapping)
+void TopK_Parallel_Kernel(
+    const ScoreT* __restrict__ score,         // [Batch, N, chunk_size]
+    int32_t*      __restrict__ global_idx,    // [Batch, K]
+    float*        __restrict__ partial_keys,  // [Batch, N, K] workspace
+    int32_t*      __restrict__ partial_idx,   // [Batch, N, K] workspace
+    int                         N,
+    int                         chunk_size,
+    int                         K,
+    float                       mapping_power)
 {
-  // ---- Dynamic smem layout -------------------------------------------------
-  // [ f_input_idx (2 × SMEM_INPUT_SIZE ints = kSmem bytes)
-  //   s_bins      (chunk_bytes, only valid during Phase 1) ]
-  // The merge doesn't touch s_bins, so its extern region overlaps
-  // f_input_idx harmlessly.
-  extern __shared__ int smem_scratch[];
-  constexpr auto SMEM_INPUT_SIZE = kSmem / (2 * sizeof(int));
-  int*      f_input_idx_raw = smem_scratch;
-  uint8_t*  s_bins          = reinterpret_cast<uint8_t*>(&smem_scratch[2 * SMEM_INPUT_SIZE]);
-  (void)chunk_bytes;  // sizing is the host's responsibility; kernel just uses it
-
-  // s_indices doubles as the partition's radix output AND the merge's radix
-  // output — they run sequentially on the same CTA, so the same ~2K slots
-  // are reused. Stores up to VORTEX_MAX_TOPK = 2048 entries.
-  __shared__ int s_indices[VORTEX_MAX_TOPK];
-  // Broadcasts whether this CTA is the last-arriving one for its batch.
-  __shared__ int s_is_last;
-
-  const int p  = blockIdx.x;
-  const int bx = blockIdx.y;
+  const int b  = blockIdx.x;
+  const int n  = blockIdx.y;
   const int tx = threadIdx.x;
 
-  const int start = dense_kv_indptr[bx] + page_reserved_bos;
-  const int end   = dense_kv_indptr[bx + 1] - page_reserved_eos;
-  const int total_len = end - start;
+  // Addresses for this CTA's chunk slice and its slot in the workspace.
+  const ScoreT* chunk_in      = score        + (static_cast<int64_t>(b) * N + n) * chunk_size;
+  float*        chunk_keys_out = partial_keys + (static_cast<int64_t>(b) * N + n) * K;
+  int32_t*      chunk_idx_out  = partial_idx  + (static_cast<int64_t>(b) * N + n) * K;
+  const int32_t idx_base        = n * chunk_size;  // batch-local offset
 
-  // Short batch: fused kernel returns without writing; match that.
-  if (total_len <= topk_val) return;
+  // ---------------------------------------------------------------- smem
+  extern __shared__ char smem_raw[];
 
-  const size_t slot_base = (static_cast<size_t>(bx) * num_splits + p) * topk_val;
-  float* keys_out = partial_keys + slot_base;
-  int*   idx_out  = partial_idx  + slot_base;
+  // Shared-memory counters / histogram live in static smem so the
+  // Phase-1 and merge phases can share the same dynamic pool.
+  alignas(128) __shared__ int s_hist_buf[2][RADIX + 128];
+  alignas(128) __shared__ int s_counter;
+  alignas(128) __shared__ int s_threshold_bin;
+  alignas(128) __shared__ int s_sub_threshold_bin;
+  alignas(128) __shared__ int s_last_remain;
+  alignas(128) __shared__ int s_is_last;
+  auto& s_hist = s_hist_buf[0];
 
-  const int chunk       = (total_len + num_splits - 1) / num_splits;
-  const int part_start  = p * chunk;
-  const int raw_part_end = part_start + chunk;
-  const int part_end    = raw_part_end < total_len ? raw_part_end : total_len;
-  const int part_len    = (part_end > part_start) ? (part_end - part_start) : 0;
+  // =========================================================================
+  // Phase 1: per-chunk TopK via 8-bit radix + 8-bit refinement.
+  // =========================================================================
+  //
+  // Dynamic smem region used as:
+  //   s_remapped : chunk_size * 4 B  (cached apply_transform output)
+  //   s_bins     : chunk_size * 1 B  (cached Stage-1 bin)
+  //
+  // Refinement is a second 8-bit bucket on bits [23:16] of the
+  // sign-flipped u32 key, used to refine the threshold bin. 8 + 8 =
+  // 16 bits of selection precision → lossless for bf16.
+  float*   s_remapped = reinterpret_cast<float*>(smem_raw);
+  uint8_t* s_bins     = reinterpret_cast<uint8_t*>(s_remapped + chunk_size);
 
-  // Sentinel tail: merge filters these by idx == -1. Only fill the range
-  // that won't be overwritten with real data.
-  const int real_fill = (part_len < topk_val) ? part_len : topk_val;
-  const int tail_count = topk_val - real_fill;
-  if (tail_count > 0) {
-    for (int i = tx; i < tail_count; i += blockDim.x) {
-      keys_out[real_fill + i] = -CUDART_INF_F;
-      idx_out [real_fill + i] = -1;
+  // ---- Degenerate chunk_size <= K : emit everything as-is. -------------
+  if (chunk_size <= K) {
+    for (int i = tx; i < K; i += blockDim.x) {
+      if (i < chunk_size) {
+        const float raw = vortex_to_float(chunk_in[i]);
+        chunk_keys_out[i] = apply_transform_tmpl<MODE>(raw, mapping_power);
+        chunk_idx_out [i] = i + idx_base;
+      } else {
+        chunk_keys_out[i] = -CUDART_INF_F;
+        chunk_idx_out [i] = -1;
+      }
+    }
+  } else {
+    // ---- Histogram pass 1: transform + bucket; cache both to smem. ----
+    if (tx < RADIX + 1) s_hist[tx] = 0;
+    if (tx == 0) { s_counter = 0; s_threshold_bin = -1; s_last_remain = 0; }
+    __syncthreads();
+
+    for (int idx = tx; idx < chunk_size; idx += blockDim.x) {
+      const float raw      = vortex_to_float(chunk_in[idx]);
+      const float remapped = apply_transform_tmpl<MODE>(raw, mapping_power);
+      const uint32_t b32   = convert_to_uint32(remapped);
+      const int bin        = (b32 >> 24) & 0xFF;
+      s_remapped[idx] = remapped;
+      s_bins    [idx] = static_cast<uint8_t>(bin);
+      ::atomicAdd(&s_hist[bin], 1);
+    }
+    __syncthreads();
+
+    run_cumsum_256(s_hist_buf);
+
+    if (tx < RADIX && s_hist[tx] > K && s_hist[tx + 1] <= K) {
+      s_threshold_bin = tx;
+      s_last_remain   = K - s_hist[tx + 1];
+    }
+    __syncthreads();
+    const int threshold_bin = s_threshold_bin;
+
+    // ---- Emit bin > threshold (warp-popc) and build refinement hist. ----
+    if (tx < RADIX + 1) s_hist[tx] = 0;
+    __syncthreads();
+
+    const int num_iters = (chunk_size + blockDim.x - 1) / blockDim.x;
+    for (int it = 0; it < num_iters; ++it) {
+      const int idx = it * blockDim.x + tx;
+      const bool in_range = (idx < chunk_size);
+      int bin = -1;
+      if (in_range) bin = static_cast<int>(s_bins[idx]);
+      const bool take_above = in_range && (bin > threshold_bin);
+
+      const int slot = warp_compact_slot(take_above, &s_counter);
+      if (take_above) {
+        chunk_keys_out[slot] = s_remapped[idx];
+        chunk_idx_out [slot] = idx + idx_base;
+      } else if (in_range && bin == threshold_bin) {
+        const uint32_t b32 = convert_to_uint32(s_remapped[idx]);
+        const int sub_bin  = (b32 >> 16) & 0xFF;
+        ::atomicAdd(&s_hist[sub_bin], 1);
+      }
+    }
+    __syncthreads();
+
+    // ---- Refinement cumsum → sub-threshold bin. ------------------------
+    run_cumsum_256(s_hist_buf);
+    if (tx < RADIX && s_hist[tx] > s_last_remain
+                   && s_hist[tx + 1] <= s_last_remain) {
+      s_sub_threshold_bin = tx;
+      // budget for items at the sub-threshold bin
+      s_last_remain = s_last_remain - s_hist[tx + 1];
+    }
+    if (tx == 0 && s_sub_threshold_bin == -1) {
+      // Only possible if last_remain == 0 (bin > threshold already emitted
+      // exactly K items). Nothing more to do; make the sub bin a sentinel.
+      s_sub_threshold_bin = RADIX;   // no sub-threshold bin
+    }
+    __syncthreads();
+    const int sub_threshold_bin = s_sub_threshold_bin;
+
+    // ---- Emit threshold-bin items using sub-threshold logic. ----------
+    for (int it = 0; it < num_iters; ++it) {
+      const int idx = it * blockDim.x + tx;
+      const bool in_range = (idx < chunk_size);
+      int bin = -1;
+      if (in_range) bin = static_cast<int>(s_bins[idx]);
+      int sub_bin = -1;
+      if (in_range && bin == threshold_bin) {
+        const uint32_t b32 = convert_to_uint32(s_remapped[idx]);
+        sub_bin = (b32 >> 16) & 0xFF;
+      }
+
+      const bool take_sub_above = (sub_bin > sub_threshold_bin);
+      const int slot = warp_compact_slot(take_sub_above, &s_counter);
+      if (take_sub_above) {
+        chunk_keys_out[slot] = s_remapped[idx];
+        chunk_idx_out [slot] = idx + idx_base;
+      } else if (sub_bin == sub_threshold_bin) {
+        const int pos = ::atomicAdd(&s_last_remain, -1);
+        if (pos > 0) {
+          chunk_keys_out[K - pos] = s_remapped[idx];
+          chunk_idx_out [K - pos] = idx + idx_base;
+        }
+      }
     }
     __syncthreads();
   }
 
-  const ScoreT* __restrict__ slice_ptr = score + start + part_start;
+  // =========================================================================
+  // Barrier: publish this CTA's workspace writes and atomicInc the
+  // per-batch done-counter. The CTA that sees old == N-1 is the last
+  // arriving one; every other CTA returns here.
+  // =========================================================================
+  __threadfence();
+  __syncthreads();
+  if (tx == 0) {
+    const unsigned int old = ::atomicInc(
+        &g_done_counter[b], static_cast<unsigned int>(N - 1));
+    s_is_last = (old == static_cast<unsigned int>(N - 1)) ? 1 : 0;
+  }
+  __syncthreads();
+  if (s_is_last == 0) return;
 
-  // ---- Phase 1: per-partition top-K ---------------------------------------
-  if (part_len > 0) {
-    if (part_len <= topk_val) {
-      // Whole slice fits under topk_val — emit it directly.
-      for (int i = tx; i < part_len; i += blockDim.x) {
-        const float raw = vortex_to_float(slice_ptr[i]);
-        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-        keys_out[i] = remapped;
-        idx_out [i] = part_start + i;
-      }
-    } else {
-      fast_topk_partition<ScoreT, MODE>(
-          slice_ptr, s_indices, f_input_idx_raw, s_bins,
-          0, part_len, topk_val, mapping);
-      __syncthreads();
-      for (int i = tx; i < topk_val; i += blockDim.x) {
-        const int sl = s_indices[i];
-        const float raw = vortex_to_float(slice_ptr[sl]);
-        const float remapped = apply_transform_tmpl<MODE>(raw, mapping.power_exp);
-        keys_out[i] = remapped;
-        idx_out [i] = part_start + sl;
-      }
+  // =========================================================================
+  // Phase 2 (merge, only in last-arriving CTA):
+  //   load N*K candidates into smem (vectorised) →
+  //   8-bit histogram in smem →
+  //   threshold → warp-popc emit above + tie-bin refinement.
+  // =========================================================================
+  const int total  = N * K;
+  const float*   keys_in = partial_keys + static_cast<int64_t>(b) * total;
+  const int32_t* idx_in  = partial_idx  + static_cast<int64_t>(b) * total;
+  int32_t*       out_idx = global_idx   + static_cast<int64_t>(b) * K;
+
+  // Reuse the same dynamic smem region as Phase 1 — Phase 1's caches
+  // are dead now. Layout: [ s_scores : total floats | s_indices : total int32 ].
+  float*   s_scores  = reinterpret_cast<float*>(smem_raw);
+  int32_t* s_indices = reinterpret_cast<int32_t*>(s_scores + total);
+
+  // Vectorised 128-bit loads when `total` is a multiple of 4.
+  if ((total & 3) == 0) {
+    const float4* keys_v = reinterpret_cast<const float4*>(keys_in);
+    const int4*   idx_v  = reinterpret_cast<const int4*>  (idx_in);
+    float4*       ss_v   = reinterpret_cast<float4*>      (s_scores);
+    int4*         si_v   = reinterpret_cast<int4*>        (s_indices);
+    const int total4 = total >> 2;
+    for (int i = tx; i < total4; i += blockDim.x) {
+      ss_v[i] = keys_v[i];
+      si_v[i] = idx_v [i];
+    }
+  } else {
+    for (int i = tx; i < total; i += blockDim.x) {
+      s_scores [i] = keys_in[i];
+      s_indices[i] = idx_in [i];
     }
   }
 
-  // Publish workspace writes so the last-CTA can observe them.
-  __threadfence();
-  __syncthreads();
-
-  // ---- Arrive at the barrier via atomicInc --------------------------------
-  // atomicInc(ptr, N-1) stores `((old >= N-1) ? 0 : old+1)` and returns old.
-  // So with N == num_splits the counter cycles 0→1→…→N-1→0 per call, which
-  // means we never need to memset done_counter between calls — after the
-  // last-CTA's increment it's back at 0, ready for the next launch.
-  // (Relies on the caller allocating done_counter zero-initialised once.)
+  if (tx < RADIX + 1) s_hist[tx] = 0;
   if (tx == 0) {
-    const unsigned int old = ::atomicInc(
-        reinterpret_cast<unsigned int*>(&g_parallel_done_counter[bx]),
-        static_cast<unsigned int>(num_splits - 1));
-    s_is_last = (old == static_cast<unsigned int>(num_splits - 1)) ? 1 : 0;
+    s_counter           = 0;
+    s_threshold_bin     = -1;
+    s_sub_threshold_bin = -1;
+    s_last_remain       = 0;
   }
   __syncthreads();
 
-  if (s_is_last == 0) return;
-
-  // ---- Merge: last CTA selects final top-K --------------------------------
-  const int candidate_len = num_splits * topk_val;
-  const size_t batch_base  = static_cast<size_t>(bx) * candidate_len;
-  const float* keys_blk    = partial_keys + batch_base;
-  const int*   idx_blk     = partial_idx  + batch_base;
-  int*         out_blk     = sparse_kv_indices
-                            + sparse_kv_indptr[bx]
-                            + page_reserved_bos;
-  const int*   dense_blk   = dense_kv_indices + start;
-
-  fast_topk_merge<MODE>(
-      keys_blk, idx_blk, s_indices, f_input_idx_raw,
-      0, candidate_len, topk_val);
+  // (2) 8-bit histogram in smem.
+  const int num_iters_m = (total + blockDim.x - 1) / blockDim.x;
+  for (int it = 0; it < num_iters_m; ++it) {
+    const int i = it * blockDim.x + tx;
+    if (i < total && s_indices[i] >= 0) {
+      const uint32_t b32 = convert_to_uint32(s_scores[i]);
+      const int bin = (b32 >> 24) & 0xFF;
+      ::atomicAdd(&s_hist[bin], 1);
+    }
+  }
   __syncthreads();
 
-  for (int i = tx; i < topk_val; i += blockDim.x) {
-    const int pos = s_indices[i];
-    const int batch_local = idx_blk[pos];
-    out_blk[i] = (batch_local >= 0) ? dense_blk[batch_local] : -1;
+  run_cumsum_256(s_hist_buf);
+
+  // Fast path: no threshold search needed when valid_count ≤ K.
+  const int valid_count = s_hist[0];
+  if (valid_count <= K) {
+    for (int it = 0; it < num_iters_m; ++it) {
+      const int i = it * blockDim.x + tx;
+      const bool take = (i < total) && (s_indices[i] >= 0);
+      const int slot = warp_compact_slot(take, &s_counter);
+      if (take) out_idx[slot] = s_indices[i];
+    }
+    return;
+  }
+
+  if (tx < RADIX && s_hist[tx] > K && s_hist[tx + 1] <= K) {
+    s_threshold_bin = tx;
+    s_last_remain   = K - s_hist[tx + 1];
+  }
+  __syncthreads();
+  const int threshold_bin_m = s_threshold_bin;
+
+  // (3) Emit above threshold via warp-popc; build sub-bin histogram on
+  //     bits [23:16] for the tie-bin refinement.
+  if (tx < RADIX + 1) s_hist[tx] = 0;
+  __syncthreads();
+
+  for (int it = 0; it < num_iters_m; ++it) {
+    const int i = it * blockDim.x + tx;
+    bool in_valid = false;
+    int bin = -1;
+    uint32_t b32 = 0;
+    if (i < total) {
+      const int32_t idx = s_indices[i];
+      if (idx >= 0) {
+        in_valid = true;
+        b32 = convert_to_uint32(s_scores[i]);
+        bin = (b32 >> 24) & 0xFF;
+      }
+    }
+    const bool take_above = in_valid && (bin > threshold_bin_m);
+    const int  slot       = warp_compact_slot(take_above, &s_counter);
+    if (take_above) {
+      out_idx[slot] = s_indices[i];
+    } else if (in_valid && bin == threshold_bin_m) {
+      const int sub_bin = (b32 >> 16) & 0xFF;
+      ::atomicAdd(&s_hist[sub_bin], 1);
+    }
+  }
+  __syncthreads();
+
+  // (4) Refinement cumsum → sub-threshold bin.
+  run_cumsum_256(s_hist_buf);
+  if (tx < RADIX && s_hist[tx] > s_last_remain
+                 && s_hist[tx + 1] <= s_last_remain) {
+    s_sub_threshold_bin = tx;
+    s_last_remain = s_last_remain - s_hist[tx + 1];
+  }
+  if (tx == 0 && s_sub_threshold_bin == -1) {
+    s_sub_threshold_bin = RADIX;   // no tie-bin refinement needed
+  }
+  __syncthreads();
+  const int sub_threshold_bin_m = s_sub_threshold_bin;
+
+  // (5) Emit tie-bin items via warp-popc + sub-threshold budget.
+  for (int it = 0; it < num_iters_m; ++it) {
+    const int i = it * blockDim.x + tx;
+    bool in_threshold = false;
+    int sub_bin = -1;
+    if (i < total) {
+      const int32_t idx = s_indices[i];
+      if (idx >= 0) {
+        const uint32_t b32 = convert_to_uint32(s_scores[i]);
+        const int bin = (b32 >> 24) & 0xFF;
+        if (bin == threshold_bin_m) {
+          in_threshold = true;
+          sub_bin = (b32 >> 16) & 0xFF;
+        }
+      }
+    }
+    const bool take_sub_above = in_threshold && (sub_bin > sub_threshold_bin_m);
+    const int  slot           = warp_compact_slot(take_sub_above, &s_counter);
+    if (take_sub_above) {
+      out_idx[slot] = s_indices[i];
+    } else if (in_threshold && sub_bin == sub_threshold_bin_m) {
+      const int pos = ::atomicAdd(&s_last_remain, -1);
+      if (pos > 0) out_idx[K - pos] = s_indices[i];
+    }
   }
 }
 
-// ---- setup_kernel_smem_once (duplicated) -----------------------------------
+// ---- setup_kernel_smem_once ------------------------------------------------
 
 template <auto* f, size_t max_dynamic_smem>
 void setup_kernel_smem_once() {
   [[maybe_unused]]
   static const auto result = [] {
-#ifdef USE_ROCM
-    return ::cudaFuncSetAttribute(
-        reinterpret_cast<const void*>(f),
-        ::cudaFuncAttributeMaxDynamicSharedMemorySize, max_dynamic_smem);
-#else
     return ::cudaFuncSetAttribute(
         f, ::cudaFuncAttributeMaxDynamicSharedMemorySize, max_dynamic_smem);
-#endif
   }();
   TORCH_CHECK(result == cudaSuccess,
-              "set_up_kernel_once (parallel) failed:", ::cudaGetErrorString(result));
+              "fast_fused_topk_merge setup failed: ",
+              ::cudaGetErrorString(result));
 }
 
 }  // namespace
@@ -662,150 +501,139 @@ void setup_kernel_smem_once() {
 // ============================================================================
 // Host entry point.
 //
-// Signature matches topk_output_sglang_fused plus `num_splits`.
-// `num_splits <= 1` delegates to the single-CTA fused kernel so callers
-// can unconditionally use this path.
+//   score                [batch_size, num_chunks, chunk_size]  bf16 or f32
+//   global_topk_indices  [batch_size, topk_val]                int32  (output)
+//
+// ONE kernel launch. The per-chunk selection (Phase 1) and the
+// cross-chunk merge (Phase 2) are fused in TopK_Parallel_Kernel via a
+// last-CTA-wins atomicInc barrier. A per-call workspace holds the
+// [batch, N, K] partial top-K that the last CTA reads from; the
+// done-counter is a program-lifetime __device__ global so nothing
+// needs memsetting on the hot path.
 // ============================================================================
-void topk_output_sglang_parallel(
-    const at::Tensor& x,
-    const at::Tensor& dense_kv_indptr,
-    const at::Tensor& sparse_kv_indptr,
-    const at::Tensor& dense_kv_indices,
-    at::Tensor&       sparse_kv_indices,
-    const int64_t     eff_batch_size,
+void fast_fused_topk_merge(
+    const at::Tensor& score,
+    at::Tensor&       global_topk_indices,
+    const int64_t     batch_size,
+    const int64_t     num_chunks,
+    const int64_t     chunk_size,
     const int64_t     topk_val,
-    const int64_t     reserved_bos,
-    const int64_t     reserved_eos,
-    const int64_t     max_num_pages,
-    const int64_t     num_splits,
     const int64_t     mapping_mode,
-    const double      mapping_power,
-    std::optional<at::Tensor> mapping_lut,
-    std::optional<at::Tensor> mapping_quantiles)
+    const double      mapping_power)
 {
-    TORCH_CHECK(topk_val <= VORTEX_MAX_TOPK,
-                "topk_output_sglang_parallel: topk_val (", topk_val,
-                ") exceeds VORTEX_MAX_TOPK (", VORTEX_MAX_TOPK, ")");
-    TORCH_CHECK(num_splits >= 1,
-                "topk_output_sglang_parallel: num_splits must be >= 1");
+  CHECK_CUDA(score);
+  CHECK_CUDA(global_topk_indices);
 
-    if (num_splits <= 1) {
-        topk_output_sglang_fused(
-            x, dense_kv_indptr, sparse_kv_indptr, dense_kv_indices,
-            sparse_kv_indices, eff_batch_size, topk_val,
-            reserved_bos, reserved_eos, max_num_pages,
-            mapping_mode, mapping_power, mapping_lut, mapping_quantiles);
-        return;
-    }
+  TORCH_CHECK(topk_val > 0 && topk_val <= VORTEX_MAX_TOPK,
+              "fast_fused_topk_merge: topk_val=", topk_val,
+              " must be in (0, ", VORTEX_MAX_TOPK, "]");
+  TORCH_CHECK(num_chunks >= 1,  "num_chunks must be >= 1");
+  TORCH_CHECK(batch_size >= 1,  "batch_size must be >= 1");
+  TORCH_CHECK(batch_size <= kMaxBatch,
+              "fast_fused_topk_merge: batch_size ", batch_size,
+              " exceeds the __device__ done-counter cap (", kMaxBatch, ")");
+  TORCH_CHECK(chunk_size >= 1,  "chunk_size must be >= 1");
+  TORCH_CHECK(num_chunks * topk_val <= kMergeCap,
+              "fast_fused_topk_merge: num_chunks*topk_val (",
+              num_chunks * topk_val, ") exceeds merge cap (", kMergeCap,
+              "). Reduce num_chunks or topk_val.");
+  TORCH_CHECK(global_topk_indices.scalar_type() == at::kInt,
+              "global_topk_indices must be int32");
+  TORCH_CHECK(global_topk_indices.numel() >= batch_size * topk_val,
+              "global_topk_indices is too small for batch_size * topk_val");
 
-    CHECK_CUDA(x);
-    CHECK_CUDA(dense_kv_indptr);
-    CHECK_CUDA(sparse_kv_indptr);
-    CHECK_CUDA(dense_kv_indices);
-    CHECK_CUDA(sparse_kv_indices);
+  TORCH_CHECK(
+      mapping_mode == MAPPING_POWER        ||
+      mapping_mode == MAPPING_ASINH        ||
+      mapping_mode == MAPPING_LOG1P        ||
+      mapping_mode == MAPPING_ERF          ||
+      mapping_mode == MAPPING_TANH         ||
+      mapping_mode == MAPPING_SUBTRACT     ||
+      mapping_mode == MAPPING_EXP_STRETCH  ||
+      mapping_mode == MAPPING_SHIFT_POW2   ||
+      mapping_mode == MAPPING_SHIFT_POW3   ||
+      mapping_mode == MAPPING_LINEAR_STEEP,
+      "fast_fused_topk_merge: mapping_mode=", mapping_mode,
+      " not supported. Valid: POWER(3), ASINH(6), LOG1P(7), ERF(9), "
+      "TANH(10), SUBTRACT(11), EXP_STRETCH(13), SHIFT_POW2(15), "
+      "SHIFT_POW3(16), LINEAR_STEEP(17).");
 
-    (void)mapping_lut;
-    (void)mapping_quantiles;
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
+  const float mp = static_cast<float>(mapping_power);
 
-    TopKMappingParams mapping{};
-    mapping.mode      = static_cast<int>(mapping_mode);
-    mapping.power_exp = static_cast<float>(mapping_power);
-    mapping.lut       = nullptr;
-    mapping.quantiles = nullptr;
+  // Dynamic smem must fit whichever phase is larger:
+  //   Phase 1:  chunk_size floats + chunk_size bytes.
+  //   Phase 2:  num_chunks*topk_val * (float + int32).
+  const size_t p1_bytes = static_cast<size_t>(chunk_size) * sizeof(float)
+                        + ((static_cast<size_t>(chunk_size) + 15) & ~size_t(15));
+  const size_t p2_bytes = static_cast<size_t>(num_chunks) *
+                          static_cast<size_t>(topk_val) *
+                          (sizeof(float) + sizeof(int32_t));
+  const size_t smem_bytes = p1_bytes > p2_bytes ? p1_bytes : p2_bytes;
+  TORCH_CHECK(smem_bytes <= kMaxDynSmem,
+              "fast_fused_topk_merge: smem ", smem_bytes,
+              " > ceiling ", kMaxDynSmem);
 
-    // Dynamic smem = kSmem (f_input_idx) + chunk_bytes (s_bins for the
-    // partition radix; the merge doesn't touch s_bins).
-    const int64_t chunk_pages = (max_num_pages + num_splits - 1) / num_splits;
-    const size_t chunk_bytes = (static_cast<size_t>(chunk_pages) + size_t(15)) & ~size_t(15);
-    const size_t smem_bytes = kSmem + chunk_bytes;
-    TORCH_CHECK(smem_bytes <= kFusedSmemMax,
-                "topk_output_sglang_parallel: smem ", smem_bytes,
-                " exceeds ceiling ", kFusedSmemMax);
+  // Per-call workspace for the [batch, N, K] partial top-K. at::empty
+  // hits the caching allocator (no cudaMalloc in the hot path after
+  // warmup). The done-counter lives in __device__ memory — no memset.
+  auto opts_f32 = at::TensorOptions().device(score.device()).dtype(at::kFloat);
+  auto opts_i32 = at::TensorOptions().device(score.device()).dtype(at::kInt);
+  const int64_t ws_elems = batch_size * num_chunks * topk_val;
+  at::Tensor partial_keys = at::empty({ws_elems}, opts_f32);
+  at::Tensor partial_idx  = at::empty({ws_elems}, opts_i32);
 
-    cudaStream_t stream = at::cuda::getCurrentCUDAStream().stream();
+  dim3 grid(static_cast<unsigned>(batch_size),
+            static_cast<unsigned>(num_chunks));
+  dim3 block(kThreadsPerBlock);
 
-    TORCH_CHECK(eff_batch_size <= kMaxParallelEffBs,
-                "topk_output_sglang_parallel: eff_batch_size (", eff_batch_size,
-                ") exceeds kMaxParallelEffBs (", kMaxParallelEffBs,
-                "). Raise the __device__ counter array size.");
+  #define LAUNCH(DTYPE, PTR_EXPR, MODE_VAL)                                    \
+    do {                                                                       \
+      setup_kernel_smem_once<TopK_Parallel_Kernel<DTYPE, MODE_VAL>,            \
+                             kMaxDynSmem>();                                   \
+      TopK_Parallel_Kernel<DTYPE, MODE_VAL>                                    \
+          <<<grid, block, smem_bytes, stream>>>(                               \
+              PTR_EXPR,                                                        \
+              global_topk_indices.data_ptr<int32_t>(),                         \
+              partial_keys.data_ptr<float>(),                                  \
+              partial_idx.data_ptr<int32_t>(),                                 \
+              static_cast<int>(num_chunks),                                    \
+              static_cast<int>(chunk_size),                                    \
+              static_cast<int>(topk_val),                                      \
+              mp);                                                             \
+    } while (0)
 
-    // Per-call workspace. at::empty, no zero-init — kernel fills every used
-    // slot (valid prefix + sentinel tail). done_counter is a __device__
-    // global (above) so no workspace allocation needed for it.
-    const int64_t ws_elems = eff_batch_size * num_splits * topk_val;
-    auto opts_f32 = at::TensorOptions().device(x.device()).dtype(at::kFloat);
-    auto opts_i32 = at::TensorOptions().device(x.device()).dtype(at::kInt);
-    at::Tensor partial_keys = at::empty({ws_elems}, opts_f32);
-    at::Tensor partial_idx  = at::empty({ws_elems}, opts_i32);
+  #define DISPATCH_MODE(DTYPE, PTR_EXPR)                                       \
+    do {                                                                       \
+      switch (mapping_mode) {                                                  \
+        case MAPPING_POWER:        LAUNCH(DTYPE, PTR_EXPR, MAPPING_POWER);        break; \
+        case MAPPING_ASINH:        LAUNCH(DTYPE, PTR_EXPR, MAPPING_ASINH);        break; \
+        case MAPPING_LOG1P:        LAUNCH(DTYPE, PTR_EXPR, MAPPING_LOG1P);        break; \
+        case MAPPING_ERF:          LAUNCH(DTYPE, PTR_EXPR, MAPPING_ERF);          break; \
+        case MAPPING_TANH:         LAUNCH(DTYPE, PTR_EXPR, MAPPING_TANH);         break; \
+        case MAPPING_SUBTRACT:     LAUNCH(DTYPE, PTR_EXPR, MAPPING_SUBTRACT);     break; \
+        case MAPPING_EXP_STRETCH:  LAUNCH(DTYPE, PTR_EXPR, MAPPING_EXP_STRETCH);  break; \
+        case MAPPING_SHIFT_POW2:   LAUNCH(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW2);   break; \
+        case MAPPING_SHIFT_POW3:   LAUNCH(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW3);   break; \
+        case MAPPING_LINEAR_STEEP: LAUNCH(DTYPE, PTR_EXPR, MAPPING_LINEAR_STEEP); break; \
+        default: TORCH_CHECK(false, "unreachable mode");                       \
+      }                                                                        \
+    } while (0)
 
-    dim3 grid(static_cast<unsigned>(num_splits),
-              static_cast<unsigned>(eff_batch_size));
-    dim3 nthreads(kThreadsPerBlock);
+  if (score.scalar_type() == at::ScalarType::BFloat16) {
+    DISPATCH_MODE(__nv_bfloat16,
+                  reinterpret_cast<__nv_bfloat16*>(score.data_ptr<at::BFloat16>()));
+  } else if (score.scalar_type() == at::ScalarType::Float) {
+    DISPATCH_MODE(float, score.data_ptr<float>());
+  } else {
+    TORCH_CHECK(false, "fast_fused_topk_merge: unsupported dtype ",
+                score.scalar_type());
+  }
 
-    #define VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MODE_VAL)                     \
-        do {                                                                         \
-            setup_kernel_smem_once<                                                  \
-                TopKOutput_Parallel_Kernel<DTYPE, MODE_VAL>,                         \
-                kFusedSmemMax>();                                                    \
-            TopKOutput_Parallel_Kernel<DTYPE, MODE_VAL>                              \
-                <<<grid, nthreads, smem_bytes, stream>>>(                            \
-                    PTR_EXPR,                                                        \
-                    dense_kv_indptr.data_ptr<int>(),                                 \
-                    sparse_kv_indptr.data_ptr<int>(),                                \
-                    dense_kv_indices.data_ptr<int>(),                                \
-                    sparse_kv_indices.data_ptr<int>(),                               \
-                    partial_keys.data_ptr<float>(),                                  \
-                    partial_idx.data_ptr<int>(),                                     \
-                    static_cast<int>(topk_val),                                      \
-                    static_cast<int>(num_splits),                                    \
-                    static_cast<int>(reserved_bos),                                  \
-                    static_cast<int>(reserved_eos),                                  \
-                    static_cast<int>(chunk_bytes),                                   \
-                    mapping);                                                        \
-        } while (0)
+  #undef DISPATCH_MODE
+  #undef LAUNCH
 
-    #define VORTEX_PARALLEL_DISPATCH_MODE(DTYPE, PTR_EXPR)                          \
-        do {                                                                         \
-            switch (mapping.mode) {                                                  \
-                case MAPPING_NONE:        VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_NONE); break; \
-                case MAPPING_POWER:       VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_POWER); break; \
-                case MAPPING_LOG:         VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_LOG); break; \
-                case MAPPING_ASINH:       VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_ASINH); break; \
-                case MAPPING_LOG1P:       VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_LOG1P); break; \
-                case MAPPING_TRUNC8:      VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_TRUNC8); break; \
-                case MAPPING_ERF:         VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_ERF); break; \
-                case MAPPING_TANH:        VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_TANH); break; \
-                case MAPPING_SUBTRACT:    VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_SUBTRACT); break; \
-                case MAPPING_EXP_STRETCH: VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_EXP_STRETCH); break; \
-                case MAPPING_SHIFT_POW2:  VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW2); break; \
-                case MAPPING_SHIFT_POW3:  VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_SHIFT_POW3); break; \
-                case MAPPING_LINEAR_STEEP:VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_LINEAR_STEEP); break; \
-                case MAPPING_HALF_SQUARE: VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_HALF_SQUARE); break; \
-                case MAPPING_HALF_CUBE:   VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_HALF_CUBE); break; \
-                case MAPPING_DENSE_MANT:  VORTEX_PARALLEL_DISPATCH(DTYPE, PTR_EXPR, MAPPING_DENSE_MANT); break; \
-                default:                                                             \
-                    TORCH_CHECK(false,                                               \
-                        "topk_output_sglang_parallel: unsupported mapping_mode ",    \
-                        mapping.mode);                                               \
-            }                                                                        \
-        } while (0)
-
-    if (x.scalar_type() == at::ScalarType::BFloat16) {
-        VORTEX_PARALLEL_DISPATCH_MODE(
-            __nv_bfloat16,
-            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()));
-    } else if (x.scalar_type() == at::ScalarType::Float) {
-        VORTEX_PARALLEL_DISPATCH_MODE(float, x.data_ptr<float>());
-    } else {
-        TORCH_CHECK(false, "topk_output_sglang_parallel: unsupported dtype ",
-                    x.scalar_type());
-    }
-
-    #undef VORTEX_PARALLEL_DISPATCH_MODE
-    #undef VORTEX_PARALLEL_DISPATCH
-
-    const auto result = cudaGetLastError();
-    TORCH_CHECK(result == cudaSuccess,
-                "topk_output_sglang_parallel kernel failed: ",
-                ::cudaGetErrorString(result));
+  const auto rc = cudaGetLastError();
+  TORCH_CHECK(rc == cudaSuccess,
+              "fast_fused_topk_merge kernel failed: ", ::cudaGetErrorString(rc));
 }
