@@ -27,8 +27,7 @@ from vortex_torch_C import (
     topk_output_sglang,          # 2-stage radix approximate topk (unmapped baseline)
     topk_output_sglang_fused,    # fused remap + 2-stage radix topk
     topk_output_sglang_ori,      # original SGLang reference kernel
-    fast_fused_topk_merge,       # single-kernel split+merge (new parallel kernel)
-    fast_cluster_topk_merge,     # Hopper TBC+DSMEM fused split+merge (sm_90+)
+    topk_output_adaptive,        # adaptive split-2 last-CTA-wins (hybrid radix/CUB)
     topk_remap_only,             # standalone value-space remap
     topk_profile_histogram,
     topk_profile_counters,
@@ -571,6 +570,28 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
     none_stats = _collect_threshold_stats(
         inputs, topk_val, pages_per_seg, args, mode=0, power=0.5
     )
+
+    # Adaptive split-2 kernel (last-CTA-wins merge). Enabled via --bench-parallel.
+    # For the None row we run it with mapping_mode=0 (identity transform).
+    none_parallel_ms = None
+    none_parallel_splits = None
+    none_cluster_ms = None
+    if getattr(args, "bench_parallel", False):
+        par_args = (
+            inputs["x"],
+            inputs["dense_kv_indptr"],
+            inputs["sparse_kv_indptr"],
+            inputs["dense_kv_indices"],
+            inputs["sparse_kv_indices"],
+            eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+            0,      # mapping_mode = NONE
+            0.5,    # mapping_power (unused for mode 0)
+        )
+        inputs["sparse_kv_indices"].zero_()
+        par_none = bench_kernel(topk_output_adaptive, par_args, args.warmup, args.repeat)
+        none_parallel_ms = par_none["mean_ms"]
+        none_parallel_splits = 2
+
     config["modes"].append({
         "mode": 0,
         "mode_name": "None",
@@ -579,8 +600,9 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         "topk_after_remap_ms": baseline["mean_ms"],
         "split_total_ms": None,
         "fused_ms": None,
-        "parallel_ms": None,
-        "parallel_splits": None,
+        "parallel_ms": none_parallel_ms,
+        "parallel_splits": none_parallel_splits,
+        "cluster_ms": none_cluster_ms,
         **none_stats,
     })
 
@@ -637,100 +659,28 @@ def _remap_bench_one_config(args, batch_size, num_kv_heads, seq_len, topk_val,
         inputs["sparse_kv_indices"].zero_()
         fused = bench_kernel(topk_output_sglang_fused, fused_args, args.warmup, args.repeat)
 
-        # New single-kernel split+merge (fast_fused_topk_merge). Takes a
-        # dense [B, N, chunk] score tensor and writes [B, K] int32
-        # indices. We reshape the bench's [eff_bs * pages_per_seg] flat
-        # scores into [eff_bs, num_splits, chunk_per_split] and compare
-        # the resulting batch-local indices against the fused kernel's
-        # (which map through the identity dense_kv_indices).
+        # Adaptive split-2 kernel (last-CTA-wins merge) with remap mode.
+        # Only ARITHMETIC_MODES are supported by topk_output_adaptive — the
+        # LUT/quantile/trunc8 modes have no apply_transform arithmetic path.
         parallel_ms = None
         parallel_splits_used = None
         cluster_ms = None
-        if getattr(args, "bench_parallel", False) and mode in {
-            3, 6, 7, 9, 10, 11, 13, 15, 16, 17
-        }:
-            splits = getattr(args, "num_splits", -1)
-            if splits is None or splits < 1:
-                splits = _auto_num_splits(eff_bs, pages_per_seg, topk_val)
-            # num_splits must divide pages_per_seg, and num_splits*topk_val
-            # must fit the merge cap (8192). Clamp + round.
-            if splits > 1 and pages_per_seg % splits != 0:
-                # snap down to the largest divisor ≤ splits
-                for cand in range(splits, 0, -1):
-                    if pages_per_seg % cand == 0:
-                        splits = cand
-                        break
-            while splits * topk_val > 8192 and splits > 1:
-                splits //= 2
-            # splits=1 means "no parallel" — the parallel kernel has no
-            # work to do and would ask for seq_len * 5 bytes of smem (the
-            # Phase-1 cache), blowing past the 96 KB ceiling at seq_len
-            # > ~19K. Skip the parallel timing row for this config.
-            if splits < 2:
-                parallel_ms = None
-                parallel_splits_used = None
-                row = {
-                    "mode": mode,
-                    "mode_name": MAPPING_MODE_NAMES.get(mode, f"m{mode}"),
-                    "power": power,
-                    "remap_ms": None,
-                    "topk_after_remap_ms": None,
-                    "split_total_ms": None,
-                    "fused_ms": fused["mean_ms"],
-                    "parallel_ms": parallel_ms,
-                    "parallel_splits": parallel_splits_used,
-                    "cluster_ms": cluster_ms,
-                    **_collect_threshold_stats(
-                        inputs, topk_val, pages_per_seg, args, mode, power
-                    ),
-                }
-                config["modes"].append(row)
-                continue
-            chunk_per_split = pages_per_seg // splits
-            parallel_x = (
-                inputs["x"].view(eff_bs, pages_per_seg)
-                           .view(eff_bs, splits, chunk_per_split)
-                           .contiguous()
+        if getattr(args, "bench_parallel", False) and mode in ARITHMETIC_MODES:
+            par_args = (
+                inputs["x"],
+                inputs["dense_kv_indptr"],
+                inputs["sparse_kv_indptr"],
+                inputs["dense_kv_indices"],
+                inputs["sparse_kv_indices"],
+                eff_bs, topk_val, args.reserved_bos, args.reserved_eos, pages_per_seg,
+                mode, power,
             )
-            parallel_out = torch.empty(eff_bs, topk_val,
-                                       dtype=torch.int32, device="cuda")
-            parallel_args = (
-                parallel_x,
-                parallel_out,
-                eff_bs,
-                splits,
-                chunk_per_split,
-                topk_val,
-                mode,
-                power,
+            inputs["sparse_kv_indices"].zero_()
+            par_bench = bench_kernel(
+                topk_output_adaptive, par_args, args.warmup, args.repeat
             )
-            parallel = bench_kernel(
-                fast_fused_topk_merge, parallel_args, args.warmup, args.repeat
-            )
-            parallel_ms = parallel["mean_ms"]
-            parallel_splits_used = splits
-
-            # Hopper TBC+DSMEM variant — same args, sm_90+ only,
-            # cluster cap = 8. Fresh output buffer so validation can
-            # compare against the parallel kernel's output independently.
-            cluster_ms = None
-            if splits <= 8 and torch.cuda.get_device_capability(0)[0] >= 9:
-                cluster_out = torch.empty(eff_bs, topk_val,
-                                          dtype=torch.int32, device="cuda")
-                cluster_args = (
-                    parallel_x,
-                    cluster_out,
-                    eff_bs,
-                    splits,
-                    chunk_per_split,
-                    topk_val,
-                    mode,
-                    power,
-                )
-                cluster = bench_kernel(
-                    fast_cluster_topk_merge, cluster_args, args.warmup, args.repeat
-                )
-                cluster_ms = cluster["mean_ms"]
+            parallel_ms = par_bench["mean_ms"]
+            parallel_splits_used = 2
 
         # Split-phase timing is only meaningful for arithmetic modes.
         # MAPPING_LUT_CDF / QUANTILE / TRUNC8 apply their mapping inside
@@ -1134,7 +1084,8 @@ def main():
     p.add_argument("--remap-bench", action="store_true",
                    help="Run the split-phase remap/topk/fused/baseline benchmark.")
     p.add_argument("--bench-parallel", action="store_true",
-                   help="Also time fast_fused_topk_merge (single-kernel split+merge).")
+                   help="Time the adaptive split-2 last-CTA-wins kernel "
+                        "(topk_output_adaptive) and fill the parallel_ms column.")
     p.add_argument("--num-splits", type=int, default=-1,
                    help="Partitions per batch for the parallel kernel. -1 = auto "
                         "(sm_count / eff_batch_size, clamped to pages_per_seg/topk_val).")
