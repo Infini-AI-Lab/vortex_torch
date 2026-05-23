@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.cache.elementwise - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,21 +255,18 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.cache.elementwise</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.triton_kernels.elementwise_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">elementwise_pp</span><span class="p">,</span> <span class="n">elementwise_rp</span><span class="p">,</span> <span class="n">elementwise_pr</span><span class="p">,</span> <span class="n">elementwise_rr</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">as_vtensor</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementwiseOpType</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementwiseOpType</span><span class="p">,</span> <span class="n">Schedule</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
 
 <div class="viewcode-block" id="Elementwise">
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Elementwise</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Unary elementwise operator dispatcher (e.g. ReLU/Sigmoid/SiLU/Abs/Affine).</span>
+<span class="sd">    Unary elementwise op (e.g. ReLU/Sigmoid/SiLU/Abs/Affine).</span>
 
-<span class="sd">    This class dispatches a family of unary elementwise operations on</span>
-<span class="sd">    rank-3 tensors. The input is treated as</span>
+<span class="sd">    Operates on rank-3 tensors</span>
 
 <span class="sd">    .. math::</span>
 
@@ -289,114 +286,41 @@
 
 <span class="sd">        Y[b, n, d] = f(X[b, n, d]; \alpha, \beta, \text{op_type}),</span>
 
-<span class="sd">    where the actual function :math:`f` is selected by :attr:`op_type`,</span>
-<span class="sd">    and may make use of scalar parameters :attr:`alpha` and :attr:`beta`</span>
-<span class="sd">    (for example, in affine or activation variants).</span>
+<span class="sd">    where the actual function :math:`f` is selected by :attr:`op_type`.</span>
 
-<span class="sd">    Dispatch is based on the pair of tensor formats</span>
-<span class="sd">    ``(x_format, o_format)`` and a registry mapping:</span>
-
-<span class="sd">    .. code-block:: text</span>
-
-<span class="sd">        (x_format, o_format) -&gt; (impl, resolved_output_format)</span>
-
-<span class="sd">    Policy</span>
-<span class="sd">    ------</span>
-<span class="sd">    - If ``output`` is ``None``, :meth:`profile` selects an implementation</span>
-<span class="sd">      with ``o_format == FORMAT.RAGGED``, allocates an internal buffer</span>
-<span class="sd">      of logical shape ``[B, N, D]``, and returns a ``vTensor`` view.</span>
-<span class="sd">    - If ``output`` is provided, :meth:`profile` requires an exact</span>
-<span class="sd">      ``(x_fmt, o_fmt)`` mapping in :attr:`_impl_map` and validates</span>
-<span class="sd">      shape/device consistency.</span>
-<span class="sd">    - The logical (``N, D``) axes are preserved by design; only the</span>
-<span class="sd">      leading ``B`` comes from the runtime context.</span>
+<span class="sd">    Output format rule: if a caller-provided ``output`` is supplied with</span>
+<span class="sd">    ``PAGED`` format, the output is ``PAGED``; in every other case</span>
+<span class="sd">    (``output is None``, or ``output._format == RAGGED``) the output is</span>
+<span class="sd">    ``RAGGED``. Format compatibility is enforced by the compiler&#39;s</span>
+<span class="sd">    per-block kernel.</span>
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[Tuple[FORMAT, FORMAT], Tuple[Callable, FORMAT]]</span>
-<span class="sd">        Dispatch table keyed by ``(x_format, o_format)``. Each entry maps</span>
-<span class="sd">        to ``(callable_impl, resolved_output_format)``.</span>
 <span class="sd">    alpha : float</span>
 <span class="sd">        Scalar parameter used by certain unary ops.</span>
 <span class="sd">    beta : float</span>
 <span class="sd">        Scalar parameter used by certain unary ops.</span>
 <span class="sd">    op_type : Optional[ElementwiseOpType]</span>
 <span class="sd">        Runtime-set enum/int describing the specific elementwise operation.</span>
-<span class="sd">    impl : Optional[Callable]</span>
-<span class="sd">        The resolved implementation selected during :meth:`profile`.</span>
 <span class="sd">    output_format : Optional[FORMAT]</span>
 <span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Internal output buffer allocated when ``output`` is ``None``.</span>
+<span class="sd">    output_buffer : Optional[vTensor]</span>
+<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Implementation registry:</span>
-    <span class="c1">#   key   = (x_format, o_format)</span>
-    <span class="c1">#   value = (callable_impl, resolved_output_format)</span>
-    <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Callable</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">,</span>  <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">):</span>  <span class="p">(</span><span class="n">elementwise_pp</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">),</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">,</span>  <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">):</span> <span class="p">(</span><span class="n">elementwise_pr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">):</span>  <span class="p">(</span><span class="n">elementwise_rp</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">),</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">):</span> <span class="p">(</span><span class="n">elementwise_rr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-    <span class="p">}</span>
-
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Initialize a unary elementwise dispatcher.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        alpha : float, optional</span>
-<span class="sd">            Scalar parameter used by certain elementwise operations</span>
-<span class="sd">            (for example, as an additive or bias term). Default is ``0.0``.</span>
-
-<span class="sd">        beta : float, optional</span>
-<span class="sd">            Scalar parameter used by certain elementwise operations</span>
-<span class="sd">            (for example, as a multiplicative or slope term).</span>
-<span class="sd">            Default is ``1.0``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">alpha</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">beta</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ElementwiseOpType</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>          <span class="c1"># runtime-set enum/int for the op</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ElementwiseOpType</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-
-    <span class="c1"># ------------------------------ helpers ------------------------------ #</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_infer_impl_ragged</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x_fmt</span><span class="p">:</span> <span class="n">FORMAT</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Callable</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">]:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Infer an implementation assuming a RAGGED output format.</span>
-
-<span class="sd">        This helper is used when :meth:`profile` is called with</span>
-<span class="sd">        ``output is None``. It selects an implementation for the</span>
-<span class="sd">        key ``(x_fmt, FORMAT.RAGGED)`` in :attr:`_impl_map`.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x_fmt : FORMAT</span>
-<span class="sd">            The format of the input tensor ``x``.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        (Callable, FORMAT)</span>
-<span class="sd">            The implementation callable and the resolved output format.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If there is no entry for ``(x_fmt, FORMAT.RAGGED)`` in</span>
-<span class="sd">            :attr:`_impl_map`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_fmt</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span><span class="si">}</span><span class="s2">no RAGGED-output implementation for x_fmt=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">. &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="p">)</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>  <span class="c1"># -&gt; (impl, out_fmt)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">vTensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Cache elementwise ops fuse with neighbours into a single</span>
+        <span class="c1"># token-driven kernel — see ``cache.compiler.triton_impl.kernel_gen``.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">W</span>
 
     <span class="c1"># --------------------------------------------------------------------- #</span>
-    <span class="c1"># profile: validate, select impl/format, and optionally allocate output</span>
+    <span class="c1"># profile: validate and optionally allocate output</span>
     <span class="c1"># --------------------------------------------------------------------- #</span>
 <div class="viewcode-block" id="Elementwise.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.profile">[docs]</a>
@@ -404,32 +328,26 @@
         <span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">vTensor</span><span class="p">],</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs, select implementation and output format, and</span>
-<span class="sd">        optionally allocate an internal output buffer.</span>
+<span class="sd">        Validate inputs and optionally allocate an internal output buffer.</span>
 
 <span class="sd">        The input tensor ``x`` is expected to have logical shape</span>
-<span class="sd">        ``[B, N, D]``. The auxiliary tensor ``loc`` carries per-position</span>
-<span class="sd">        metadata used by the implementation (for example, mapping positions</span>
-<span class="sd">        to segments or other runtime indices); its exact shape and semantics</span>
-<span class="sd">        are defined by the kernel.</span>
+<span class="sd">        ``[B, N, D]``.</span>
 
-<span class="sd">        There are two modes:</span>
+<span class="sd">        Two modes:</span>
 
 <span class="sd">        - **No output provided** (``output is None``):</span>
 
-<span class="sd">          - Select an implementation for ``(x._format, FORMAT.RAGGED)``.</span>
-<span class="sd">          - Allocate an internal buffer with shape</span>
-<span class="sd">            ``[B, N, D]``, where</span>
+<span class="sd">          - Allocate an internal RAGGED buffer with shape ``[B, N, D]``,</span>
+<span class="sd">            where</span>
 
 <span class="sd">            .. math::</span>
 
-<span class="sd">                B = \text{ctx.max_new_tokens_per_batch} \times \text{ctx.head_num},</span>
-
-<span class="sd">          - Wrap it as a :class:`vTensor` with the resolved output format.</span>
+<span class="sd">                B = \text{ctx.max_new_tokens_per_batch} \times \text{ctx.head_num}.</span>
 
 <span class="sd">        - **Output provided** (``output is not None``):</span>
 
-<span class="sd">          - Require an exact mapping for ``(x._format, output._format)``.</span>
+<span class="sd">          - Take the format directly from ``output._format`` (must be</span>
+<span class="sd">            ``PAGED`` or ``RAGGED``).</span>
 <span class="sd">          - Validate that ``output`` has rank 3 and preserves the</span>
 <span class="sd">            ``(N, D)`` dimensions of ``x``.</span>
 <span class="sd">          - Validate device consistency between ``x`` and ``output``.</span>
@@ -441,9 +359,9 @@
 
 <span class="sd">        output : Optional[vTensor]</span>
 <span class="sd">            Optional preallocated output tensor. If ``None``, an internal</span>
-<span class="sd">            buffer is allocated; otherwise, this tensor must have shape</span>
-<span class="sd">            ``[B_out, N, D]`` for some ``B_out`` and a format compatible</span>
-<span class="sd">            with :attr:`_impl_map`.</span>
+<span class="sd">            RAGGED buffer is allocated; otherwise, this tensor must have</span>
+<span class="sd">            shape ``[B_out, N, D]`` for some ``B_out`` and a format in</span>
+<span class="sd">            ``{PAGED, RAGGED}``.</span>
 
 <span class="sd">        loc : torch.Tensor</span>
 <span class="sd">            Auxiliary tensor carrying per-position metadata required by</span>
@@ -464,8 +382,7 @@
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        AssertionError</span>
-<span class="sd">            If types, ranks, formats, shapes, or devices are incompatible,</span>
-<span class="sd">            or if no implementation is found in :attr:`_impl_map`.</span>
+<span class="sd">            If types, ranks, shapes, or devices are incompatible.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
@@ -474,37 +391,38 @@
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">loc must be torch.Tensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">loc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">x must be 3D, got ndim=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="si">}</span><span class="s2"> shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
 
-        <span class="n">x_fmt</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span>
         <span class="n">N</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 
-        <span class="c1"># Case A: output not provided -&gt; choose RAGGED impl and allocate buffer</span>
+        <span class="c1"># Case A: output not provided -&gt; allocate a RAGGED metadata buffer.</span>
         <span class="k">if</span> <span class="n">output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_infer_impl_ragged</span><span class="p">(</span><span class="n">x_fmt</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span>
 
-            <span class="c1"># Allocate on x.device/x.dtype; B comes from runtime context</span>
             <span class="n">B</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">max_new_tokens_per_batch</span> <span class="o">*</span> <span class="n">ctx</span><span class="o">.</span><span class="n">head_num</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span>
-                <span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">D</span><span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span>
+                <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">D</span><span class="p">),</span>
+                <span class="n">dtype</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">vortex_dtype</span><span class="p">,</span>
                 <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-                <span class="n">dtype</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+                <span class="n">_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">,</span>
+                <span class="n">tensor_id</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="p">),</span>
             <span class="p">)</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">))</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span>
 
-        <span class="c1"># Case B: output provided -&gt; validate and select exact impl</span>
+        <span class="c1"># Case B: output provided -&gt; output_format follows output._format</span>
+        <span class="c1"># (PAGED iff caller supplied a PAGED tensor; otherwise RAGGED).</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">output must be vTensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">output</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="k">assert</span> <span class="n">output</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">output must be 3D, &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;got ndim=</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="si">}</span><span class="s2"> shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
-
-        <span class="n">o_fmt</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">_format</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_fmt</span><span class="p">,</span> <span class="n">o_fmt</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for (x_fmt=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">, o_fmt=</span><span class="si">{</span><span class="n">o_fmt</span><span class="si">}</span><span class="s2">). &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="n">output</span><span class="o">.</span><span class="n">_format</span> <span class="ow">in</span> <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">output._format must be PAGED or RAGGED, got </span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">_format</span>
 
         <span class="c1"># Shape consistency: unary elementwise keeps (N,D)</span>
         <span class="k">assert</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">N</span> <span class="ow">and</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="n">D</span><span class="p">,</span> <span class="p">(</span>
@@ -517,67 +435,17 @@
             <span class="sa">f</span><span class="s2">&quot;(x.device=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, output.device=</span><span class="si">{</span><span class="n">output</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
         <span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">output</span></div>
+        <span class="c1"># Register in the cache graph. ``output`` is provided by the caller</span>
+        <span class="c1"># and assumed to already have a valid ``tensor_id`` and to live in</span>
+        <span class="c1"># ``ctx.tensor_list``. We claim it as this op&#39;s produced tensor</span>
+        <span class="c1"># (override producer), mirroring ``indexer.save_load.Save``.</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="p">[</span><span class="n">output</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">output</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
 
-
-    <span class="c1"># --------------------------------------------------------------------- #</span>
-    <span class="c1"># execute: run selected impl and return the plain output tensor</span>
-    <span class="c1"># --------------------------------------------------------------------- #</span>
-<div class="viewcode-block" id="Elementwise.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Execute the selected unary elementwise implementation.</span>
-
-<span class="sd">        This method assumes that :meth:`profile` has already selected an</span>
-<span class="sd">        implementation and, if needed, allocated an internal output buffer.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : torch.Tensor</span>
-<span class="sd">            Plain input tensor with shape consistent with the ``vTensor``</span>
-<span class="sd">            validated in :meth:`profile`.</span>
-
-<span class="sd">        output : Optional[torch.Tensor]</span>
-<span class="sd">            Optional preallocated output tensor. If ``None``, the internal</span>
-<span class="sd">            buffer created during :meth:`profile` will be used.</span>
-
-<span class="sd">        loc : torch.Tensor</span>
-<span class="sd">            Auxiliary tensor carrying per-position metadata required by the</span>
-<span class="sd">            implementation (e.g., location/segment indices).</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context forwarded to the implementation.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The output tensor written by the implementation: either the</span>
-<span class="sd">            provided ``output`` or the internal buffer.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`profile` has not been called and no implementation</span>
-<span class="sd">            or internal buffer is available.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">called before profile() (impl is None)&quot;</span>
-
-        <span class="k">if</span> <span class="n">output</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">internal output buffer is None; did profile() run?&quot;</span>
-            <span class="p">)</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span>
-
-        <span class="c1"># Expected signature for impl:</span>
-        <span class="c1">#   impl(x, output, loc, ctx, op_type, alpha, beta)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">output</span></div>
 </div>
-
 
 
 
@@ -764,6 +632,72 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseOpType</span><span class="o">.</span><span class="n">Abs</span></div>
 
+
+
+<div class="viewcode-block" id="Log">
+<a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Log">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Log</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Natural logarithm of an affine transform.</span>
+
+<span class="sd">    This operator applies, elementwise, the scalar function</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        f(x; \alpha, \beta) = \log(\beta x + \alpha).</span>
+
+<span class="sd">    Given an input tensor :math:`X \in \mathbb{R}^{B \times N \times D}`,</span>
+<span class="sd">    the output is</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        Y[b, n, d] = \log(\beta X[b, n, d] + \alpha).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Additive bias term inside the logarithm. Default is ``0.0``.</span>
+
+<span class="sd">    beta : float, optional</span>
+<span class="sd">        Multiplicative scale term inside the logarithm. Default is ``1.0``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseOpType</span><span class="o">.</span><span class="n">Log</span></div>
+
+
+
+<div class="viewcode-block" id="Exp">
+<a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Exp">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Exp</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Exponential of an affine transform.</span>
+
+<span class="sd">    This operator applies, elementwise, the scalar function</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        f(x; \alpha, \beta) = \exp(\beta x + \alpha).</span>
+
+<span class="sd">    Given an input tensor :math:`X \in \mathbb{R}^{B \times N \times D}`,</span>
+<span class="sd">    the output is</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        Y[b, n, d] = \exp(\beta X[b, n, d] + \alpha).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    alpha : float, optional</span>
+<span class="sd">        Additive bias term inside the exponential. Default is ``0.0``.</span>
+
+<span class="sd">    beta : float, optional</span>
+<span class="sd">        Multiplicative scale term inside the exponential. Default is ``1.0``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseOpType</span><span class="o">.</span><span class="n">Exp</span></div>
+
 </pre></div>
         </article>
       </div>
@@ -776,7 +710,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -797,8 +731,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

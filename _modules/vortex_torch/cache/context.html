@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.cache.context - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,8 +255,10 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.cache.context</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">UNSET</span><span class="p">,</span> <span class="n">Mode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">UNSET</span><span class="p">,</span> <span class="n">Mode</span><span class="p">,</span> <span class="n">resolve_dtype</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
 
 
@@ -264,22 +266,80 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Context</span><span class="p">(</span><span class="n">ContextBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Mutable, single-instance context; populate later via .create(...).</span>
+<span class="sd">    Mutable, single-instance cache context; populate later via .create(...).</span>
+
+<span class="sd">    Beyond the minimal runtime knobs (page/block layout, head shape) this</span>
+<span class="sd">    context also carries the **graph** and **codegen** state used by the</span>
+<span class="sd">    cache compiler — mirroring ``vortex_torch.indexer.context.Context``.</span>
+
+<span class="sd">    The graph state (``tensor_list``, ``op_list``, ``op_to_input_tensor_list``,</span>
+<span class="sd">    ``op_to_output_tensor_list``, ``output_tensor_to_op_list``) is populated</span>
+<span class="sd">    during the ``profile`` phase as cache ops register themselves; the</span>
+<span class="sd">    codegen state (``compilation_header_lines``, ``auxilary_func_def_lines``,</span>
+<span class="sd">    ``tensor_id_to_tensor_name_map``, ``compilation_cache_dir``,</span>
+<span class="sd">    ``sparse_attention_name``, ``impl_backend``) is consumed by</span>
+<span class="sd">    ``vortex_torch.cache.compiler``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
+
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="n">ContextBase</span><span class="o">.</span><span class="vm">__slots__</span> <span class="o">+</span> <span class="p">(</span>
-        
-        <span class="c1">#page infomation</span>
-        <span class="s2">&quot;max_new_tokens_per_batch&quot;</span><span class="p">,</span> <span class="s2">&quot;page_size&quot;</span><span class="p">,</span> <span class="s2">&quot;total_num_pages&quot;</span><span class="p">,</span>
-        
-        <span class="c1">#model infomation</span>
+        <span class="c1"># page &amp; block infomation</span>
+        <span class="s2">&quot;max_new_tokens_per_batch&quot;</span><span class="p">,</span> <span class="s2">&quot;page_size&quot;</span><span class="p">,</span> <span class="s2">&quot;total_num_pages&quot;</span><span class="p">,</span> <span class="s2">&quot;block_size&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;num_blocks_per_page&quot;</span><span class="p">,</span> <span class="s2">&quot;total_num_blocks&quot;</span><span class="p">,</span>
+
+        <span class="c1"># model infomation</span>
         <span class="s2">&quot;head_dim&quot;</span><span class="p">,</span> <span class="s2">&quot;head_num&quot;</span><span class="p">,</span>
-        
-        <span class="c1"># auxilary memory in graph</span>
-        <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">,</span>
-        
-        <span class="s2">&quot;_aux_total_flops&quot;</span>
+
+        <span class="c1"># hardware</span>
+        <span class="s2">&quot;num_sms&quot;</span><span class="p">,</span>
+
+        <span class="c1"># auxilary memory / flops in graph</span>
+        <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;_aux_total_flops&quot;</span><span class="p">,</span>
+
+        <span class="c1"># graph state</span>
+        <span class="s2">&quot;tensor_list&quot;</span><span class="p">,</span> <span class="s2">&quot;op_list&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;output_tensor_to_op_list&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;op_to_input_tensor_list&quot;</span><span class="p">,</span> <span class="s2">&quot;op_to_output_tensor_list&quot;</span><span class="p">,</span>
+
+        <span class="c1"># codegen state</span>
+        <span class="s2">&quot;sparse_attention_name&quot;</span><span class="p">,</span> <span class="s2">&quot;impl_backend&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;tensor_id_to_tensor_name_map&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;compilation_header_lines&quot;</span><span class="p">,</span> <span class="s2">&quot;auxilary_func_def_lines&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;compilation_cache_dir&quot;</span><span class="p">,</span>
     <span class="p">)</span>
+
+    <span class="c1"># --- page &amp; block ---</span>
+    <span class="n">max_new_tokens_per_batch</span><span class="p">:</span> <span class="nb">int</span>   <span class="c1">#: Max number of new tokens per batch.</span>
+    <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span>                  <span class="c1">#: Page size used for memory paging.</span>
+    <span class="n">total_num_pages</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1">#: Total available pages in the cache.</span>
+    <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span>                 <span class="c1">#: Block size (page_size % block_size == 0).</span>
+    <span class="n">num_blocks_per_page</span><span class="p">:</span> <span class="nb">int</span>        <span class="c1">#: ``page_size // block_size``.</span>
+    <span class="n">total_num_blocks</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: ``num_blocks_per_page * total_num_pages``.</span>
+
+    <span class="c1"># --- model ---</span>
+    <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span>                   <span class="c1">#: Dimension per attention head.</span>
+    <span class="n">head_num</span><span class="p">:</span> <span class="nb">int</span>                   <span class="c1">#: Number of (KV) heads.</span>
+
+    <span class="c1"># --- hardware ---</span>
+    <span class="n">num_sms</span><span class="p">:</span> <span class="nb">int</span>                    <span class="c1">#: Number of streaming multiprocessors.</span>
+
+    <span class="c1"># --- auxiliary ---</span>
+    <span class="n">_aux_total_bytes</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: Accumulated auxiliary memory in bytes.</span>
+    <span class="n">_aux_total_flops</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: Accumulated auxiliary FLOPs.</span>
+
+    <span class="c1"># --- graph state ---</span>
+    <span class="n">tensor_list</span><span class="p">:</span> <span class="nb">list</span>               <span class="c1">#: All vTensors that flow through the graph.</span>
+    <span class="n">op_list</span><span class="p">:</span> <span class="nb">list</span>                   <span class="c1">#: All registered vOps in profile order.</span>
+    <span class="n">output_tensor_to_op_list</span><span class="p">:</span> <span class="nb">list</span>  <span class="c1">#: For each tensor_id, the producing op_id (or ``None``).</span>
+    <span class="n">op_to_input_tensor_list</span><span class="p">:</span> <span class="nb">list</span>   <span class="c1">#: For each op_id, the list of input tensor_ids.</span>
+    <span class="n">op_to_output_tensor_list</span><span class="p">:</span> <span class="nb">list</span>  <span class="c1">#: For each op_id, the (single) output tensor_id wrapped in a list.</span>
+
+    <span class="c1"># --- codegen state ---</span>
+    <span class="n">sparse_attention_name</span><span class="p">:</span> <span class="nb">str</span>         <span class="c1">#: Unique name for the cache-pipeline instance.</span>
+    <span class="n">impl_backend</span><span class="p">:</span> <span class="nb">str</span>                  <span class="c1">#: Implementation backend (default ``&quot;triton&quot;``).</span>
+    <span class="n">tensor_id_to_tensor_name_map</span><span class="p">:</span> <span class="nb">dict</span> <span class="c1">#: tensor_id -&gt; Python name in the generated code.</span>
+    <span class="n">compilation_header_lines</span><span class="p">:</span> <span class="nb">list</span>     <span class="c1">#: Lines inserted at the top of the generated module.</span>
+    <span class="n">auxilary_func_def_lines</span><span class="p">:</span> <span class="nb">list</span>      <span class="c1">#: Auxiliary function/kernel definitions to embed.</span>
+    <span class="n">compilation_cache_dir</span><span class="p">:</span> <span class="nb">str</span>         <span class="c1">#: Where to write the generated module.</span>
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -290,15 +350,15 @@
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;Cache&quot;</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># start from 0 bytes</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_aux_total_flops&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># start from 0 flops</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;mode&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">Mode</span><span class="o">.</span><span class="n">profile</span><span class="p">)</span> 
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">Mode</span><span class="o">.</span><span class="n">profile</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">UNSET</span><span class="p">)</span>
-    
-     
+
+
 <div class="viewcode-block" id="Context.create">
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.context.html#vortex_torch.cache.context.Context.create">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model_runner</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Context&quot;</span><span class="p">:</span>
@@ -310,16 +370,59 @@
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Context.create() already called; pass overwrite=True to reinitialize.&quot;</span><span class="p">)</span>
 
         <span class="n">sa</span> <span class="o">=</span> <span class="n">model_runner</span><span class="o">.</span><span class="n">server_args</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vortex_dtype</span> <span class="o">=</span> <span class="n">resolve_dtype</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;bfloat16&quot;</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">page_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">block_size</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Page size must be a multiple of block size for block-sparse attention&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">total_num_blocks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span> <span class="o">*</span> <span class="n">parent</span><span class="o">.</span><span class="n">num_pages</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">total_num_pages</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">num_pages</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_new_tokens_per_batch</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">max_prefill_tokens</span><span class="p">,</span> <span class="n">model_runner</span><span class="o">.</span><span class="n">req_to_token_pool</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">head_num</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">head_num</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">head_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_sms</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">get_device_properties</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">multi_processor_count</span>
+
+        <span class="c1"># --- graph state (fresh per instance) ---</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># --- codegen state (fresh per instance) ---</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tensor_id_to_tensor_name_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compilation_header_lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">auxilary_func_def_lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compilation_cache_dir</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_compilation_cache_dir&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sparse_attention_name</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">parent</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;_cache_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="c1"># Cache compiler only supports triton for now — the indexer is the</span>
+        <span class="c1"># piece that picks up vortex_impl_backend. Hard-code triton here so</span>
+        <span class="c1"># passing vortex_impl_backend=&quot;cuda&quot; still works end-to-end (only</span>
+        <span class="c1"># the indexer kernel switches backends).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">impl_backend</span> <span class="o">=</span> <span class="s2">&quot;triton&quot;</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_created</span> <span class="o">=</span> <span class="kc">True</span>
-        
         <span class="k">return</span> <span class="bp">self</span></div>
 </div>
 
+
+
+<span class="c1"># Module-level singleton mirroring ``indexer.context.ctx``.</span>
+<span class="n">ctx</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">Context</span><span class="p">]</span> <span class="o">=</span> <span class="n">Context</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="get_ctx">
+<a class="viewcode-back" href="../../../api/vortex_torch.cache.context.html#vortex_torch.cache.context.get_ctx">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_ctx</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Context</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ctx</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Context&quot;</span><span class="p">,</span> <span class="s2">&quot;ctx&quot;</span><span class="p">,</span> <span class="s2">&quot;get_ctx&quot;</span><span class="p">]</span>
     
 
 </pre></div>
@@ -334,7 +437,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -355,8 +458,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

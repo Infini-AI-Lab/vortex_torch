@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.indexer.save_load" href="vortex_torch.indexer.save_load.html"><link rel="prev" title="vortex_torch.indexer.output_func" href="vortex_torch.indexer.output_func.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.reduce - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -279,7 +279,7 @@
 <td><p>Minimum reduction over a single logical axis.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Reduce</span></code></a>([dim])</p></td>
-<td><p>Generic reduction dispatcher for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></td>
+<td><p>Generic reduction op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.reduce.Sum" title="vortex_torch.indexer.reduce.Sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Sum</span></code></a>([dim])</p></td>
 <td><p>Sum reduction over a single logical axis.</p></td>
@@ -289,13 +289,11 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Reduce">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Reduce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Reduce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Generic reduction dispatcher for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p>
-<p>This operator performs a 1D reduction over either the <code class="docutils literal notranslate"><span class="pre">D_0</span></code> or <code class="docutils literal notranslate"><span class="pre">D_1</span></code>
-axis of a 3D tensor. The leading dimension <code class="docutils literal notranslate"><span class="pre">N</span></code> is generic and may
-represent a batch axis (<code class="docutils literal notranslate"><span class="pre">B</span></code>) or a sequence/page axis (<code class="docutils literal notranslate"><span class="pre">S</span></code>); the
-reduction is applied independently for each of the <code class="docutils literal notranslate"><span class="pre">N</span></code> slices.</p>
+<p>Generic reduction op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p>
+<p>This operator performs a 1D reduction over the leading <code class="docutils literal notranslate"><span class="pre">N</span></code> axis,
+the <code class="docutils literal notranslate"><span class="pre">D_0</span></code> axis, or the <code class="docutils literal notranslate"><span class="pre">D_1</span></code> axis of a 3D tensor.</p>
 <p>Given an input tensor</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
@@ -304,6 +302,10 @@ reduction is applied independently for each of the <code class="docutils literal
 <p>the output logical shape depends on the configured reduction dimension
 <code class="docutils literal notranslate"><span class="pre">dim</span></code>:</p>
 <ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">0</span></code> (reduce over the packed leading axis):
+collapses <code class="docutils literal notranslate"><span class="pre">N</span></code> to one row per <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">kv_head)</span></code>; produces a
+<code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> output (custom standalone kernel, requires
+<code class="docutils literal notranslate"><span class="pre">RAGGED</span></code> input).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (reduce over <span class="math notranslate nohighlight">\(D_0\)</span>):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
@@ -317,37 +319,25 @@ reduction is applied independently for each of the <code class="docutils literal
 </div>
 </li>
 </ul>
+<p>For <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">2}</span></code> the output is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff the input is
+<code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> (per-row reduction preserves the leading-axis layout);
+otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
+compiler’s per-workload kernel.</p>
 <p>The specific reduction operation (e.g. mean, max, min, L2-norm, sum)
 is selected via <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.reduce_type" title="vortex_torch.indexer.reduce.Reduce.reduce_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">reduce_type</span></code></a>.</p>
-<p>Dispatch is keyed only by the input format <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Reduce._impl_map">
-<span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Reduce.dim">
 <span class="sig-name descname"><span class="pre">dim</span></span><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce.dim" title="Link to this definition">¶</a></dt>
-<dd><p>Reduction dimension in the logical 3D tensor: must be either</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code> for reduction over the <span class="math notranslate nohighlight">\(D_0\)</span> axis, or</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">2</span></code> for reduction over the <span class="math notranslate nohighlight">\(D_1\)</span> axis.</p></li>
-</ul>
+<dd><p>Reduction dimension in the logical 3D tensor: must be <code class="docutils literal notranslate"><span class="pre">0</span></code>,
+<code class="docutils literal notranslate"><span class="pre">1</span></code>, or <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -358,18 +348,7 @@ is selected via <a class="reference internal" href="#vortex_torch.indexer.reduce
 <dd><p>The type of reduction to perform (e.g. mean, max, min, L2-norm, sum).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ReduceType" title="vortex_torch.utils.ReduceType">ReduceType</a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Reduce.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.profile" title="vortex_torch.indexer.reduce.Reduce.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ReduceType" title="vortex_torch.utils.ReduceType"><em>ReduceType</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -380,7 +359,7 @@ is selected via <a class="reference internal" href="#vortex_torch.indexer.reduce
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.profile" title="vortex_torch.indexer.reduce.Reduce.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -393,7 +372,7 @@ is selected via <a class="reference internal" href="#vortex_torch.indexer.reduce
 <code class="docutils literal notranslate"><span class="pre">dim</span></code> as described above.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[torch.Tensor]</p>
+<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -416,7 +395,7 @@ treat the first axis as the logical <code class="docutils literal notranslate"><
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor with logical shape <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor with logical shape <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> for the leading
 dimension and tracking auxiliary memory usage.</p></li>
 </ul>
@@ -426,7 +405,7 @@ dimension and tracking auxiliary memory usage.</p></li>
 resolved output format.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code>, if its rank is not 3, or if no
@@ -435,44 +414,11 @@ resolved output format.</p>
 </dl>
 </dd></dl>
 
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Reduce.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Reduce.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Run the selected reduction implementation into the internal buffer
-and return the result.</p>
-<p>The underlying implementation is expected to follow the signature:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">dim</span><span class="p">,</span> <span class="n">reduce_type</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>where <code class="docutils literal notranslate"><span class="pre">dim</span></code> specifies which logical axis to reduce and
-<a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.reduce_type" title="vortex_torch.indexer.reduce.Reduce.reduce_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">reduce_type</span></code></a> selects the reduction operation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor with shape <code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code> on the same device as
-the preallocated output buffer.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The output tensor stored in <code class="docutils literal notranslate"><span class="pre">self.output_buffer</span></code>, with logical
-shape determined by <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.dim" title="vortex_torch.indexer.reduce.Reduce.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a> as described in <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.profile" title="vortex_torch.indexer.reduce.Reduce.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.profile" title="vortex_torch.indexer.reduce.Reduce.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called (no implementation or
-    output buffer).</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Max">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Max" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Max" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Maximum reduction over a single logical axis.</p>
 <p>Given an input tensor</p>
@@ -512,7 +458,7 @@ independently for each slice along this dimension.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Min">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Min" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Min" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Minimum reduction over a single logical axis.</p>
 <p>Given an input tensor</p>
@@ -552,7 +498,7 @@ independently for each slice along this dimension.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Mean">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Mean" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Mean" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Mean reduction over a single logical axis.</p>
 <p>Given an input tensor</p>
@@ -592,7 +538,7 @@ independently for each slice along this dimension.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.L2Norm">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">L2Norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#L2Norm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.L2Norm" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">L2Norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#L2Norm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.L2Norm" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>L2-norm reduction over a single logical axis.</p>
 <p>Given an input tensor</p>
@@ -632,7 +578,7 @@ independently for each slice along this dimension.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.reduce.Sum">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Sum" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Sum" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Sum reduction over a single logical axis.</p>
 <p>Given an input tensor</p>
@@ -701,7 +647,7 @@ independently for each slice along this dimension.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -729,14 +675,11 @@ independently for each slice along this dimension.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.reduce</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce"><code class="docutils literal notranslate"><span class="pre">Reduce</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce._impl_map"><code class="docutils literal notranslate"><span class="pre">Reduce._impl_map</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.dim"><code class="docutils literal notranslate"><span class="pre">Reduce.dim</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.reduce_type"><code class="docutils literal notranslate"><span class="pre">Reduce.reduce_type</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.impl"><code class="docutils literal notranslate"><span class="pre">Reduce.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.output_format"><code class="docutils literal notranslate"><span class="pre">Reduce.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.output_buffer"><code class="docutils literal notranslate"><span class="pre">Reduce.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.profile"><code class="docutils literal notranslate"><span class="pre">Reduce.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce.execute"><code class="docutils literal notranslate"><span class="pre">Reduce.execute()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.indexer.reduce.Max"><code class="docutils literal notranslate"><span class="pre">Max</span></code></a></li>
@@ -756,11 +699,11 @@ independently for each slice along this dimension.</p>
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

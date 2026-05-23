@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.cache.elementwise" href="vortex_torch.cache.elementwise.html"><link rel="prev" title="vortex_torch.cache" href="vortex_torch.cache.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.cache.context - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -267,18 +267,148 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Context</span></code></a>()</p></td>
-<td><p>Mutable, single-instance context; populate later via .create(...).</p></td>
+<td><p>Mutable, single-instance cache context; populate later via .create(...).</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.cache.context.Context">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.context.</span></span><span class="sig-name descname"><span class="pre">Context</span></span><a class="reference internal" href="../_modules/vortex_torch/cache/context.html#Context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.context.Context" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.context.</span></span><span class="sig-name descname"><span class="pre">Context</span></span><a class="reference internal" href="../_modules/vortex_torch/cache/context.html#Context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.context.Context" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">ContextBase</span></code></a></p>
-<p>Mutable, single-instance context; populate later via .create(…).</p>
+<p>Mutable, single-instance cache context; populate later via .create(…).</p>
+<p>Beyond the minimal runtime knobs (page/block layout, head shape) this
+context also carries the <strong>graph</strong> and <strong>codegen</strong> state used by the
+cache compiler — mirroring <code class="docutils literal notranslate"><span class="pre">vortex_torch.indexer.context.Context</span></code>.</p>
+<p>The graph state (<code class="docutils literal notranslate"><span class="pre">tensor_list</span></code>, <code class="docutils literal notranslate"><span class="pre">op_list</span></code>, <code class="docutils literal notranslate"><span class="pre">op_to_input_tensor_list</span></code>,
+<code class="docutils literal notranslate"><span class="pre">op_to_output_tensor_list</span></code>, <code class="docutils literal notranslate"><span class="pre">output_tensor_to_op_list</span></code>) is populated
+during the <code class="docutils literal notranslate"><span class="pre">profile</span></code> phase as cache ops register themselves; the
+codegen state (<code class="docutils literal notranslate"><span class="pre">compilation_header_lines</span></code>, <code class="docutils literal notranslate"><span class="pre">auxilary_func_def_lines</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tensor_id_to_tensor_name_map</span></code>, <code class="docutils literal notranslate"><span class="pre">compilation_cache_dir</span></code>,
+<code class="docutils literal notranslate"><span class="pre">sparse_attention_name</span></code>, <code class="docutils literal notranslate"><span class="pre">impl_backend</span></code>) is consumed by
+<code class="docutils literal notranslate"><span class="pre">vortex_torch.cache.compiler</span></code>.</p>
 <dl class="field-list simple">
 </dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.max_new_tokens_per_batch">
+<span class="sig-name descname"><span class="pre">max_new_tokens_per_batch</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.max_new_tokens_per_batch" title="Link to this definition">¶</a></dt>
+<dd><p>Max number of new tokens per batch.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.page_size">
+<span class="sig-name descname"><span class="pre">page_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.page_size" title="Link to this definition">¶</a></dt>
+<dd><p>Page size used for memory paging.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.total_num_pages">
+<span class="sig-name descname"><span class="pre">total_num_pages</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.total_num_pages" title="Link to this definition">¶</a></dt>
+<dd><p>Total available pages in the cache.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.block_size">
+<span class="sig-name descname"><span class="pre">block_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.block_size" title="Link to this definition">¶</a></dt>
+<dd><p>Block size (page_size % block_size == 0).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.num_blocks_per_page">
+<span class="sig-name descname"><span class="pre">num_blocks_per_page</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.num_blocks_per_page" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">page_size</span> <span class="pre">//</span> <span class="pre">block_size</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.total_num_blocks">
+<span class="sig-name descname"><span class="pre">total_num_blocks</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.total_num_blocks" title="Link to this definition">¶</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">num_blocks_per_page</span> <span class="pre">*</span> <span class="pre">total_num_pages</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.head_dim">
+<span class="sig-name descname"><span class="pre">head_dim</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.head_dim" title="Link to this definition">¶</a></dt>
+<dd><p>Dimension per attention head.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.head_num">
+<span class="sig-name descname"><span class="pre">head_num</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.head_num" title="Link to this definition">¶</a></dt>
+<dd><p>Number of (KV) heads.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.num_sms">
+<span class="sig-name descname"><span class="pre">num_sms</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.num_sms" title="Link to this definition">¶</a></dt>
+<dd><p>Number of streaming multiprocessors.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.tensor_list">
+<span class="sig-name descname"><span class="pre">tensor_list</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.tensor_list" title="Link to this definition">¶</a></dt>
+<dd><p>All vTensors that flow through the graph.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.op_list">
+<span class="sig-name descname"><span class="pre">op_list</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.op_list" title="Link to this definition">¶</a></dt>
+<dd><p>All registered vOps in profile order.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.output_tensor_to_op_list">
+<span class="sig-name descname"><span class="pre">output_tensor_to_op_list</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.output_tensor_to_op_list" title="Link to this definition">¶</a></dt>
+<dd><p>For each tensor_id, the producing op_id (or <code class="docutils literal notranslate"><span class="pre">None</span></code>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.op_to_input_tensor_list">
+<span class="sig-name descname"><span class="pre">op_to_input_tensor_list</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.op_to_input_tensor_list" title="Link to this definition">¶</a></dt>
+<dd><p>For each op_id, the list of input tensor_ids.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.op_to_output_tensor_list">
+<span class="sig-name descname"><span class="pre">op_to_output_tensor_list</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.op_to_output_tensor_list" title="Link to this definition">¶</a></dt>
+<dd><p>For each op_id, the (single) output tensor_id wrapped in a list.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.sparse_attention_name">
+<span class="sig-name descname"><span class="pre">sparse_attention_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.sparse_attention_name" title="Link to this definition">¶</a></dt>
+<dd><p>Unique name for the cache-pipeline instance.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.impl_backend">
+<span class="sig-name descname"><span class="pre">impl_backend</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.impl_backend" title="Link to this definition">¶</a></dt>
+<dd><p>Implementation backend (default <code class="docutils literal notranslate"><span class="pre">&quot;triton&quot;</span></code>).</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.tensor_id_to_tensor_name_map">
+<span class="sig-name descname"><span class="pre">tensor_id_to_tensor_name_map</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.tensor_id_to_tensor_name_map" title="Link to this definition">¶</a></dt>
+<dd><p>tensor_id -&gt; Python name in the generated code.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.compilation_header_lines">
+<span class="sig-name descname"><span class="pre">compilation_header_lines</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.compilation_header_lines" title="Link to this definition">¶</a></dt>
+<dd><p>Lines inserted at the top of the generated module.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.auxilary_func_def_lines">
+<span class="sig-name descname"><span class="pre">auxilary_func_def_lines</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.auxilary_func_def_lines" title="Link to this definition">¶</a></dt>
+<dd><p>Auxiliary function/kernel definitions to embed.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.compilation_cache_dir">
+<span class="sig-name descname"><span class="pre">compilation_cache_dir</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.compilation_cache_dir" title="Link to this definition">¶</a></dt>
+<dd><p>Where to write the generated module.</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.cache.context.Context.create">
 <span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parent</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_runner</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/context.html#Context.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.context.Context.create" title="Link to this definition">¶</a></dt>
@@ -300,41 +430,32 @@ NOTE: Without locking, concurrent callers may race; call from a single thread.</
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.cache.context.Context.name">
-<span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#vortex_torch.cache.context.Context.name" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#vortex_torch.cache.context.Context.name" title="Link to this definition">¶</a></dt>
 <dd><p>Human-readable context name.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.cache.context.Context.mode">
-<span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Literal</span><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'profile'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'execute'</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#vortex_torch.cache.context.Context.mode" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">mode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'profile'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'execute'</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.mode" title="Link to this definition">¶</a></dt>
 <dd><p>Current operating mode.</p>
 </dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.max_new_tokens_per_batch">
-<span class="sig-name descname"><span class="pre">max_new_tokens_per_batch</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.max_new_tokens_per_batch" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.vortex_dtype">
+<span class="sig-name descname"><span class="pre">vortex_dtype</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.dtype</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.vortex_dtype" title="Link to this definition">¶</a></dt>
+<dd><p>Intermediate-tensor dtype (default <code class="docutils literal notranslate"><span class="pre">torch.bfloat16</span></code>).</p>
+</dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.page_size">
-<span class="sig-name descname"><span class="pre">page_size</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.page_size" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+</dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.total_num_pages">
-<span class="sig-name descname"><span class="pre">total_num_pages</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.total_num_pages" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.head_dim">
-<span class="sig-name descname"><span class="pre">head_dim</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.head_dim" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.context.Context.head_num">
-<span class="sig-name descname"><span class="pre">head_num</span></span><a class="headerlink" href="#vortex_torch.cache.context.Context.head_num" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
+<dl class="py function">
+<dt class="sig sig-object py" id="vortex_torch.cache.context.get_ctx">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.context.</span></span><span class="sig-name descname"><span class="pre">get_ctx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/context.html#get_ctx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.context.get_ctx" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a></p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -368,7 +489,7 @@ NOTE: Without locking, concurrent callers may race; call from a single thread.</
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -396,16 +517,33 @@ NOTE: Without locking, concurrent callers may race; call from a single thread.</
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.context</a><ul>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context"><code class="docutils literal notranslate"><span class="pre">Context</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.context.Context.create"><code class="docutils literal notranslate"><span class="pre">Context.create()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.context.Context.name"><code class="docutils literal notranslate"><span class="pre">Context.name</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.context.Context.mode"><code class="docutils literal notranslate"><span class="pre">Context.mode</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context.max_new_tokens_per_batch"><code class="docutils literal notranslate"><span class="pre">Context.max_new_tokens_per_batch</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context.page_size"><code class="docutils literal notranslate"><span class="pre">Context.page_size</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context.total_num_pages"><code class="docutils literal notranslate"><span class="pre">Context.total_num_pages</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.block_size"><code class="docutils literal notranslate"><span class="pre">Context.block_size</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.num_blocks_per_page"><code class="docutils literal notranslate"><span class="pre">Context.num_blocks_per_page</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.total_num_blocks"><code class="docutils literal notranslate"><span class="pre">Context.total_num_blocks</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context.head_dim"><code class="docutils literal notranslate"><span class="pre">Context.head_dim</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.context.Context.head_num"><code class="docutils literal notranslate"><span class="pre">Context.head_num</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.num_sms"><code class="docutils literal notranslate"><span class="pre">Context.num_sms</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.tensor_list"><code class="docutils literal notranslate"><span class="pre">Context.tensor_list</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.op_list"><code class="docutils literal notranslate"><span class="pre">Context.op_list</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.output_tensor_to_op_list"><code class="docutils literal notranslate"><span class="pre">Context.output_tensor_to_op_list</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.op_to_input_tensor_list"><code class="docutils literal notranslate"><span class="pre">Context.op_to_input_tensor_list</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.op_to_output_tensor_list"><code class="docutils literal notranslate"><span class="pre">Context.op_to_output_tensor_list</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.sparse_attention_name"><code class="docutils literal notranslate"><span class="pre">Context.sparse_attention_name</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.impl_backend"><code class="docutils literal notranslate"><span class="pre">Context.impl_backend</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.tensor_id_to_tensor_name_map"><code class="docutils literal notranslate"><span class="pre">Context.tensor_id_to_tensor_name_map</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.compilation_header_lines"><code class="docutils literal notranslate"><span class="pre">Context.compilation_header_lines</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.auxilary_func_def_lines"><code class="docutils literal notranslate"><span class="pre">Context.auxilary_func_def_lines</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.compilation_cache_dir"><code class="docutils literal notranslate"><span class="pre">Context.compilation_cache_dir</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.create"><code class="docutils literal notranslate"><span class="pre">Context.create()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.name"><code class="docutils literal notranslate"><span class="pre">Context.name</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.mode"><code class="docutils literal notranslate"><span class="pre">Context.mode</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.Context.vortex_dtype"><code class="docutils literal notranslate"><span class="pre">Context.vortex_dtype</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#vortex_torch.cache.context.get_ctx"><code class="docutils literal notranslate"><span class="pre">get_ctx()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -418,8 +556,8 @@ NOTE: Without locking, concurrent callers may race; call from a single thread.</
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

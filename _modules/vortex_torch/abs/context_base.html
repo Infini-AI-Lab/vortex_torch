@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.abs.context_base - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -261,7 +261,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">UNSET</span><span class="p">,</span> <span class="n">Mode</span>
 
 <div class="viewcode-block" id="ContextBase">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ContextBase</span><span class="p">(</span><span class="n">ABC</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Abstract base class for runtime contexts.</span>
@@ -277,11 +277,12 @@
 <span class="sd">    minimal and consistent.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
-    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;mode&quot;</span><span class="p">,</span> <span class="s2">&quot;_created&quot;</span><span class="p">)</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;mode&quot;</span><span class="p">,</span> <span class="s2">&quot;_created&quot;</span><span class="p">,</span> <span class="s2">&quot;vortex_dtype&quot;</span><span class="p">)</span>
 
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>                                <span class="c1">#: Human-readable context name.</span>
     <span class="n">mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;profile&quot;</span><span class="p">,</span> <span class="s2">&quot;execute&quot;</span><span class="p">]</span>      <span class="c1">#: Current operating mode.</span>
     <span class="n">_created</span><span class="p">:</span> <span class="nb">bool</span>                           <span class="c1">#: Backing flag for ``created`` property.</span>
+    <span class="n">vortex_dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span>                <span class="c1">#: Intermediate-tensor dtype (default ``torch.bfloat16``).</span>
     
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">created</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -289,7 +290,7 @@
     
     <span class="c1"># --- abstract lifecycle ---</span>
 <div class="viewcode-block" id="ContextBase.create">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.create">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.create">[docs]</a>
     <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ContextBase&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Populate the context (idempotency/overwrite rules are up to the subclass).&quot;&quot;&quot;</span>
@@ -299,14 +300,14 @@
 
     
 <div class="viewcode-block" id="ContextBase.profile">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.profile">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         
         <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">Mode</span><span class="o">.</span><span class="n">profile</span></div>
 
     
 <div class="viewcode-block" id="ContextBase.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.execute">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.execute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         
         <span class="bp">self</span><span class="o">.</span><span class="n">mode</span> <span class="o">=</span> <span class="n">Mode</span><span class="o">.</span><span class="n">execute</span></div>
@@ -314,14 +315,14 @@
 
     <span class="c1"># Utilities</span>
 <div class="viewcode-block" id="ContextBase.assert_created">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.assert_created">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.assert_created">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">assert_created</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_created</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Context is not created yet.&quot;</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="ContextBase.missing">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.missing">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.missing">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">missing</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__slots__</span> <span class="k">if</span> <span class="n">n</span> <span class="o">!=</span> <span class="s2">&quot;_created&quot;</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span> <span class="ow">is</span> <span class="n">UNSET</span><span class="p">]</span></div>
 
@@ -331,7 +332,7 @@
             <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">element_size</span><span class="p">()</span> <span class="o">*</span> <span class="n">t</span><span class="o">.</span><span class="n">nelement</span><span class="p">())</span>
 
 <div class="viewcode-block" id="ContextBase.add_aux_memory">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.add_aux_memory">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.add_aux_memory">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">add_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obj</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -369,14 +370,14 @@
 
 
 <div class="viewcode-block" id="ContextBase.add_aux_flops">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.add_aux_flops">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.add_aux_flops">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">add_aux_flops</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">nflops</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
         
         <span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_flops</span> <span class="o">+=</span> <span class="n">nflops</span></div>
 
     
 <div class="viewcode-block" id="ContextBase.clear_aux_memory">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.clear_aux_memory">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.clear_aux_memory">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">clear_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Reset the total auxiliary memory to zero.</span>
@@ -386,7 +387,7 @@
 
     
 <div class="viewcode-block" id="ContextBase.clear_aux_flops">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.clear_aux_flops">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.clear_aux_flops">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">clear_aux_flops</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_aux_total_flops</span> <span class="o">=</span> <span class="mi">0</span></div>
@@ -394,7 +395,7 @@
         
     
 <div class="viewcode-block" id="ContextBase.summary">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.ContextBase.summary">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase.summary">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Print fields; tensor fields show shape/dtype/device, and append memory totals incl. auxiliary.</span>
@@ -484,7 +485,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -505,8 +506,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

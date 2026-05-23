@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.flow.algorithms - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -258,8 +258,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">vFlow</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">topK</span><span class="p">,</span> <span class="n">GeMV</span><span class="p">,</span> <span class="n">Softmax</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">GeMM</span><span class="p">,</span> <span class="n">Maximum</span><span class="p">,</span> <span class="n">Multiply</span><span class="p">,</span> <span class="n">Add</span><span class="p">,</span> <span class="n">L2Norm</span><span class="p">,</span> <span class="n">Save</span><span class="p">,</span> <span class="n">Load</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mean</span> <span class="k">as</span> <span class="n">CMean</span><span class="p">,</span> <span class="n">Max</span> <span class="k">as</span> <span class="n">CMax</span><span class="p">,</span> <span class="n">Min</span> <span class="k">as</span> <span class="n">CMin</span><span class="p">,</span> <span class="n">L2Norm</span> <span class="k">as</span> <span class="n">CL2Norm</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">topK</span><span class="p">,</span> <span class="n">approxTopK</span><span class="p">,</span> <span class="n">GeMV</span><span class="p">,</span> <span class="n">Softmax</span><span class="p">,</span> <span class="n">Max</span><span class="p">,</span> <span class="n">Sum</span><span class="p">,</span> <span class="n">GeMM</span><span class="p">,</span> <span class="n">Maximum</span><span class="p">,</span> <span class="n">Multiply</span><span class="p">,</span> <span class="n">Add</span><span class="p">,</span> <span class="n">L2Norm</span><span class="p">,</span> <span class="n">Save</span><span class="p">,</span> <span class="n">Load</span><span class="p">,</span> <span class="n">Mean</span><span class="p">,</span> <span class="n">MaskSlice</span><span class="p">,</span> <span class="n">Kron</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mean</span> <span class="k">as</span> <span class="n">CMean</span><span class="p">,</span> <span class="n">Max</span> <span class="k">as</span> <span class="n">CMax</span><span class="p">,</span> <span class="n">Min</span> <span class="k">as</span> <span class="n">CMin</span><span class="p">,</span> <span class="n">L2Norm</span> <span class="k">as</span> <span class="n">CL2Norm</span><span class="p">,</span> <span class="n">Fill</span> <span class="k">as</span> <span class="n">CFill</span><span class="p">,</span> <span class="n">MaxInterleave</span> <span class="k">as</span> <span class="n">CMaxInterleave</span><span class="p">,</span> <span class="n">MinInterleave</span> <span class="k">as</span> <span class="n">CMinInterleave</span><span class="p">,</span> <span class="n">MeanInterleave</span> <span class="k">as</span> <span class="n">CMeanInterleave</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">register</span>
 
@@ -282,7 +282,7 @@
 
 <span class="sd">    This flow implements a simple **block-sparse routing** strategy</span>
 <span class="sd">    inspired by the block-top-k routing used in Kinetics</span>
-<span class="sd">    :cite:`sadhukhan2025kinetics` (arXiv:2506.05333). It maintains a</span>
+<span class="sd">    [sadhukhan2025kinetics]_ (arXiv:2506.05333). It maintains a</span>
 <span class="sd">    per-request centroid over keys and uses query–centroid similarity to</span>
 <span class="sd">    select a sparse set of pages.</span>
 
@@ -311,7 +311,7 @@
 
 <span class="sd">         .. math::</span>
 
-<span class="sd">             o \in \mathbb{R}^{S} \times 1 \times 1},</span>
+<span class="sd">             o \in \mathbb{R}^{S \times 1 \times 1},</span>
 
 <span class="sd">         Here :math:`S` is the leading page axis. Internally it is a packed</span>
 <span class="sd">         axis (often denoted :math:`S_{\mathrm{pack}}`), obtained by</span>
@@ -340,7 +340,7 @@
 <span class="sd">      .. math::</span>
 
 <span class="sd">          \text{cache[&quot;centroids&quot;]} \sim</span>
-<span class="sd">          \mathbb{R}^{S} \times 1 \times D},</span>
+<span class="sd">          \mathbb{R}^{S \times 1 \times D},</span>
 
 <span class="sd">    - In :meth:`forward_cache` (batch-major view):</span>
 
@@ -363,7 +363,8 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="c1"># Indexer-side ops</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span> <span class="o">=</span> <span class="n">GeMV</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span> <span class="o">=</span> <span class="n">GeMM</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
 
         <span class="c1"># Cache-side ops</span>
@@ -425,8 +426,8 @@
 <span class="sd">           and write the corresponding indices into ``o`` in the packed</span>
 <span class="sd">           sparse layout.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">q_mean</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">q_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
 
 
@@ -470,7 +471,7 @@
 
 <div class="viewcode-block" id="BlockSparseAttention.create_cache">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.BlockSparseAttention.create_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Declare inner shapes for custom cache tensors.</span>
 
@@ -520,6 +521,7 @@
 
 <span class="sd">      - ``[S, 1, D]`` in :meth:`forward_indexer`,</span>
 <span class="sd">      - ``[B, 1, D]`` in :meth:`forward_cache`.</span>
+
 <span class="sd">      Here :math:`S` is the leading page axis. Internally it is a packed</span>
 <span class="sd">      axis (often denoted :math:`S_{\mathrm{pack}}`), obtained by</span>
 <span class="sd">      concatenating the pages from all requests. As a user, you can simply</span>
@@ -578,8 +580,8 @@
 <span class="sd">           ``[S_sparse, 1, 1]``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="n">aggr_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">normalized_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">aggr_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span><span class="p">(</span><span class="n">normalized_score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">aggr_score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
 
 
@@ -606,7 +608,7 @@
 
 <div class="viewcode-block" id="GQABlockSparseAttention.create_cache">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQABlockSparseAttention.create_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Declare inner shapes for custom cache tensors.</span>
 
@@ -760,7 +762,7 @@
 
 <div class="viewcode-block" id="GQAQuestSparseAttention.create_cache">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.GQAQuestSparseAttention.create_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Declare inner shapes for custom cache tensors.</span>
 
@@ -788,10 +790,616 @@
 
 
 
+
+<div class="viewcode-block" id="LServeSparseAttention">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeSparseAttention">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;lserve_sparse_attention&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LServeSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    GQA-style QUEST sparse attention flow.</span>
+
+<span class="sd">    This flow uses **query–envelope matching** similar to QUEST sparse</span>
+<span class="sd">    attention (see https://arxiv.org/abs/2406.10774). For each request,</span>
+<span class="sd">    it maintains per-page **max** and **min** envelopes of keys and uses</span>
+<span class="sd">    them to compute a conservative upper bound on query–key similarity.</span>
+
+<span class="sd">    Shapes</span>
+<span class="sd">    ------</span>
+<span class="sd">    - Queries ``q``: ``[B, H_q, D]`` (typically bfloat16).</span>
+<span class="sd">    - Cache entries (inner shapes as declared in :meth:`create_cache`):</span>
+
+<span class="sd">      - ``cache[&quot;max&quot;]`` and ``cache[&quot;min&quot;]``: ``(1, head_dim)``</span>
+<span class="sd">        → viewed as</span>
+
+<span class="sd">        - ``[S, 1, D]`` in :meth:`forward_indexer`,</span>
+<span class="sd">        - ``[B, 1, D]`` in :meth:`forward_cache`.</span>
+
+<span class="sd">      - ``cache[&quot;k&quot;]``: standard key cache with inner shape</span>
+<span class="sd">        ``(page_size, head_dim)``.</span>
+
+<span class="sd">      Here :math:`S` is the leading page axis. Internally it is a packed</span>
+<span class="sd">      axis (often denoted :math:`S_{\mathrm{pack}}`), obtained by</span>
+<span class="sd">      concatenating the pages from all requests. As a user, you can simply</span>
+<span class="sd">      think of :math:`S` as &quot;the number of pages for this request&quot;; the</span>
+<span class="sd">      vFlow kernels and :class:`ContextBase` will take care of mapping</span>
+<span class="sd">      between per-request page counts and the packed layout automatically.</span>
+<span class="sd">      </span>
+<span class="sd">    Routing intuition</span>
+<span class="sd">    -----------------</span>
+<span class="sd">    For each query and page envelope:</span>
+
+<span class="sd">    1. Compute elementwise products with the **max** and **min** envelopes.</span>
+<span class="sd">    2. Take an elementwise maximum of these two products to form a</span>
+<span class="sd">       QUEST-style upper bound.</span>
+<span class="sd">    3. Sum over the feature dimension and then take a max over the</span>
+<span class="sd">       grouped-query axis to get a single scalar score per page.</span>
+<span class="sd">    4. Feed the resulting per-page scores into :class:`topK` to obtain</span>
+<span class="sd">       sparse page indices.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">LSERVE_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="c1"># Indexer-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul_max</span> <span class="o">=</span> <span class="n">Kron</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>     <span class="c1"># q * max</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul_min</span> <span class="o">=</span> <span class="n">Kron</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>     <span class="c1"># q * min</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maximum_op</span> <span class="o">=</span> <span class="n">Maximum</span><span class="p">()</span>    <span class="c1"># elementwise max(q*max, q*min)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sum</span> <span class="o">=</span> <span class="n">Sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>          <span class="c1"># sum over feature dim D</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span> <span class="o">=</span> <span class="n">Max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>       <span class="c1"># max over grouped-query axis</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>      <span class="c1"># produce sparse indices</span>
+
+        <span class="c1"># Cache-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_max</span> <span class="o">=</span> <span class="n">CMaxInterleave</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">LSERVE_BLOCK_SIZE</span><span class="p">)</span>  <span class="c1"># page-wise max envelope over k</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_min</span> <span class="o">=</span> <span class="n">CMinInterleave</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">LSERVE_BLOCK_SIZE</span><span class="p">)</span>  <span class="c1"># page-wise min envelope over k</span>
+
+<div class="viewcode-block" id="LServeSparseAttention.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeSparseAttention.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute sparse page indices using QUEST-style envelope scores.</span>
+
+<span class="sd">        Pipeline (indexer view)</span>
+<span class="sd">        -----------------------</span>
+<span class="sd">        Let:</span>
+
+<span class="sd">        - ``q``: ``[B, H_q, D]``</span>
+<span class="sd">        - ``cache[&quot;max&quot;]``: ``[S, b//k, D]``</span>
+<span class="sd">        - ``cache[&quot;min&quot;]``: ``[S, b//k, D]``</span>
+
+<span class="sd">        Steps:</span>
+
+<span class="sd">        1. ``s_max = q * max_envelope``</span>
+<span class="sd">        2. ``s_min = q * min_envelope``</span>
+<span class="sd">        3. ``s = max(s_max, s_min)`` (elementwise)</span>
+<span class="sd">        4. ``score = sum(s, dim=D)`` → ``[S, H_q, 1]``</span>
+<span class="sd">        5. ``aggr_score = max(score, dim=H_q)`` → per-page scalar</span>
+<span class="sd">        6. :class:`topK` converts ``aggr_score`` into sparse page</span>
+<span class="sd">           indices ``o`` of shape ``[S_sparse, 1, 1]``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">s_max</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul_max</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">s_min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul_min</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum_op</span><span class="p">(</span><span class="n">s_max</span><span class="p">,</span> <span class="n">s_min</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">aggr_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">aggr_score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LServeSparseAttention.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeSparseAttention.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update per-page max/min envelopes from the key cache.</span>
+
+<span class="sd">        Cache-update view</span>
+<span class="sd">        -----------------</span>
+<span class="sd">        - ``cache[&quot;k&quot;]``: ``[B, page_size, D]``</span>
+<span class="sd">        - ``cache[&quot;max&quot;]``: ``[B, 1, D]``</span>
+<span class="sd">        - ``cache[&quot;min&quot;]``: ``[B, 1, D]``</span>
+
+<span class="sd">        The :class:`CMax` and :class:`CMin` ops (with ``dim=1``) take</span>
+<span class="sd">        page-wise maxima and minima over keys (optionally masked/structured</span>
+<span class="sd">        via ``loc``) and write the envelopes into ``cache[&quot;max&quot;]`` and</span>
+<span class="sd">        ``cache[&quot;min&quot;]``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_max</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_min</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LServeSparseAttention.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeSparseAttention.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Declare inner shapes for custom cache tensors.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        page_size : int</span>
+<span class="sd">            Number of tokens per page (unused here but part of the vFlow contract).</span>
+
+<span class="sd">        head_dim : int</span>
+<span class="sd">            Head dimension ``D`` used by the envelopes.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict[str, Tuple[int, int]]</span>
+<span class="sd">            Custom cache metadata:</span>
+
+<span class="sd">            - ``&quot;max&quot;``: inner shape ``(1, head_dim)``</span>
+<span class="sd">            - ``&quot;min&quot;``: inner shape ``(1, head_dim)``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">block_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">LSERVE_BLOCK_SIZE</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+            <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">block_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">LSERVE_BLOCK_SIZE</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="LServeCentroidSparseAttention">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeCentroidSparseAttention">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;lserve_centroid_sparse_attention&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">LServeCentroidSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Centroid block-sparse routing at LSERVE sub-block granularity.</span>
+
+<span class="sd">    This flow keeps the **centroid** routing of</span>
+<span class="sd">    :class:`BlockSparseAttention` — a page is scored by the dot product</span>
+<span class="sd">    between a query summary and a *mean* key vector — but borrows the</span>
+<span class="sd">    sub-block granularity idea of :class:`LServeSparseAttention`. Rather</span>
+<span class="sd">    than collapsing a whole page into a single centroid, the page is</span>
+<span class="sd">    split into consecutive sub-blocks of :attr:`SUB_BLOCK_SIZE` tokens</span>
+<span class="sd">    and a separate centroid is stored per sub-block. The page score is</span>
+<span class="sd">    the **max** over its sub-block centroids, so a page is selected when</span>
+<span class="sd">    *any* of its sub-regions matches the query — the same &quot;finest-grained</span>
+<span class="sd">    statistic, then max&quot; intuition LSERVE applies to min/max envelopes,</span>
+<span class="sd">    here applied to means.</span>
+
+<span class="sd">    Shapes</span>
+<span class="sd">    ------</span>
+<span class="sd">    - Queries ``q``: ``[B, H_q, D]`` (typically bfloat16).</span>
+<span class="sd">    - ``cache[&quot;centroids&quot;]``: inner shape ``(block_size // SUB_BLOCK_SIZE, head_dim)``</span>
+<span class="sd">      → viewed as ``[S, n_sub, D]`` in :meth:`forward_indexer` and</span>
+<span class="sd">      ``[B, n_sub, D]`` in :meth:`forward_cache`, where</span>
+<span class="sd">      ``n_sub = block_size // SUB_BLOCK_SIZE`` is the number of</span>
+<span class="sd">      sub-blocks per page.</span>
+<span class="sd">    - ``cache[&quot;k&quot;]``: standard key cache, inner shape ``(page_size, head_dim)``.</span>
+
+<span class="sd">    Routing intuition</span>
+<span class="sd">    -----------------</span>
+<span class="sd">    1. Average the query over the grouped-query heads → one summary</span>
+<span class="sd">       vector per request.</span>
+<span class="sd">    2. Dot the query summary against every sub-block centroid → one</span>
+<span class="sd">       score per (page, sub-block).</span>
+<span class="sd">    3. Take the max over sub-blocks → a single per-page score.</span>
+<span class="sd">    4. Feed per-page scores into :class:`topK` for sparse page indices.</span>
+
+<span class="sd">    When ``block_size == SUB_BLOCK_SIZE`` there is exactly one sub-block</span>
+<span class="sd">    per page and this reduces identically to</span>
+<span class="sd">    :class:`BlockSparseAttention`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUB_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="c1"># Indexer-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>        <span class="c1"># average query over grouped-query heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span> <span class="o">=</span> <span class="n">GeMM</span><span class="p">()</span>             <span class="c1"># q_summary · sub-block centroids</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_sub</span> <span class="o">=</span> <span class="n">Max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>      <span class="c1"># max over sub-block centroids</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>      <span class="c1"># produce sparse indices</span>
+
+        <span class="c1"># Cache-side op: interleaved per-sub-block mean over keys</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMeanInterleave</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">SUB_BLOCK_SIZE</span><span class="p">)</span>
+
+<div class="viewcode-block" id="LServeCentroidSparseAttention.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeCentroidSparseAttention.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute sparse page indices from sub-block centroid scores.</span>
+
+<span class="sd">        Pipeline (indexer view)</span>
+<span class="sd">        -----------------------</span>
+<span class="sd">        - ``q``: ``[B, H_q, D]``</span>
+<span class="sd">        - ``cache[&quot;centroids&quot;]``: ``[S, n_sub, D]``</span>
+
+<span class="sd">        Steps:</span>
+
+<span class="sd">        1. ``q_summary = mean(q, dim=H_q)`` → ``[B, 1, D]``</span>
+<span class="sd">        2. ``score = GeMM(q_summary, centroids)`` → ``[S, n_sub, 1]``</span>
+<span class="sd">           (per sub-block dot product, since ``GeMM(x, y) = y x^t``)</span>
+<span class="sd">        3. ``page_score = max(score, dim=n_sub)`` → ``[S, 1, 1]``</span>
+<span class="sd">        4. :class:`topK` converts ``page_score`` into sparse page</span>
+<span class="sd">           indices ``o`` of shape ``[S_sparse, 1, 1]``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">q_summary</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q_summary</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">page_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_sub</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">page_score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LServeCentroidSparseAttention.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeCentroidSparseAttention.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Update per-sub-block centroids from the key cache.</span>
+
+<span class="sd">        Cache-update view</span>
+<span class="sd">        -----------------</span>
+<span class="sd">        - ``cache[&quot;k&quot;]``: ``[B, page_size, D]``</span>
+<span class="sd">        - ``cache[&quot;centroids&quot;]``: ``[B, n_sub, D]``</span>
+
+<span class="sd">        :class:`CMeanInterleave` (``dim=1``, ``k=SUB_BLOCK_SIZE``) takes a</span>
+<span class="sd">        grouped mean over consecutive groups of ``SUB_BLOCK_SIZE`` keys,</span>
+<span class="sd">        writing one centroid per sub-block.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="LServeCentroidSparseAttention.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.LServeCentroidSparseAttention.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Declare inner shapes for custom cache tensors.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Dict[str, Tuple[int, int]]</span>
+<span class="sd">            - ``&quot;centroids&quot;``: inner shape</span>
+<span class="sd">              ``(block_size // SUB_BLOCK_SIZE, head_dim)`` — one centroid</span>
+<span class="sd">              per sub-block of the page.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">block_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">SUB_BLOCK_SIZE</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="MaskedQuestSparseAttention">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.MaskedQuestSparseAttention">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;masked_quest_sparse_attention&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MaskedQuestSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    QUEST-style sparse attention with a feature-axis :class:`MaskSlice`.</span>
+
+<span class="sd">    Identical to :class:`GQAQuestSparseAttention` in its routing logic,</span>
+<span class="sd">    but before summing over the feature dimension it multiplies the</span>
+<span class="sd">    envelope tensor by a position-dependent mask built with</span>
+<span class="sd">    :class:`MaskSlice`:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        m[\ldots, d] =</span>
+<span class="sd">        \begin{cases}</span>
+<span class="sd">            0, &amp; d &lt; \text{MASK\_END}, \\</span>
+<span class="sd">            1, &amp; d \ge \text{MASK\_END}.</span>
+<span class="sd">        \end{cases}</span>
+
+<span class="sd">    This suppresses the leading ``MASK_END`` feature planes of the</span>
+<span class="sd">    QUEST envelope score — a cheap, position-only way to exclude</span>
+<span class="sd">    low-signal channels. Because :class:`MaskSlice` is a pure</span>
+<span class="sd">    position-based writer (its output does not depend on the input</span>
+<span class="sd">    values), no extra state is threaded through ``ctx``.</span>
+
+<span class="sd">    The mask is applied along ``dim=2`` (the head / feature dim ``D``),</span>
+<span class="sd">    so ``MASK_END`` must be :math:`\le D` at runtime. The default</span>
+<span class="sd">    ``MASK_END = 8`` is safe for all head dims in the verification</span>
+<span class="sd">    sweep (``D \in \{32, 64, 128\}``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">MASK_END</span> <span class="o">=</span> <span class="mi">8</span>  <span class="c1"># mask [0, MASK_END) features; safe for D in {32, 64, 128}</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="c1"># Indexer-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul_max</span> <span class="o">=</span> <span class="n">Multiply</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul_min</span> <span class="o">=</span> <span class="n">Multiply</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">maximum_op</span> <span class="o">=</span> <span class="n">Maximum</span><span class="p">()</span>
+        <span class="c1"># Position-only mask on the feature axis: α=0 on [0, MASK_END), β=1 elsewhere.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">feature_mask</span> <span class="o">=</span> <span class="n">MaskSlice</span><span class="p">(</span>
+            <span class="n">start</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">MASK_END</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">1.0</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul_mask</span> <span class="o">=</span> <span class="n">Multiply</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sum</span> <span class="o">=</span> <span class="n">Sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span> <span class="o">=</span> <span class="n">Max</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+
+        <span class="c1"># Cache-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_max</span> <span class="o">=</span> <span class="n">CMax</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_min</span> <span class="o">=</span> <span class="n">CMin</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MaskedQuestSparseAttention.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.MaskedQuestSparseAttention.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">s_max</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul_max</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>      <span class="c1"># [S, H_q, D]</span>
+        <span class="n">s_min</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul_min</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>      <span class="c1"># [S, H_q, D]</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">maximum_op</span><span class="p">(</span><span class="n">s_max</span><span class="p">,</span> <span class="n">s_min</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>          <span class="c1"># [S, H_q, D]</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">feature_mask</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                <span class="c1"># [S, H_q, D]</span>
+        <span class="n">masked_s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul_mask</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>          <span class="c1"># [S, H_q, D]</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">masked_s</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                 <span class="c1"># [S, H_q, 1]</span>
+        <span class="n">aggr_score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_op</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>            <span class="c1"># [S, 1, 1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">aggr_score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MaskedQuestSparseAttention.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.MaskedQuestSparseAttention.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_max</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;max&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction_min</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;min&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MaskedQuestSparseAttention.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.MaskedQuestSparseAttention.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;max&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+            <span class="s2">&quot;min&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CenteredBlockSparseAttention">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.CenteredBlockSparseAttention">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;centered_block_sparse_attention&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CenteredBlockSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Block-sparse attention that **centers** per-page scores against a</span>
+<span class="sd">    per-(batch, kv_head) mean before topK selection.</span>
+
+<span class="sd">    The centering uses two features that landed together:</span>
+
+<span class="sd">    1. :class:`Mean` with ``dim=0`` — a *cross-row* (Schedule.S) reduce</span>
+<span class="sd">       that collapses the packed page axis into one value per</span>
+<span class="sd">       (batch, kv_head). The result is a BATCHED intermediate of shape</span>
+<span class="sd">       :math:`[B \cdot H_{kv}, 1, 1]`, allocated by the compiler with</span>
+<span class="sd">       leading dim ``ctx.max_bs * ctx.num_kv_heads``.</span>
+
+<span class="sd">    2. :class:`Add` with ``alpha=1, beta=-1`` over a (RAGGED, BATCHED)</span>
+<span class="sd">       pair — uses the new mixed-format dispatch in</span>
+<span class="sd">       :class:`Elementwise_Binary` so the per-page RAGGED score can be</span>
+<span class="sd">       offset by the BATCHED summary.</span>
+
+<span class="sd">    Pipeline (indexer)</span>
+<span class="sd">    ------------------</span>
+<span class="sd">    .. code-block:: text</span>
+
+<span class="sd">        s         = q * cache[&quot;centroids&quot;]      # RAGGED [S, H_q, D]</span>
+<span class="sd">        score_d   = sum(s, dim=2)               # RAGGED [S, H_q, 1]</span>
+<span class="sd">        score     = mean(score_d, dim=1)        # RAGGED [S, 1, 1]</span>
+<span class="sd">        mean_seq  = mean(score, dim=0)          # BATCHED [B*H_kv, 1, 1]   (Schedule.S)</span>
+<span class="sd">        centered  = score - mean_seq            # RAGGED [S, 1, 1]   (RAGGED + BATCHED)</span>
+<span class="sd">        topK(centered, o)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># Indexer-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mul</span> <span class="o">=</span> <span class="n">Multiply</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sum_d</span> <span class="o">=</span> <span class="n">Sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean_h</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean_seq</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>            <span class="c1"># Schedule.S, RAGGED → BATCHED</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">center</span> <span class="o">=</span> <span class="n">Add</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">beta</span><span class="o">=-</span><span class="mf">1.0</span><span class="p">)</span>  <span class="c1"># score - mean_seq</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+
+        <span class="c1"># Cache-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CenteredBlockSparseAttention.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.CenteredBlockSparseAttention.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>        <span class="c1"># RAGGED</span>
+        <span class="n">score_d</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sum_d</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                    <span class="c1"># RAGGED</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_h</span><span class="p">(</span><span class="n">score_d</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>               <span class="c1"># RAGGED [S, 1, 1]</span>
+        <span class="n">mean_seq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean_seq</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>            <span class="c1"># BATCHED [B*H_kv, 1, 1]</span>
+        <span class="n">centered</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">center</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">mean_seq</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>    <span class="c1"># RAGGED via (R, B) dispatch</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">centered</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CenteredBlockSparseAttention.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.CenteredBlockSparseAttention.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CenteredBlockSparseAttention.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.CenteredBlockSparseAttention.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="RunningAvgBlockSparse">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.RunningAvgBlockSparse">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;running_avg_block_sparse&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RunningAvgBlockSparse</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Block-sparse attention with a running-average page score.</span>
+
+<span class="sd">    Each decode step we maintain a per-page persistent scalar</span>
+<span class="sd">    ``cache[&quot;running_score&quot;]`` updated by</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \text{running\_score} \leftarrow</span>
+<span class="sd">        \alpha \cdot \text{last\_running\_score} + \text{current\_score},</span>
+
+<span class="sd">    where ``current_score`` is the usual ``q_mean · centroid`` per-page</span>
+<span class="sd">    score and ``alpha`` controls momentum. Pages that keep scoring</span>
+<span class="sd">    highly accumulate; pages that lose relevance decay.</span>
+
+<span class="sd">    Illustrates the :class:`Save` / :class:`Load` pattern for persistent</span>
+<span class="sd">    state across decode steps — ``running_score`` is declared in</span>
+<span class="sd">    :meth:`create_cache` but written entirely from</span>
+<span class="sd">    :meth:`forward_indexer` via ``Save``; :meth:`forward_cache` never</span>
+<span class="sd">    touches it.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ALPHA</span> <span class="o">=</span> <span class="mf">0.5</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># Indexer-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean</span>        <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span>        <span class="o">=</span> <span class="n">GeMM</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">load_score</span>  <span class="o">=</span> <span class="n">Load</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fuse</span>        <span class="o">=</span> <span class="n">Add</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ALPHA</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_score</span>  <span class="o">=</span> <span class="n">Save</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+
+        <span class="c1"># Cache-side ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># Zero-initialise the persistent per-block scalar when each new</span>
+        <span class="c1"># block completes. Without this, the first ``Load`` after a</span>
+        <span class="c1"># block is allocated reads whatever was in that memory slot</span>
+        <span class="c1"># before — typically stale values from a prior sequence.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_running_score</span> <span class="o">=</span> <span class="n">CFill</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RunningAvgBlockSparse.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.RunningAvgBlockSparse.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">q_mean</span>       <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                               <span class="c1"># [1, 1, D]</span>
+        <span class="n">current</span>      <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>      <span class="c1"># [S, 1, 1]</span>
+        <span class="n">last_running</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">load_score</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;running_score&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>    <span class="c1"># [S, 1, 1]</span>
+        <span class="n">running</span>      <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse</span><span class="p">(</span><span class="n">last_running</span><span class="p">,</span> <span class="n">current</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>           <span class="c1"># α*last + current</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">save_score</span><span class="p">(</span><span class="n">running</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;running_score&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>          <span class="c1"># persist</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">running</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RunningAvgBlockSparse.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.RunningAvgBlockSparse.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">init_running_score</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;running_score&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="RunningAvgBlockSparse.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.RunningAvgBlockSparse.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;centroids&quot;</span><span class="p">:</span>     <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>  <span class="c1"># maintained by forward_cache</span>
+            <span class="s2">&quot;running_score&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>         <span class="c1"># maintained by forward_indexer (Save)</span>
+        <span class="p">}</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="VEnergyGatedCentroid">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.VEnergyGatedCentroid">[docs]</a>
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;venergy_gated_centroid&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">VEnergyGatedCentroid</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Score pages by centroid dot-product gated by the mean token magnitude</span>
+<span class="sd">    of the value block.  Pages whose values carry little energy are muted</span>
+<span class="sd">    even when the key centroid aligns with the query.</span>
+
+<span class="sd">    Novelty: v-block energy as a multiplicative gate on the key-centroid</span>
+<span class="sd">    score via CL2Norm(dim=2) → CMean(dim=1) chain in forward_cache.</span>
+<span class="sd">    §16.4 — value-side signal exploitation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># indexer-side</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">q_mean</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span> <span class="o">=</span> <span class="n">GeMM</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gate</span> <span class="o">=</span> <span class="n">Multiply</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+
+        <span class="c1"># cache-side</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k_mean</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v_tok_norm</span> <span class="o">=</span> <span class="n">CL2Norm</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>   <span class="c1"># [1, block_size, D] → [1, block_size, 1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v_energy</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>        <span class="c1"># [1, block_size, 1] → [1, 1, 1]</span>
+
+<div class="viewcode-block" id="VEnergyGatedCentroid.create_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.VEnergyGatedCentroid.create_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+            <span class="s2">&quot;v_energy&quot;</span><span class="p">:</span>  <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="VEnergyGatedCentroid.forward_cache">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.VEnergyGatedCentroid.forward_cache">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">k_mean</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">v_tok</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">v_tok_norm</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">],</span> <span class="kc">None</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>   <span class="c1"># [1, block_size, 1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v_energy</span><span class="p">(</span><span class="n">v_tok</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;v_energy&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>      <span class="c1"># [1, 1, 1]</span></div>
+
+
+<div class="viewcode-block" id="VEnergyGatedCentroid.forward_indexer">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.algorithms.html#vortex_torch.flow.algorithms.VEnergyGatedCentroid.forward_indexer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">cache</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+        <span class="n">q_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">q_mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                         <span class="c1"># [1, 1, D]</span>
+        <span class="n">dot</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>     <span class="c1"># [S, 1, 1]</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gate</span><span class="p">(</span><span class="n">dot</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;v_energy&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>       <span class="c1"># [S, 1, 1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span></div>
+</div>
+
+
 <span class="c1"># For agent developers!</span>
 <span class="c1"># The ops are not reusable, even if they have the same semantic meaning. Internally, they will initialize different memory buffer.</span>
 <span class="c1"># For example, in Quest attention, we need to define two multiply operators.</span>
-<span class="c1"># In the entire flow (including forward_cache/forward_indexer), native torch Ops are only allowed to apply to q in forward_indexer. For other tensors, please use vortex_torch ops in indexer/ and cache/.</span>
+<span class="c1"># Native torch ops are not allowed anywhere in the flow. Every tensor (q, o, cache[...], intermediates) must go through vortex_torch.indexer ops in forward_indexer and vortex_torch.cache ops in forward_cache.</span>
 
 <span class="c1"># In forward indexer, q can be viewed as [1, H_q, D] or [B, H_q, D] (B=1) and cache[&quot;xxx&quot;] can be viewed as [S, r, c] (r, c defined in create_cache) logically.</span>
 <span class="c1"># In forward cache, the cache[&quot;xxx&quot;] is viewed as [B, r, c]  (r, c defined in create_cache) logically.</span>
@@ -812,7 +1420,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -833,8 +1441,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

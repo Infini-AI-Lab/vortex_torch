@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.utils - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -283,106 +283,237 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.utils.Mode">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">Mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#Mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.Mode" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">Mode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#Mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.Mode" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.Mode.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#vortex_torch.utils.Mode.profile" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">profile</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.Mode.profile" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.Mode.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#vortex_torch.utils.Mode.execute" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">execute</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.Mode.execute" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.utils.Schedule">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">Schedule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#Schedule"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.Schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.Schedule.W">
+<span class="sig-name descname"><span class="pre">W</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.Schedule.W" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.Schedule.S">
+<span class="sig-name descname"><span class="pre">S</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.Schedule.S" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ReduceType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ReduceType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ReduceType" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ReduceType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ReduceType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ReduceType" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType.Mean">
-<span class="sig-name descname"><span class="pre">Mean</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#vortex_torch.utils.ReduceType.Mean" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Mean</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.ReduceType.Mean" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType.Max">
-<span class="sig-name descname"><span class="pre">Max</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#vortex_torch.utils.ReduceType.Max" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Max</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.ReduceType.Max" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType.Min">
-<span class="sig-name descname"><span class="pre">Min</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#vortex_torch.utils.ReduceType.Min" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Min</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#vortex_torch.utils.ReduceType.Min" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType.L2Norm">
-<span class="sig-name descname"><span class="pre">L2Norm</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></em><a class="headerlink" href="#vortex_torch.utils.ReduceType.L2Norm" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">L2Norm</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#vortex_torch.utils.ReduceType.L2Norm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ReduceType.Sum">
-<span class="sig-name descname"><span class="pre">Sum</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></em><a class="headerlink" href="#vortex_torch.utils.ReduceType.Sum" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Sum</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#vortex_torch.utils.ReduceType.Sum" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ElementwiseBinaryOpType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ElementwiseBinaryOpType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ElementwiseBinaryOpType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ElementwiseBinaryOpType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.Maximum">
-<span class="sig-name descname"><span class="pre">Maximum</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Maximum" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Maximum</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Maximum" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.Minimum">
-<span class="sig-name descname"><span class="pre">Minimum</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Minimum" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Minimum</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Minimum" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.Add">
-<span class="sig-name descname"><span class="pre">Add</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Add" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Add</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Add" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.Mul">
-<span class="sig-name descname"><span class="pre">Mul</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Mul" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Mul</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.Mul" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereEqual">
+<span class="sig-name descname"><span class="pre">WhereEqual</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereEqual" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereNotEqual">
+<span class="sig-name descname"><span class="pre">WhereNotEqual</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereNotEqual" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereGreater">
+<span class="sig-name descname"><span class="pre">WhereGreater</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereGreater" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereGreaterEqual">
+<span class="sig-name descname"><span class="pre">WhereGreaterEqual</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">7</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereGreaterEqual" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereLess">
+<span class="sig-name descname"><span class="pre">WhereLess</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">8</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereLess" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseBinaryOpType.WhereLessEqual">
+<span class="sig-name descname"><span class="pre">WhereLessEqual</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">9</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereLessEqual" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ElementwiseOpType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ElementwiseOpType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">ElementwiseOpType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#ElementwiseOpType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Relu">
-<span class="sig-name descname"><span class="pre">Relu</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Relu" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Relu</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Relu" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Sigmoid">
-<span class="sig-name descname"><span class="pre">Sigmoid</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Sigmoid" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Sigmoid</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Sigmoid" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Silu">
-<span class="sig-name descname"><span class="pre">Silu</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Silu" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Silu</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Silu" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Abs">
-<span class="sig-name descname"><span class="pre">Abs</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Abs" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Abs</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Abs" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Add_Mul">
-<span class="sig-name descname"><span class="pre">Add_Mul</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></em><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Add_Mul" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">Add_Mul</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">4</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Add_Mul" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Log">
+<span class="sig-name descname"><span class="pre">Log</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Log" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.ElementwiseOpType.Exp">
+<span class="sig-name descname"><span class="pre">Exp</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">6</span></span><a class="headerlink" href="#vortex_torch.utils.ElementwiseOpType.Exp" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.utils.QuantizationType">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">QuantizationType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#QuantizationType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.QuantizationType" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.QuantizationType.BF16">
+<span class="sig-name descname"><span class="pre">BF16</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#vortex_torch.utils.QuantizationType.BF16" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.QuantizationType.FP8_E5M2">
+<span class="sig-name descname"><span class="pre">FP8_E5M2</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#vortex_torch.utils.QuantizationType.FP8_E5M2" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.utils.QuantizationType.FP8_E4M3">
+<span class="sig-name descname"><span class="pre">FP8_E4M3</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#vortex_torch.utils.QuantizationType.FP8_E4M3" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vortex_torch.utils.indent_block">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">indent_block</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">level</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#indent_block"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.indent_block" title="Link to this definition">¶</a></dt>
+<dd><p>Indent a multi-line text block by the given indentation level.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>text</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p></li>
+<li><p><strong>level</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="vortex_torch.utils.DTYPE_STR_TO_TORCH">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">DTYPE_STR_TO_TORCH</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'bfloat16':</span> <span class="pre">torch.bfloat16,</span> <span class="pre">'float16':</span> <span class="pre">torch.float16,</span> <span class="pre">'float32':</span> <span class="pre">torch.float32,</span> <span class="pre">'fp8_e4m3fn':</span> <span class="pre">torch.float8_e4m3fn,</span> <span class="pre">'fp8_e5m2':</span> <span class="pre">torch.float8_e5m2}</span></span><a class="headerlink" href="#vortex_torch.utils.DTYPE_STR_TO_TORCH" title="Link to this definition">¶</a></dt>
+<dd><p>Canonical string -&gt; <code class="docutils literal notranslate"><span class="pre">torch.dtype</span></code>. Keep this one-to-one; aliases go in
+<code class="xref py py-data docutils literal notranslate"><span class="pre">_DTYPE_ALIASES</span></code> so tooling that prints the valid set (<code class="docutils literal notranslate"><span class="pre">choices=</span></code>,
+error messages) can show canonical names without alias noise.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vortex_torch.utils.resolve_dtype">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">resolve_dtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.bfloat16</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#resolve_dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.resolve_dtype" title="Link to this definition">¶</a></dt>
+<dd><p>Resolve a dtype given either a <code class="docutils literal notranslate"><span class="pre">torch.dtype</span></code> or a canonical string.</p>
+<p>Accepts <code class="docutils literal notranslate"><span class="pre">None</span></code> (returns <code class="docutils literal notranslate"><span class="pre">default</span></code>), a <code class="docutils literal notranslate"><span class="pre">torch.dtype</span></code> (returned as-is),
+a canonical string in <a class="reference internal" href="#vortex_torch.utils.DTYPE_STR_TO_TORCH" title="vortex_torch.utils.DTYPE_STR_TO_TORCH"><code class="xref py py-data docutils literal notranslate"><span class="pre">DTYPE_STR_TO_TORCH</span></code></a>, or a short alias in
+<code class="xref py py-data docutils literal notranslate"><span class="pre">_DTYPE_ALIASES</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>default</strong> (<em>torch.dtype</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>torch.dtype</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vortex_torch.utils.is_hopper_or_newer">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">is_hopper_or_newer</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#is_hopper_or_newer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.is_hopper_or_newer" title="Link to this definition">¶</a></dt>
+<dd><p>Check if the current CUDA device is Hopper architecture or newer.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="vortex_torch.utils.is_hopper">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.utils.</span></span><span class="sig-name descname"><span class="pre">is_hopper</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/utils.html#is_hopper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.utils.is_hopper" title="Link to this definition">¶</a></dt>
+<dd><p>Check if the current CUDA device is exactly Hopper architecture.</p>
 </dd></dl>
 
 </section>
@@ -398,7 +529,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -430,6 +561,11 @@
 <li><a class="reference internal" href="#vortex_torch.utils.Mode.execute"><code class="docutils literal notranslate"><span class="pre">Mode.execute</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#vortex_torch.utils.Schedule"><code class="docutils literal notranslate"><span class="pre">Schedule</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.utils.Schedule.W"><code class="docutils literal notranslate"><span class="pre">Schedule.W</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.Schedule.S"><code class="docutils literal notranslate"><span class="pre">Schedule.S</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#vortex_torch.utils.ReduceType"><code class="docutils literal notranslate"><span class="pre">ReduceType</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.utils.ReduceType.Mean"><code class="docutils literal notranslate"><span class="pre">ReduceType.Mean</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.utils.ReduceType.Max"><code class="docutils literal notranslate"><span class="pre">ReduceType.Max</span></code></a></li>
@@ -443,6 +579,12 @@
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.Minimum"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.Minimum</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.Add"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.Add</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.Mul"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.Mul</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereEqual"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereEqual</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereNotEqual"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereNotEqual</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereGreater"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereGreater</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereGreaterEqual"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereGreaterEqual</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereLess"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereLess</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseBinaryOpType.WhereLessEqual"><code class="docutils literal notranslate"><span class="pre">ElementwiseBinaryOpType.WhereLessEqual</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType</span></code></a><ul>
@@ -451,8 +593,21 @@
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType.Silu"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType.Silu</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType.Abs"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType.Abs</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType.Add_Mul"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType.Add_Mul</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType.Log"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType.Log</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.ElementwiseOpType.Exp"><code class="docutils literal notranslate"><span class="pre">ElementwiseOpType.Exp</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#vortex_torch.utils.QuantizationType"><code class="docutils literal notranslate"><span class="pre">QuantizationType</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.utils.QuantizationType.BF16"><code class="docutils literal notranslate"><span class="pre">QuantizationType.BF16</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.QuantizationType.FP8_E5M2"><code class="docutils literal notranslate"><span class="pre">QuantizationType.FP8_E5M2</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.QuantizationType.FP8_E4M3"><code class="docutils literal notranslate"><span class="pre">QuantizationType.FP8_E4M3</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#vortex_torch.utils.indent_block"><code class="docutils literal notranslate"><span class="pre">indent_block()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.DTYPE_STR_TO_TORCH"><code class="docutils literal notranslate"><span class="pre">DTYPE_STR_TO_TORCH</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.resolve_dtype"><code class="docutils literal notranslate"><span class="pre">resolve_dtype()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.is_hopper_or_newer"><code class="docutils literal notranslate"><span class="pre">is_hopper_or_newer()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.utils.is_hopper"><code class="docutils literal notranslate"><span class="pre">is_hopper()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -465,8 +620,8 @@
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.abs.op - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -274,7 +274,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.abs.op.vOp">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.op.</span></span><span class="sig-name descname"><span class="pre">vOp</span></span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.op.</span></span><span class="sig-name descname"><span class="pre">vOp</span></span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
 <p>Base class for defining virtual operators that support profiling and execution modes.</p>
 <p>This abstract base class provides a unified interface for defining
@@ -283,14 +283,23 @@ virtual operators that have two main phases:</p>
 <li><p><strong>Profiling phase</strong> – used to pre-compute shapes, allocate buffers, or collect statistics.</p></li>
 <li><p><strong>Execution phase</strong> – performs the actual operator computation.</p></li>
 </ul>
-<p>Subclasses must implement <a class="reference internal" href="#vortex_torch.abs.op.vOp.profile" title="vortex_torch.abs.op.vOp.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> and <a class="reference internal" href="#vortex_torch.abs.op.vOp.execute" title="vortex_torch.abs.op.vOp.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a>.
+<p>Subclasses <strong>must</strong> implement <a class="reference internal" href="#vortex_torch.abs.op.vOp.profile" title="vortex_torch.abs.op.vOp.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>. <a class="reference internal" href="#vortex_torch.abs.op.vOp.execute" title="vortex_torch.abs.op.vOp.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a> is
+optional — ops that run only through the compiled codegen path may
+omit it; calling <a class="reference internal" href="#vortex_torch.abs.op.vOp.execute" title="vortex_torch.abs.op.vOp.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a> on such an op will raise
+<a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">NotImplementedError</span></code></a>.
 The <code class="xref py py-meth docutils literal notranslate"><span class="pre">__call__()</span></code> method automatically dispatches between these modes
 based on the provided context.</p>
 <dl class="field-list simple">
 </dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.op.vOp.schedule">
+<span class="sig-name descname"><span class="pre">schedule</span></span><a class="headerlink" href="#vortex_torch.abs.op.vOp.schedule" title="Link to this definition">¶</a></dt>
+<dd><p>Schedule type (e.g. W or S) that may be used by implementations.</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.abs.op.vOp.profile">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp.profile" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp.profile" title="Link to this definition">¶</a></dt>
 <dd><p>Abstract method: profile.</p>
 <p>Called during the profiling or preparation phase.</p>
 <dl class="simple">
@@ -306,7 +315,7 @@ based on the provided context.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>*args</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Positional arguments.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.ContextBase" title="vortex_torch.abs.ContextBase"><em>ContextBase</em></a><em>, </em><em>optional</em>) – The execution context.</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><em>ContextBase</em></a><em>, </em><em>optional</em>) – The execution context.</p></li>
 <li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
 </ul>
 </dd>
@@ -314,7 +323,7 @@ based on the provided context.</p>
 <dd class="field-even"><p>The result of the profiling operation.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Any</p>
+<dd class="field-odd"><p><em>Any</em></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the subclass does not implement this method.</p>
@@ -324,27 +333,29 @@ based on the provided context.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.abs.op.vOp.execute">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Abstract method: execute.</p>
-<p>Called during the normal execution phase.</p>
-<p>This method implements the actual operator logic.
-Subclasses must provide their own implementation.</p>
+<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/op.html#vOp.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.op.vOp.execute" title="Link to this definition">¶</a></dt>
+<dd><p>Optional: execute the operator at runtime.</p>
+<p>Subclasses that participate in the runtime (eager) path should
+override this method. Subclasses that run only through the
+compiled (codegen) path may leave it unimplemented; in that case
+attempting to call <a class="reference internal" href="#vortex_torch.abs.op.vOp.execute" title="vortex_torch.abs.op.vOp.execute"><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code></a> raises <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">NotImplementedError</span></code></a>
+with a hint that this op is codegen-only.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>*args</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>) – Positional arguments for the operation.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.ContextBase" title="vortex_torch.abs.ContextBase"><em>ContextBase</em></a><em>, </em><em>optional</em>) – The execution context.</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><em>ContextBase</em></a><em>, </em><em>optional</em>) – The execution context.</p></li>
 <li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The result of the operator execution.</p>
+<dd class="field-even"><p>The result of the operator execution, if implemented.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Any</p>
+<dd class="field-odd"><p><em>Any</em></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the subclass does not implement this method.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the subclass has not overridden it.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -364,7 +375,7 @@ Subclasses must provide their own implementation.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -392,6 +403,7 @@ Subclasses must provide their own implementation.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.abs.op</a><ul>
 <li><a class="reference internal" href="#vortex_torch.abs.op.vOp"><code class="docutils literal notranslate"><span class="pre">vOp</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.abs.op.vOp.schedule"><code class="docutils literal notranslate"><span class="pre">vOp.schedule</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.op.vOp.profile"><code class="docutils literal notranslate"><span class="pre">vOp.profile()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.op.vOp.execute"><code class="docutils literal notranslate"><span class="pre">vOp.execute()</span></code></a></li>
 </ul>
@@ -408,8 +420,8 @@ Subclasses must provide their own implementation.</p>
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

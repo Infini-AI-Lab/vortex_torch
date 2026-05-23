@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.cache.fill - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,127 +255,58 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.cache.fill</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.triton_kernels.fill_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">fill_p</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">Schedule</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrozenSet</span>
+
 
 <div class="viewcode-block" id="Fill">
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Fill</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    In-place page-wise fill dispatcher.</span>
+<span class="sd">    In-place page-wise fill dispatcher (codegen path only).</span>
 
-<span class="sd">    This operator performs an in-place, format-aware fill over a batched</span>
-<span class="sd">    tensor. The input is treated as a rank-3 tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times D_0 \times D_1},</span>
-
-<span class="sd">    where:</span>
-
-<span class="sd">    - :math:`B` is a batch-like axis (for example, batch * heads),</span>
-<span class="sd">    - :math:`D_0, D_1` encode per-page/per-token features.</span>
-
-<span class="sd">    Using per-position metadata stored in ``loc`` together with layout</span>
-<span class="sd">    information in :class:`Context`, the implementation identifies</span>
-<span class="sd">    positions where a page has reached its logical end (e.g. an</span>
-<span class="sd">    end-of-page or end-of-sequence condition) and fills the corresponding</span>
-<span class="sd">    tiles with a scalar value :attr:`alpha`:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X[b, d_0, d_1] \leftarrow \alpha</span>
-<span class="sd">        \quad \text{for all positions } (b, d_0, d_1)</span>
-<span class="sd">        \text{ that lie past the end-of-page mark.}</span>
-
-<span class="sd">    All modifications are performed in-place; the tensor format</span>
-<span class="sd">    (PAGED, RAGGED, etc.) determines how page boundaries are interpreted</span>
-<span class="sd">    and which elements are affected.</span>
-
-<span class="sd">    Key properties</span>
-<span class="sd">    --------------</span>
-<span class="sd">    - Dispatch is keyed only by the input tensor format ``x._format``.</span>
-<span class="sd">    - The operator is purely in-place: no output buffer is allocated.</span>
-<span class="sd">    - The same :class:`vTensor` is returned from :meth:`profile`.</span>
+<span class="sd">    Overwrites selected page tiles of a rank-3 tensor with a scalar</span>
+<span class="sd">    ``alpha``. Structurally a **pure producer** of its input tensor:</span>
+<span class="sd">    ``Fill`` takes no graph-level inputs, and its output tensor id is</span>
+<span class="sd">    the same as the input tensor id (cache field being initialized).</span>
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, Callable]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to a</span>
-<span class="sd">        callable implementation that performs the in-place fill.</span>
-
+<span class="sd">    _supported_formats : FrozenSet[FORMAT]</span>
+<span class="sd">        Input formats for which a codegen implementation exists.</span>
 <span class="sd">    alpha : float</span>
 <span class="sd">        Scalar fill value written into selected positions.</span>
-
-<span class="sd">    impl : Optional[Callable]</span>
-<span class="sd">        The resolved implementation selected during :meth:`profile`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Implementation registry keyed by x_format.</span>
-    <span class="c1"># Expected impl signature: impl(x: torch.Tensor, loc: torch.Tensor, ctx: Context, alpha: float) -&gt; None</span>
-    <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">:</span> <span class="n">fill_p</span><span class="p">,</span>  <span class="c1"># e.g., wraps `fill_p_kernel` (page-major in-place fill)</span>
-        <span class="c1"># Add more entries if you support other layouts, e.g.:</span>
-        <span class="c1"># FORMAT.RAGGED: fill_r,</span>
-    <span class="p">}</span>
+    <span class="c1"># Supported input formats; only PAGED is wired up for now.</span>
+    <span class="n">_supported_formats</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">})</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Initialize an in-place fill operator.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        alpha : float, optional</span>
-<span class="sd">            Scalar fill value used to overwrite positions after the</span>
-<span class="sd">            end-of-page condition is met. Default is ``0.0``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">alpha</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="c1"># Cache fill fuses into the per-block kernel — see</span>
+        <span class="c1"># ``cache.compiler.triton_impl.kernel_gen``.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">W</span>
 
     <span class="c1"># ---------------- profile ----------------</span>
 <div class="viewcode-block" id="Fill.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs and select the in-place implementation.</span>
+<span class="sd">        Validate inputs and register this op in the cache graph.</span>
 
-<span class="sd">        Since the operation is in-place, no output buffer is allocated and</span>
-<span class="sd">        this method simply returns the input :class:`vTensor` unmodified.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be modified in-place. Expected logical shape</span>
-<span class="sd">            ``[B, D_0, D_1]``.</span>
-
-<span class="sd">        loc : torch.Tensor</span>
-<span class="sd">            Auxiliary tensor carrying page/position metadata used to</span>
-<span class="sd">            detect end-of-page locations.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing layout information and any</span>
-<span class="sd">            additional metadata needed by the implementation.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            The same object as ``x``, returned as the output view.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor`, if its rank is not 3, if</span>
-<span class="sd">            ``loc`` is not a :class:`torch.Tensor`, or if no</span>
-<span class="sd">            implementation is registered for ``x._format``.</span>
+<span class="sd">        ``Fill`` is a pure producer of ``x``: it overwrites ``x`` with a</span>
+<span class="sd">        constant and claims ``x``&#39;s producer slot (mirroring</span>
+<span class="sd">        :class:`indexer.save_load.Save`). The same :class:`vTensor` is</span>
+<span class="sd">        returned so downstream ops can continue to reference ``x``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
-        <span class="c1"># Type &amp; rank checks</span>
-        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">profile expects x to be vTensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">profile expects x to be vTensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">loc</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">),</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">profile expects loc to be torch.Tensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">loc</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
@@ -384,58 +315,17 @@
             <span class="sa">f</span><span class="s2">&quot;got ndim=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="si">}</span><span class="s2"> shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
 
-        <span class="c1"># Dispatch by input format</span>
-        <span class="n">x_fmt</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span>
-        <span class="k">assert</span> <span class="n">x_fmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for x_fmt=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">. &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for x_fmt=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2">. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Supported: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span><span class="w"> </span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="n">f</span><span class="o">.</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">x_fmt</span><span class="p">]</span>
 
-        <span class="c1"># In-place: return the same vTensor view</span>
-        <span class="k">return</span> <span class="n">x</span></div>
+        <span class="c1"># Register in the cache graph as a pure producer of ``x``.</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([])</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
 
-
-    <span class="c1"># ---------------- execute ----------------</span>
-<div class="viewcode-block" id="Fill.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Execute the in-place page-wise fill and return the input tensor.</span>
-
-<span class="sd">        The selected implementation examines page/position metadata in</span>
-<span class="sd">        ``loc`` and context, and overwrites elements in ``x`` with the</span>
-<span class="sd">        scalar value :attr:`alpha` once an end-of-page condition is</span>
-<span class="sd">        detected.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : torch.Tensor</span>
-<span class="sd">            Input tensor to be modified in-place. Must be compatible with</span>
-<span class="sd">            the :class:`vTensor` validated in :meth:`profile`.</span>
-
-<span class="sd">        loc : torch.Tensor</span>
-<span class="sd">            Auxiliary tensor carrying page/position metadata.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context forwarded to the implementation.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The same tensor instance ``x``, after in-place filling.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`profile` has not been called and no implementation</span>
-<span class="sd">            is available.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">execute called before profile() (impl is None)&quot;</span>
-
-        <span class="c1"># Expected signature: impl(x, loc, ctx, alpha)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">x</span></div>
 </div>
 
@@ -451,7 +341,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -472,8 +362,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.context - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,115 +255,165 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.indexer.context</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Final</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">UNSET</span><span class="p">,</span> <span class="n">Mode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">UNSET</span><span class="p">,</span> <span class="n">Mode</span><span class="p">,</span> <span class="n">resolve_dtype</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">MetaData</span>
 
 
 <div class="viewcode-block" id="Context">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Context</span><span class="p">(</span><span class="n">ContextBase</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Mutable, single-instance context; populate later via .create(...).</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Static, single-instance indexer context.</span>
+
+<span class="sd">    Holds **only** configuration that&#39;s fixed for the lifetime of the</span>
+<span class="sd">    compiled indexer — shapes, page/block sizes, head counts, allocation</span>
+<span class="sd">    budgets, codegen scratch (op/tensor lists), backend identity, …</span>
+
+<span class="sd">    Per-forward-batch buffers (winfo_*, dense/sparse_kv_indptr+indices,</span>
+<span class="sd">    dense/sparse_seqlens, dense/sparse_block_tables, kv_last_page_len)</span>
+<span class="sd">    and ``batch_size`` live on a separate :class:`MetaData` object,</span>
+<span class="sd">    pre-allocated at attention-backend ``__init__`` and exposed as</span>
+<span class="sd">    ``ctx.metadata``. Codegen emits ``ctx.metadata.&lt;field&gt;`` for any</span>
+<span class="sd">    value that varies between forward batches.</span>
+
+<span class="sd">    Build pattern (from each attention backend&#39;s ``_compile``):</span>
+<span class="sd">        ctx = Context()</span>
+<span class="sd">        ctx.create(self, model_runner)              # static fields</span>
+<span class="sd">        ctx.metadata = MetaData.preallocate(ctx, device=...)</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
-    <span class="vm">__slots__</span> <span class="o">=</span>  <span class="n">ContextBase</span><span class="o">.</span><span class="vm">__slots__</span> <span class="o">+</span> <span class="p">(</span>
-        <span class="c1"># indices / indptr</span>
-        <span class="s2">&quot;dense_kv_indices&quot;</span><span class="p">,</span> <span class="s2">&quot;sparse_kv_indices&quot;</span><span class="p">,</span> <span class="s2">&quot;dense_kv_indptr&quot;</span><span class="p">,</span> <span class="s2">&quot;sparse_kv_indptr&quot;</span><span class="p">,</span> <span class="s2">&quot;kv_last_page_len&quot;</span><span class="p">,</span> <span class="s2">&quot;batch_size&quot;</span><span class="p">,</span>
-        <span class="c1"># winfo</span>
-        <span class="s2">&quot;winfo_q_indices&quot;</span><span class="p">,</span> <span class="s2">&quot;winfo_kv_offsets&quot;</span><span class="p">,</span> <span class="s2">&quot;winfo_kv_lens&quot;</span><span class="p">,</span> <span class="s2">&quot;winfo_num_workloads&quot;</span><span class="p">,</span> <span class="s2">&quot;winfo_chunk_size&quot;</span><span class="p">,</span> <span class="s2">&quot;max_num_workloads&quot;</span><span class="p">,</span>
-        <span class="c1"># chunk limits</span>
-        <span class="s2">&quot;max_chunk_size&quot;</span><span class="p">,</span> <span class="s2">&quot;min_chunk_size&quot;</span><span class="p">,</span>
-        <span class="c1"># head / shape</span>
+
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="n">ContextBase</span><span class="o">.</span><span class="vm">__slots__</span> <span class="o">+</span> <span class="p">(</span>
+        <span class="c1"># ---- per-forward-batch state (pre-allocated MetaData) ----</span>
+        <span class="s2">&quot;metadata&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- batch budget ----</span>
+        <span class="s2">&quot;max_bs&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- active attention backend ----</span>
+        <span class="c1"># &quot;flashinfer&quot; (CSR indices, default) or &quot;trtllm&quot; (2D block_tables).</span>
+        <span class="c1"># Set by Context.create() from server_args.vortex_attention_backend;</span>
+        <span class="c1"># consumed by the indexer compiler&#39;s IndexerBackend traits.</span>
+        <span class="s2">&quot;vortex_attention_backend&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- workload-scheduler shape ----</span>
+        <span class="s2">&quot;max_num_workloads&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;workload_chunk_size&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- head / shape ----</span>
         <span class="s2">&quot;group_size&quot;</span><span class="p">,</span> <span class="s2">&quot;num_kv_heads&quot;</span><span class="p">,</span> <span class="s2">&quot;num_qo_heads&quot;</span><span class="p">,</span> <span class="s2">&quot;head_dim&quot;</span><span class="p">,</span>
-        <span class="c1"># hardware / paging</span>
+        <span class="c1"># ---- hardware / paging ----</span>
         <span class="s2">&quot;num_sms&quot;</span><span class="p">,</span> <span class="s2">&quot;page_size&quot;</span><span class="p">,</span> <span class="s2">&quot;max_num_pages&quot;</span><span class="p">,</span> <span class="s2">&quot;max_num_pages_per_request&quot;</span><span class="p">,</span>
-        <span class="c1"># misc</span>
-        <span class="s2">&quot;indexer_dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;topk_val&quot;</span><span class="p">,</span> <span class="s2">&quot;page_reserved_bos&quot;</span><span class="p">,</span> <span class="s2">&quot;page_reserved_eos&quot;</span><span class="p">,</span>
-        
-        <span class="c1"># auxilary memory in graph</span>
-        <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">,</span>
-        
-        <span class="c1"># auxilary flops in graph</span>
-        <span class="s2">&quot;_aux_total_flops&quot;</span>
+        <span class="s2">&quot;block_size&quot;</span><span class="p">,</span> <span class="s2">&quot;max_num_blocks&quot;</span><span class="p">,</span> <span class="s2">&quot;max_num_blocks_per_request&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;num_blocks_per_page&quot;</span><span class="p">,</span> <span class="s2">&quot;num_pages_per_workload&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- topk / reserved-slot policy ----</span>
+        <span class="s2">&quot;topk_val&quot;</span><span class="p">,</span> <span class="s2">&quot;topk_ratio&quot;</span><span class="p">,</span> <span class="s2">&quot;block_reserved_bos&quot;</span><span class="p">,</span> <span class="s2">&quot;block_reserved_eos&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;max_topk_val&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- auxiliary accounting ----</span>
+        <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;_aux_total_flops&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- codegen / graph scratch ----</span>
+        <span class="s2">&quot;tensor_list&quot;</span><span class="p">,</span> <span class="s2">&quot;op_list&quot;</span><span class="p">,</span> <span class="s2">&quot;output_tensor_to_op_list&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;op_to_input_tensor_list&quot;</span><span class="p">,</span> <span class="s2">&quot;op_to_output_tensor_list&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;side_effect_op_ids&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sparse_attention_name&quot;</span><span class="p">,</span> <span class="s2">&quot;impl_backend&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor_id_to_tensor_name_map&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;compilation_header_lines&quot;</span><span class="p">,</span> <span class="s2">&quot;auxilary_func_def_lines&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;compilation_cache_dir&quot;</span><span class="p">,</span>
+        <span class="c1"># ---- tensor-core (bf16-compute) codegen toggle ----</span>
+        <span class="c1"># When True, the triton W-kernel keeps compute blocks in bf16</span>
+        <span class="c1"># (loads cast to bf16, accumulations promote to fp32) and emits</span>
+        <span class="c1"># ``tl.dot`` for MMA-friendly GeMMs. Triton-impl only.</span>
+        <span class="s2">&quot;use_tensor_core&quot;</span><span class="p">,</span>
     <span class="p">)</span>
-    
-    <span class="c1"># --- index tensors ---</span>
-    <span class="n">dense_kv_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>  <span class="c1">#: Dense KV index tensor for mapping keys/values.</span>
-    <span class="n">sparse_kv_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>  <span class="c1">#: Sparse KV index tensor for irregular KV layout.</span>
-    <span class="n">dense_kv_indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>    <span class="c1">#: CSR-style indptr for dense KV segments.</span>
-    <span class="n">sparse_kv_indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>   <span class="c1">#: CSR-style indptr for sparse KV segments.</span>
-    <span class="n">kv_last_page_len</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1">#: Length of the last KV page.</span>
-    <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span>                  <span class="c1">#: Active batch size.</span>
 
-    <span class="c1"># --- workload info (winfo) ---</span>
-    <span class="n">winfo_q_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>    <span class="c1">#: Query indices used in workload scheduling.</span>
-    <span class="n">winfo_kv_offsets</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>   <span class="c1">#: KV offsets per workload.</span>
-    <span class="n">winfo_kv_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>      <span class="c1">#: KV lengths per workload.</span>
-    <span class="n">winfo_num_workloads</span><span class="p">:</span> <span class="nb">int</span>         <span class="c1">#: Number of workloads in the current batch.</span>
-    <span class="n">winfo_chunk_size</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1">#: Chunk size for workload partitioning.</span>
-    <span class="n">max_num_workloads</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: Maximum number of workloads allowed.</span>
+    <span class="c1"># ---- type hints (declarations only) ----</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">MetaData</span><span class="p">]</span>
+    <span class="n">max_bs</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">vortex_attention_backend</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">max_num_workloads</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">workload_chunk_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">group_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_sms</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">max_num_pages</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">max_num_pages_per_request</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">max_num_blocks</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">max_num_blocks_per_request</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_blocks_per_page</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">num_pages_per_workload</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">topk_val</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">topk_ratio</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">block_reserved_bos</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">block_reserved_eos</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">max_topk_val</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span>
+    <span class="n">_aux_total_bytes</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">_aux_total_flops</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">tensor_list</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">op_list</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">output_tensor_to_op_list</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">op_to_input_tensor_list</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">op_to_output_tensor_list</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">side_effect_op_ids</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">sparse_attention_name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">impl_backend</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">tensor_id_to_tensor_name_map</span><span class="p">:</span> <span class="nb">dict</span>
+    <span class="n">compilation_header_lines</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">auxilary_func_def_lines</span><span class="p">:</span> <span class="nb">list</span>
+    <span class="n">compilation_cache_dir</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">use_tensor_core</span><span class="p">:</span> <span class="nb">bool</span>
 
-    <span class="c1"># --- chunk limits ---</span>
-    <span class="n">max_chunk_size</span><span class="p">:</span> <span class="nb">int</span>              <span class="c1">#: Maximum allowed chunk size.</span>
-    <span class="n">min_chunk_size</span><span class="p">:</span> <span class="nb">int</span>              <span class="c1">#: Minimum allowed chunk size.</span>
-
-    <span class="c1"># --- head / shape configuration ---</span>
-    <span class="n">group_size</span><span class="p">:</span> <span class="nb">int</span>                  <span class="c1">#: Group size for grouped attention.</span>
-    <span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span>                <span class="c1">#: Number of KV heads.</span>
-    <span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span>                <span class="c1">#: Number of query/output heads.</span>
-    <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span>                    <span class="c1">#: Dimension per attention head.</span>
-
-    <span class="c1"># --- hardware / paging ---</span>
-    <span class="n">num_sms</span><span class="p">:</span> <span class="nb">int</span>                     <span class="c1">#: Number of streaming multiprocessors (SMs).</span>
-    <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span>                   <span class="c1">#: Page size used for memory paging.</span>
-    <span class="n">max_num_pages</span><span class="p">:</span> <span class="nb">int</span>               <span class="c1">#: Total available pages.</span>
-    <span class="n">max_num_pages_per_request</span><span class="p">:</span> <span class="nb">int</span>   <span class="c1">#: Page limit per individual request.</span>
-
-    <span class="c1"># --- miscellaneous ---</span>
-    <span class="n">indexer_dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span>       <span class="c1">#: Dtype used by indexer operations.</span>
-    <span class="n">topk_val</span><span class="p">:</span> <span class="nb">int</span>                    <span class="c1">#: Top-K value used in pruning or selection.</span>
-    <span class="n">page_reserved_bos</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: Reserved page count for BOS (begin-of-sequence).</span>
-    <span class="n">page_reserved_eos</span><span class="p">:</span> <span class="nb">int</span>           <span class="c1">#: Reserved page count for EOS (end-of-sequence).</span>
-
-    <span class="c1"># --- auxiliary ---</span>
-    <span class="n">_aux_total_bytes</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1">#: Accumulated auxiliary memory in bytes.</span>
-    <span class="n">_aux_total_flops</span><span class="p">:</span> <span class="nb">int</span>            <span class="c1">#: Accumulated auxiliary flops.</span>
-    
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Start as an empty shell (no big allocations).</span>
         <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__slots__</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_created&quot;</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="s2">&quot;Indexer&quot;</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_aux_total_bytes&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># start from 0 bytes</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;_aux_total_flops&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>  <span class="c1"># start from 0 flops</span>
-            <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;batch_size&quot;</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
             <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;mode&quot;</span><span class="p">:</span>
-                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">Mode</span><span class="o">.</span><span class="n">profile</span><span class="p">)</span> 
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">Mode</span><span class="o">.</span><span class="n">profile</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;metadata&quot;</span><span class="p">:</span>
+                <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">UNSET</span><span class="p">)</span>
 
-    
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Per-batch convenience accessors — forward to ``self.metadata``.</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">batch_size</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Current batch size — proxied from ``self.metadata``.</span>
+
+<span class="sd">        Kept as a property (not a slot) so the only writable copy lives on</span>
+<span class="sd">        ``self.metadata``; ``ctx.batch_size`` is now read-only.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="mi">0</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">batch_size</span>
+
 <div class="viewcode-block" id="Context.set_batch_size">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.set_batch_size">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">set_batch_size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        
-        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">n</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Compatibility shim — forwards to ``self.metadata.set_batch_size``.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;Context.set_batch_size called before MetaData was preallocated; &quot;</span>
+                <span class="s2">&quot;did you forget `ctx.metadata = MetaData.preallocate(ctx, device=...)`?&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">set_batch_size</span><span class="p">(</span><span class="n">n</span><span class="p">)</span></div>
 
-        
-    
+
+    <span class="c1"># ------------------------------------------------------------------</span>
 <div class="viewcode-block" id="Context.create">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context.create">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">create</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model_runner</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">overwrite</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Context&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Populate this instance once (no locking). Set overwrite=True to allow re-init.</span>
-<span class="sd">        NOTE: Without locking, concurrent callers may race; call from a single thread.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Populate the static fields. Per-batch ``MetaData`` is allocated</span>
+<span class="sd">        separately by the caller via ``MetaData.preallocate(ctx, device=...)``</span>
+<span class="sd">        — see this class&#39;s docstring.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_created</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">overwrite</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Context.create() already called; pass overwrite=True to reinitialize.&quot;</span><span class="p">)</span>
@@ -375,16 +425,9 @@
             <span class="k">else</span> <span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">vortex_max_seq_lens</span> <span class="o">+</span> <span class="n">sa</span><span class="o">.</span><span class="n">page_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">sa</span><span class="o">.</span><span class="n">page_size</span>
         <span class="p">)</span>
         <span class="n">max_bs</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">model_runner</span><span class="o">.</span><span class="n">req_to_token_pool</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_bs</span> <span class="o">=</span> <span class="n">max_bs</span>
 
-        <span class="c1"># Backend-known fields</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dense_kv_indices</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">kv_indices_decode</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">sparse_kv_indices</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">kv_indices_decode</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dense_kv_indptr</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">kv_indptr_decode</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">sparse_kv_indptr</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">kv_indptr_decode</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">kv_last_page_len</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">kv_last_page_len_decode</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">max_chunk_size</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_lb_max_chunk_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">min_chunk_size</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_lb_min_chunk_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">workload_chunk_size</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_workload_chunk_size</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">group_size</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">group_size</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_kv_heads</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">num_kv_heads</span>
@@ -393,41 +436,88 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">num_sms</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">get_device_properties</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">multi_processor_count</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">page_size</span>
-
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_block_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">page_size</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Page size must be a multiple of block size.&quot;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_chunk_size</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;Workload chunk size must be a multiple of blocks per page.&quot;</span>
         <span class="c1"># Capacity model (adjust as needed)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_num_pages</span> <span class="o">=</span> <span class="n">max_pages_per_req</span> <span class="o">*</span> <span class="n">max_bs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_kv_heads</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">max_num_pages_per_request</span> <span class="o">=</span> <span class="n">max_pages_per_req</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_num_pages</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks_per_request</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_num_pages_per_request</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_pages_per_workload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_chunk_size</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_blocks_per_page</span>
 
+        <span class="c1"># Round trtllm&#39;s dense_block_tables row stride up to a multiple</span>
+        <span class="c1"># of 4 int32s (= 128 bits). Each row of ``dense_block_tables`` is</span>
+        <span class="c1"># ``max_num_blocks_per_request`` int32s wide, and the trtllm</span>
+        <span class="c1"># indexer kernel reads</span>
+        <span class="c1"># ``indices[pid * max_blocks_per_seq + p * nbp]`` starting at</span>
+        <span class="c1"># ``pid * max_blocks_per_seq`` — making that product 16-byte</span>
+        <span class="c1"># aligned for every ``pid`` lets the int32 loads coalesce into</span>
+        <span class="c1"># 128-bit LDG.E.128 cache-line-aligned transactions on the per-</span>
+        <span class="c1"># row index sweep, and is harmless on flashinfer where the CSR</span>
+        <span class="c1"># indices array doesn&#39;t carry a per-row stride at all.</span>
+        <span class="c1"># ``p &lt; _page`` already gates the kernel&#39;s index reads against</span>
+        <span class="c1"># the actual sequence length, so the extra padding entries are</span>
+        <span class="c1"># never read (the planner just doesn&#39;t write to them).</span>
+        <span class="c1"># NB: ``self.vortex_attention_backend`` is assigned further down</span>
+        <span class="c1"># in this method, so read off ``sa`` directly.</span>
+        <span class="n">_attn_backend</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_attention_backend&quot;</span><span class="p">,</span> <span class="s2">&quot;flashinfer&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;flashinfer&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">_attn_backend</span> <span class="o">==</span> <span class="s2">&quot;trtllm&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks_per_request</span> <span class="o">%</span> <span class="mi">4</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks_per_request</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks_per_request</span> <span class="o">+</span> <span class="mi">3</span><span class="p">)</span> <span class="o">//</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">4</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">topk_val</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_topk_val</span>
-        <span class="n">dtype_str</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_indexer_dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;float32&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">indexer_dtype</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">torch</span><span class="p">,</span> <span class="n">dtype_str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">indexer_dtype</span> <span class="o">=</span> <span class="n">dtype_str</span>
-        
-        <span class="bp">self</span><span class="o">.</span><span class="n">page_reserved_bos</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_page_reserved_bos</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">page_reserved_eos</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_page_reserved_eos</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">max_num_workloads</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_pages</span> <span class="o">//</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_lb_min_chunk_size</span><span class="p">))</span> <span class="o">+</span> <span class="n">max_bs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_kv_heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_topk_val</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_max_topk_val</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">topk_ratio</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_topk_ratio</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vortex_dtype</span> <span class="o">=</span> <span class="n">resolve_dtype</span><span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;bfloat16&quot;</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
         <span class="p">)</span>
 
-        <span class="n">device</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">model_runner</span><span class="p">,</span> <span class="s2">&quot;device&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">winfo_q_indices</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_workloads</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">winfo_kv_offsets</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_workloads</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">winfo_kv_lens</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_workloads</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">winfo_num_workloads</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">winfo_chunk_size</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_reserved_bos</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_block_reserved_bos</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_reserved_eos</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_block_reserved_eos</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_num_workloads</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_num_blocks</span> <span class="o">//</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">workload_chunk_size</span><span class="p">))</span> <span class="o">+</span> <span class="n">max_bs</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">num_kv_heads</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">side_effect_op_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tensor_id_to_tensor_name_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compilation_header_lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">auxilary_func_def_lines</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">compilation_cache_dir</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_compilation_cache_dir</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">sparse_attention_name</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">sparse_attention</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;_</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span><span class="p">[:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>  <span class="c1"># unique name for this attention instance</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">impl_backend</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_impl_backend&quot;</span><span class="p">,</span> <span class="s2">&quot;triton&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;triton&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vortex_attention_backend</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
+            <span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_attention_backend&quot;</span><span class="p">,</span> <span class="s2">&quot;flashinfer&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;flashinfer&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_tensor_core</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">sa</span><span class="p">,</span> <span class="s2">&quot;vortex_use_tensor_core&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+        <span class="c1"># Tensor-core (bf16-compute + tl.dot) codegen is implemented only</span>
+        <span class="c1"># in the triton W-kernel backend. The cuda backend has its own</span>
+        <span class="c1"># fp32-accumulation path and ignores this flag — reject the</span>
+        <span class="c1"># combination explicitly so a misconfigured run fails loudly</span>
+        <span class="c1"># instead of silently running fp32.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_tensor_core</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl_backend</span> <span class="o">!=</span> <span class="s2">&quot;triton&quot;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;vortex_use_tensor_core is only supported with &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;vortex_impl_backend=&#39;triton&#39;; got &#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">impl_backend</span><span class="si">}</span><span class="s2">&#39;.&quot;</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_created</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 </div>
 
 
 
-
 <span class="c1"># Module-level singleton (part of the public package API)</span>
 <span class="n">ctx</span><span class="p">:</span> <span class="n">Final</span><span class="p">[</span><span class="n">Context</span><span class="p">]</span> <span class="o">=</span> <span class="n">Context</span><span class="p">()</span>
+
 
 <div class="viewcode-block" id="get_ctx">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.context.html#vortex_torch.indexer.context.get_ctx">[docs]</a>
@@ -435,7 +525,8 @@
     <span class="k">return</span> <span class="n">ctx</span></div>
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Context&quot;</span><span class="p">,</span> <span class="s2">&quot;ctx&quot;</span><span class="p">,</span> <span class="s2">&quot;get_ctx&quot;</span><span class="p">]</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Context&quot;</span><span class="p">,</span> <span class="s2">&quot;MetaData&quot;</span><span class="p">,</span> <span class="s2">&quot;ctx&quot;</span><span class="p">,</span> <span class="s2">&quot;get_ctx&quot;</span><span class="p">]</span>
 </pre></div>
         </article>
       </div>
@@ -448,7 +539,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -469,8 +560,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

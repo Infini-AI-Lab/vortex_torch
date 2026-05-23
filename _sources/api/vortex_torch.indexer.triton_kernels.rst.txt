@@ -1,3 +1,5 @@
+:orphan:
+
 vortex\_torch.indexer.triton\_kernels
 =====================================
 

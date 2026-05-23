@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.flow.loader" href="vortex_torch.flow.loader.html"><link rel="prev" title="vortex_torch.flow.algorithms" href="vortex_torch.flow.algorithms.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.flow.flow - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -274,7 +274,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.flow.</span></span><span class="sig-name descname"><span class="pre">vFlow</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.flow.</span></span><span class="sig-name descname"><span class="pre">vFlow</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
 <p>Base class for flow-style sparse attention modules.</p>
 <p>This abstraction is conceptually similar to <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.Module</span></code>,
@@ -423,7 +423,7 @@ declare inner shapes <span class="math notranslate nohighlight">\((r, c)\)</span
 </ul>
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.forward_indexer">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward_indexer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.forward_indexer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.forward_indexer" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">forward_indexer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.forward_indexer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.forward_indexer" title="Link to this definition">¶</a></dt>
 <dd><p>Compute sparse page indices (or equivalent routing information)
 from queries and cache.</p>
 <section id="canonical-shapes">
@@ -489,7 +489,7 @@ convention and must be consistent with downstream kernels.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.forward_cache">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">forward_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.forward_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.forward_cache" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">forward_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cache</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.forward_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.forward_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Update or recompute cache tensors in the batch-major view.</p>
 <section id="id1">
 <h3>Canonical shapes<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h3>
@@ -541,7 +541,7 @@ long as they respect the shapes announced by
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.create_cache">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">create_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.create_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.create_cache" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_cache</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">block_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.create_cache"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.create_cache" title="Link to this definition">¶</a></dt>
 <dd><p>Declare inner shapes for non-<code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> / non-<code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> cache tensors.</p>
 <p>This method <strong>does not allocate</strong> tensors. It only declares the
 per-key inner dimensions <span class="math notranslate nohighlight">\((r, c)\)</span>; the runtime will attach
@@ -555,6 +555,7 @@ or <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.forward_ind
 <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries, this will be the first dimension.</p></li>
 <li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Head dimension. For the standard <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries,
 this will be the second dimension.</p></li>
+<li><p><strong>block_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -568,7 +569,7 @@ this will be the second dimension.</p></li>
 </p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Tuple[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]]</p>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>, <em>Tuple</em>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>]]</p>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
@@ -580,89 +581,45 @@ by <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_cache_m
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.get_cache_meta_info">
-<span class="sig-name descname"><span class="pre">get_cache_meta_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.get_cache_meta_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info" title="Link to this definition">¶</a></dt>
-<dd><p>Get full cache inner-shape metadata, including <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code>.</p>
-<p>This wraps <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache" title="vortex_torch.flow.flow.vFlow.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a> and injects standard inner shapes
-for key/value tensors. The resulting dictionary includes:</p>
-<ul class="simple">
-<li><p>all user-defined entries from <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache" title="vortex_torch.flow.flow.vFlow.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a>, and</p></li>
-<li><p>two additional entries:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> : <code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> : <code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code></p></li>
-</ul>
-</li>
-</ul>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of tokens per page.</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Head dimension.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Mapping from cache tensor names to inner shapes <code class="docutils literal notranslate"><span class="pre">(r,</span> <span class="pre">c)</span></code>.
-The runtime will later prepend either a batch axis <code class="docutils literal notranslate"><span class="pre">B</span></code> or a
-packed-page axis <code class="docutils literal notranslate"><span class="pre">S</span></code> when materializing the tensors.</p>
-</dd>
+<span class="sig-name descname"><span class="pre">get_cache_meta_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.get_cache_meta_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>, Tuple[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a>]]</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache" title="vortex_torch.flow.flow.vFlow.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a> tries to define entries for the
-    reserved keys <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code>.</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.14)"><em>Dict</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>, <a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>], torch.dtype]]</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.get_token_ratio">
-<span class="sig-name descname"><span class="pre">get_token_ratio</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.get_token_ratio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.get_token_ratio" title="Link to this definition">¶</a></dt>
-<dd><p>Compute the relative cache size in “tokens” compared to a k/v page.</p>
-<p>Using <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info" title="vortex_torch.flow.flow.vFlow.get_cache_meta_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_cache_meta_info()</span></code></a>, this computes a simple ratio
-that measures how many <em>equivalent tokens</em> the entire cache
-consumes per head, relative to a baseline page of shape
-<code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code>.</p>
-<p>Let <span class="math notranslate nohighlight">\(\mathcal{C}\)</span> be the set of cache tensors with inner
-shapes <span class="math notranslate nohighlight">\((r_{\text{key}}, c_{\text{key}})\)</span>. This method
-returns</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{token_ratio}
-= \sum_{\text{key} \in \mathcal{C}}
-  \frac{r_{\text{key}} \cdot c_{\text{key}}}
-       {\text{page_size} \cdot \text{head_dim}}.\]</div>
-</div>
-<p>The leading dimension (<span class="math notranslate nohighlight">\(B\)</span> or <span class="math notranslate nohighlight">\(S\)</span>) is
-not included in this ratio on purpose; it is a per-page
-normalization.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of tokens per page.</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Head dimension.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Total cache size expressed in units of
-<code class="docutils literal notranslate"><span class="pre">page_size</span> <span class="pre">*</span> <span class="pre">head_dim</span></code> (including the standard <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and
-<code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries).</p>
-</dd>
+<span class="sig-name descname"><span class="pre">get_token_ratio</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.get_token_ratio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.get_token_ratio" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.run_indexer_virtual">
-<span class="sig-name descname"><span class="pre">run_indexer_virtual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.run_indexer_virtual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.run_indexer_virtual" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dt class="sig sig-object py" id="vortex_torch.flow.flow.vFlow.initialize">
+<span class="sig-name descname"><span class="pre">initialize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">block_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kv_cache_dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_data_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">intermediate_dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.bfloat16</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/flow.html#vFlow.initialize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.flow.vFlow.initialize" title="Link to this definition">¶</a></dt>
+<dd><p>Optional initialization method called by the runtime after cache
+tensors are allocated.</p>
+<p>This can be used to set up any internal state or invariants needed
+by the flow. By default this is a no-op, but concrete flows can
+override it if needed.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>group_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>block_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of tokens per block.</p></li>
+<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Head dimension.</p></li>
+<li><p><strong>kv_cache_dtype</strong> (<em>torch.dtype</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Data type for key/value caches. Accepts a <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code>
+or one of the canonical strings in
+<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.DTYPE_STR_TO_TORCH" title="vortex_torch.utils.DTYPE_STR_TO_TORCH"><code class="xref py py-data docutils literal notranslate"><span class="pre">vortex_torch.utils.DTYPE_STR_TO_TORCH</span></code></a>
+(e.g. <code class="docutils literal notranslate"><span class="pre">&quot;bfloat16&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;fp8_e5m2&quot;</span></code>).</p></li>
+<li><p><strong>q_data_type</strong> (<em>torch.dtype</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Data type for query tensor. Same string convention as
+<code class="docutils literal notranslate"><span class="pre">kv_cache_dtype</span></code>.</p></li>
+<li><p><strong>intermediate_dtype</strong> (<em>torch.dtype</em><em> or </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Data type for intermediate tensors. Defaults to <code class="docutils literal notranslate"><span class="pre">torch.bfloat16</span></code>.
+Same string convention as <code class="docutils literal notranslate"><span class="pre">kv_cache_dtype</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
@@ -702,7 +659,7 @@ normalization.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -735,7 +692,7 @@ normalization.</p>
 <li><a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache"><code class="docutils literal notranslate"><span class="pre">vFlow.create_cache()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info"><code class="docutils literal notranslate"><span class="pre">vFlow.get_cache_meta_info()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_token_ratio"><code class="docutils literal notranslate"><span class="pre">vFlow.get_token_ratio()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.flow.flow.vFlow.run_indexer_virtual"><code class="docutils literal notranslate"><span class="pre">vFlow.run_indexer_virtual()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.flow.flow.vFlow.initialize"><code class="docutils literal notranslate"><span class="pre">vFlow.initialize()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -750,11 +707,11 @@ normalization.</p>
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

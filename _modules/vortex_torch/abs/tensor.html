@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.abs.tensor - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -254,15 +254,52 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.abs.tensor</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<span></span><span class="sd">&quot;&quot;&quot;Pure-metadata tensor type used throughout the vortex graph + compiler.</span>
+
+<span class="sd">A :class:`vTensor` does **not** carry any real storage. It is a small</span>
+<span class="sd">descriptor that records exactly what the rest of the system needs to</span>
+<span class="sd">reason about a tensor at graph-construction and codegen time:</span>
+
+<span class="sd">  * ``shape``        — tuple of ints, the *real* logical shape.</span>
+<span class="sd">  * ``padded_shape`` — tuple of ints, each entry rounded up to the next</span>
+<span class="sd">                       power of two (only ``shape[1]`` / ``shape[2]`` may</span>
+<span class="sd">                       differ from ``shape``; ``shape[0]`` is the leading</span>
+<span class="sd">                       axis and is not subject to Triton block-shape</span>
+<span class="sd">                       pow2 constraints).</span>
+<span class="sd">  * ``dtype``        — :class:`torch.dtype`</span>
+<span class="sd">  * ``device``       — :class:`torch.device` / str / ``None``</span>
+<span class="sd">  * ``_format``      — :class:`FORMAT` (BATCHED / RAGGED / PAGED)</span>
+<span class="sd">  * ``tensor_id``    — int, the graph-level identity used by the compiler</span>
+
+<span class="sd">Why ``padded_shape``: Triton&#39;s block-shape constexprs (``tl.zeros``,</span>
+<span class="sd">``tl.arange``, ``tl.reshape``, ``tl.make_block_ptr.block_shape``, etc.)</span>
+<span class="sd">must each be a power of two. Real models (e.g. Qwen3-14B with</span>
+<span class="sd">``num_attention_heads // num_key_value_heads == 5``) carry tensors whose</span>
+<span class="sd">``shape[1]`` is **not** a power of two. The compiler emits tile sizes</span>
+<span class="sd">from ``padded_shape`` while keeping memory-addressing math (strides,</span>
+<span class="sd">per-row offsets, divisors in ``Mean``) anchored to ``shape``; codegens</span>
+<span class="sd">add load/store masks that select the real-shape lanes whenever</span>
+<span class="sd">``padded_shape != shape``. When ``shape`` is already pow2,</span>
+<span class="sd">``padded_shape == shape`` and no masking is emitted, so power-of-two</span>
+<span class="sd">models pay no overhead.</span>
+
+<span class="sd">It also exposes ``dim()`` for parity with ``torch.Tensor`` so existing</span>
+<span class="sd">profile-time validation code (``assert x.dim() == 3``) keeps working.</span>
+
+<span class="sd">There is intentionally **no** torch op support, no ``__torch_function__``</span>
+<span class="sd">override, no parent ``torch.Tensor`` class. ``vTensor`` is just metadata.</span>
+<span class="sd">Real tensors used by the runtime/execute path stay as plain</span>
+<span class="sd">``torch.Tensor`` instances.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Iterable</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">numbers</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
 
 
 <div class="viewcode-block" id="FORMAT">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.FORMAT">[docs]</a>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">FORMAT</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Tensor storage/layout format.</span>
 
@@ -271,189 +308,244 @@
 <span class="sd">        RAGGED: Ragged tensors with variable-length sequences or elements per batch.</span>
 <span class="sd">        PAGED: Paged tensors used for large or streaming data split into pages/chunks.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
+
     <span class="n">BATCHED</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">RAGGED</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">PAGED</span> <span class="o">=</span> <span class="mi">2</span></div>
 
 
 
-<div class="viewcode-block" id="vTensor">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.vTensor">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">vTensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tensor subclass with a `_format` metadata field.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_next_pow2</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Round ``n`` up to the next power of two.</span>
 
-<span class="sd">    Rules:</span>
-<span class="sd">    - Torch ops do NOT change `_format`; it must be consistent across all vTensors in the op.</span>
-<span class="sd">    - vTensor CANNOT participate in ops with plain torch.Tensors (raise RuntimeError).</span>
-<span class="sd">    - vTensor CAN participate in ops with Python scalars (int/float/bool).</span>
+<span class="sd">    ``_next_pow2(1) == 1``. For ``n &lt;= 0`` returns ``1`` (defensive; the</span>
+<span class="sd">    compiler never asks about non-positive dims). For positive pow2</span>
+<span class="sd">    inputs the result is the input.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">n</span> <span class="o">&lt;=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">bit_length</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_compute_padded_shape</span><span class="p">(</span><span class="n">shape</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return ``shape`` with ``shape[1]`` and ``shape[2]`` rounded up to</span>
+<span class="sd">    the next power of two. Other axes are passed through unchanged.</span>
+
+<span class="sd">    Rationale: Triton block-shape constexprs at axes 1 and 2 of the</span>
+<span class="sd">    per-workload tile (``[chunk, D_0, D_1]``) must be pow2. The leading</span>
+<span class="sd">    axis (``shape[0]``) is the ragged/paged buffer count and is sized</span>
+<span class="sd">    by ``workload_chunk_size`` / ``num_blocks_per_page`` (already pow2</span>
+<span class="sd">    by config). Padding only the inner two axes keeps the change</span>
+<span class="sd">    minimal and avoids touching addressing math that depends on</span>
+<span class="sd">    ``shape[0]``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">shape</span>
+    <span class="n">padded</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">padded</span><span class="p">):</span>
+            <span class="n">padded</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_next_pow2</span><span class="p">(</span><span class="n">padded</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">padded</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="vTensor">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">vTensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Pure-metadata virtual tensor.</span>
+
+<span class="sd">    Carries the descriptor fields used by the graph builder, the</span>
+<span class="sd">    compiler, and the codegen layer. It does not own any GPU / CPU</span>
+<span class="sd">    memory and intentionally cannot participate in torch ops — code</span>
+<span class="sd">    that wants to compute on real data should hold a ``torch.Tensor``</span>
+<span class="sd">    separately and use the ``vTensor`` only for graph bookkeeping.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># -------- construction &amp; (de)serialization --------</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__new__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">_format</span><span class="p">:</span> <span class="n">FORMAT</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="c1"># Accept scalar/iterable/torch.Tensor inputs</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="n">data</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">as_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-        <span class="c1"># Create subclass without copying storage</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="o">.</span><span class="n">_make_subclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">require_grad</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>
-        <span class="n">out</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">_format</span>
-        <span class="k">return</span> <span class="n">out</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="s2">&quot;padded_shape&quot;</span><span class="p">,</span> <span class="s2">&quot;dtype&quot;</span><span class="p">,</span> <span class="s2">&quot;device&quot;</span><span class="p">,</span> <span class="s2">&quot;_format&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor_id&quot;</span><span class="p">)</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">base</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__repr__</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="s2">&quot;Tensor&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;vTensor(format=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">base</span><span class="si">}</span><span class="s2">)&quot;</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span>
+    <span class="n">padded_shape</span><span class="p">:</span> <span class="nb">tuple</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span>
+    <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+    <span class="n">_format</span><span class="p">:</span> <span class="n">FORMAT</span>
+    <span class="n">tensor_id</span><span class="p">:</span> <span class="nb">int</span>
 
-    <span class="c1"># Pickle support</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">__reduce_ex__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">protocol</span><span class="p">):</span>
-        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_rebuild_from_tensor</span><span class="p">,</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">(</span><span class="bp">self</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">))</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">_format</span><span class="p">:</span> <span class="n">FORMAT</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span>
+        <span class="n">tensor_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">padded_shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tensor_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tensor_id must be int, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">tensor_id</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">_format</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;_format must be a FORMAT enum, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">_format</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_rebuild_from_tensor</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">requires_grad</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="o">.</span><span class="n">_make_subclass</span><span class="p">(</span><span class="n">vTensor</span><span class="p">,</span> <span class="n">t</span><span class="p">,</span> <span class="n">require_grad</span><span class="o">=</span><span class="n">requires_grad</span><span class="p">)</span>
-        <span class="n">out</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">fmt</span>
-        <span class="k">return</span> <span class="n">out</span>
-
-    <span class="c1"># -------- helpers --------</span>
-    <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_from_base</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">base</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">FORMAT</span><span class="p">):</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="o">.</span><span class="n">_make_subclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">require_grad</span><span class="o">=</span><span class="n">base</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">)</span>
-        <span class="n">out</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">fmt</span>
-        <span class="k">return</span> <span class="n">out</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_iter_tensors</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recursively yield tensors from nested args/kwargs.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">yield</span> <span class="n">obj</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-            <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">obj</span><span class="p">:</span>
-                <span class="k">yield from</span> <span class="n">vTensor</span><span class="o">.</span><span class="n">_iter_tensors</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">obj</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-                <span class="k">yield from</span> <span class="n">vTensor</span><span class="o">.</span><span class="n">_iter_tensors</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_extract_format_and_validate</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FORMAT</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Collect vTensor formats, ensure no mixing with plain Tensors, and return the op format.&quot;&quot;&quot;</span>
-        <span class="n">tensors</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">vTensor</span><span class="o">.</span><span class="n">_iter_tensors</span><span class="p">((</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)))</span>
-        <span class="c1"># Disallow presence of any plain torch.Tensor alongside vTensor</span>
-        <span class="n">has_v</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">)</span>
-        <span class="n">has_plain</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tensors</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">has_v</span> <span class="ow">and</span> <span class="n">has_plain</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;vTensor cannot operate with plain torch.Tensor in the same op.&quot;</span><span class="p">)</span>
-
-        <span class="c1"># If only scalars and/or vTensors are present, enforce format consistency</span>
-        <span class="n">fmts</span> <span class="o">=</span> <span class="p">{</span><span class="n">t</span><span class="o">.</span><span class="n">_format</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tensors</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">)}</span>
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fmts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;vTensor _format mismatch in op: </span><span class="si">{</span><span class="n">fmts</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">fmts</span><span class="p">))</span> <span class="k">if</span> <span class="n">fmts</span> <span class="k">else</span> <span class="kc">None</span>
-
-    <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_propagate_format</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">result</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">FORMAT</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Propagate fmt into results (wrap plain Tensors as vTensor).&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">fmt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">result</span>  <span class="c1"># No vTensor involved =&gt; nothing to propagate</span>
-
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">):</span>
-                <span class="n">result</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">fmt</span>
-                <span class="k">return</span> <span class="n">result</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_from_base</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
-            <span class="n">t</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">t</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">_propagate_format</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">result</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_propagate_format</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">result</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="c1"># Normalize ``shape`` so ``shape[i]``, ``len(shape)`` and ``tuple(shape)``</span>
+        <span class="c1"># all behave like ``torch.Tensor.shape``.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">)</span>
+        <span class="c1"># ``padded_shape`` derives from ``shape`` by default; callers may</span>
+        <span class="c1"># override only when they&#39;re hand-building a tensor from a</span>
+        <span class="c1"># source that already has a padded view (rare — pickle/copy</span>
+        <span class="c1"># path uses this).</span>
+        <span class="k">if</span> <span class="n">padded_shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span> <span class="o">=</span> <span class="n">_compute_padded_shape</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Non-tensor outputs (numbers, bools, None, etc.) are returned as-is</span>
-            <span class="k">return</span> <span class="n">result</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">padded_shape</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">_format</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tensor_id</span> <span class="o">=</span> <span class="n">tensor_id</span>
 
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_allowed_scalar</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True if x is a Python numeric/bool scalar allowed to mix with vTensor.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span>
+    <span class="c1"># -------- shape helpers --------</span>
+<div class="viewcode-block" id="vTensor.dim">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor.dim">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dim</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Number of dimensions; mirrors :meth:`torch.Tensor.dim`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span></div>
 
-    <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">__torch_function__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">types</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(),</span> <span class="n">kwargs</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">kwargs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">kwargs</span> <span class="o">=</span> <span class="p">{}</span>
 
-        <span class="c1"># If no vTensor types are involved, fall back to default behavior.</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="nb">issubclass</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">types</span><span class="p">):</span>
-            <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__torch_function__</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">types</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ndim</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
 
-        <span class="c1"># Validate: no plain torch.Tensor with vTensor; allow scalars.</span>
-        <span class="c1"># (Scalars aren&#39;t torch.Tensors, so they won&#39;t appear in _iter_tensors; that&#39;s fine.)</span>
-        <span class="n">fmt</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_extract_format_and_validate</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
+<div class="viewcode-block" id="vTensor.numel">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor.numel">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">numel</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+            <span class="n">n</span> <span class="o">*=</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">n</span></div>
 
-        <span class="c1"># Execute op via parent dispatch</span>
-        <span class="n">out</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">__torch_function__</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">types</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
 
-        <span class="c1"># Propagate format into outputs</span>
-        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_propagate_format</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">fmt</span><span class="p">)</span></div>
+<div class="viewcode-block" id="vTensor.size">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor.size">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">size</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Mirror of :meth:`torch.Tensor.size`.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">dim</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">dim</span><span class="p">]</span></div>
 
+
+<div class="viewcode-block" id="vTensor.needs_padding">
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor.needs_padding">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">needs_padding</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff ``padded_shape != shape`` — i.e. at least one inner</span>
+<span class="sd">        dim is not already a power of two and codegen must emit</span>
+<span class="sd">        load/store masks.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span></div>
+
+
+    <span class="c1"># -------- repr --------</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">pad</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;, padded=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;vTensor(shape=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="si">}{</span><span class="n">pad</span><span class="si">}</span><span class="s2">, dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;device=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, _format=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2">, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;tensor_id=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">tensor_id</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># -------- pickle / copy --------</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__reduce__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">_rebuild_vtensor</span><span class="p">,</span>
+            <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_format</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">padded_shape</span><span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_rebuild_vtensor</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">_format</span><span class="p">,</span> <span class="n">tensor_id</span><span class="p">,</span> <span class="n">padded_shape</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">vTensor</span><span class="p">(</span>
+        <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">_format</span><span class="o">=</span><span class="n">_format</span><span class="p">,</span>
+        <span class="n">tensor_id</span><span class="o">=</span><span class="n">tensor_id</span><span class="p">,</span> <span class="n">padded_shape</span><span class="o">=</span><span class="n">padded_shape</span><span class="p">,</span>
+    <span class="p">)</span>
 
 
 <span class="c1"># -------- convenience factory --------</span>
 <div class="viewcode-block" id="as_vtensor">
-<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.as_vtensor">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">as_vtensor</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="n">Any</span><span class="p">,</span> <span class="n">_format</span><span class="p">:</span> <span class="n">FORMAT</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wrap an input as ``vTensor`` without copying storage.</span>
+<a class="viewcode-back" href="../../../api/vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.as_vtensor">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">as_vtensor</span><span class="p">(</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">_format</span><span class="p">:</span> <span class="n">FORMAT</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span>
+    <span class="n">tensor_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">device</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a :class:`vTensor`.</span>
 
-<span class="sd">    If ``x`` is already a ``vTensor``, this returns the same object (or an</span>
-<span class="sd">    equivalent wrapper) after updating its format to ``_format`` when needed.</span>
+<span class="sd">    Three calling styles, all returning a fresh ``vTensor`` (or, for an</span>
+<span class="sd">    existing ``vTensor``, the same object re-tagged):</span>
 
-<span class="sd">    Args:</span>
-<span class="sd">        x (torch.Tensor | Any): Input to wrap. Typically a ``torch.Tensor``.</span>
-<span class="sd">            If a ``vTensor`` is passed, it will be returned (format may be updated).</span>
-<span class="sd">        _format (FORMAT, optional): Desired tensor storage/layout format.</span>
-<span class="sd">            Defaults to ``FORMAT.BATCHED``.</span>
+<span class="sd">    1. **Re-tag an existing vTensor** — ``as_vtensor(vt, fmt, tid)``</span>
+<span class="sd">       overwrites ``vt._format`` and ``vt.tensor_id`` in place and</span>
+<span class="sd">       returns ``vt``. Useful when the caller wants to add an existing</span>
+<span class="sd">       tensor descriptor to the graph under a fresh id. ``padded_shape``</span>
+<span class="sd">       is preserved.</span>
 
-<span class="sd">    Returns:</span>
-<span class="sd">        vTensor: A ``vTensor`` that references the same underlying storage as ``x``</span>
-<span class="sd">        (no data copy). Device, dtype, and shape are preserved unless the target</span>
-<span class="sd">        ``_format`` requires metadata-only adjustments.</span>
+<span class="sd">    2. **Extract metadata from a torch.Tensor** — ``as_vtensor(real, fmt, tid)``</span>
+<span class="sd">       reads ``shape``, ``dtype``, ``device`` from ``real`` and returns</span>
+<span class="sd">       a brand-new ``vTensor``. ``padded_shape`` is derived from</span>
+<span class="sd">       ``shape``. The original tensor is **not** retained — vTensor is</span>
+<span class="sd">       pure metadata.</span>
 
-<span class="sd">    Example:</span>
-<span class="sd">        &gt;&gt;&gt; t = torch.randn(2, 4, 8)</span>
-<span class="sd">        &gt;&gt;&gt; vt = as_vtensor(t)  # FORMAT.BATCHED by default</span>
-<span class="sd">        &gt;&gt;&gt; vt_ragged = as_vtensor(vt, _format=FORMAT.RAGGED)</span>
+<span class="sd">    3. **Direct construction by kwargs** —</span>
+<span class="sd">       ``as_vtensor(_format=fmt, tensor_id=tid, shape=..., dtype=..., device=...)``.</span>
+<span class="sd">       Use this when no real torch tensor is available (the common case</span>
+<span class="sd">       once the compile path is fully virtualized).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">):</span>
         <span class="n">x</span><span class="o">.</span><span class="n">_format</span> <span class="o">=</span> <span class="n">_format</span>
+        <span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span> <span class="o">=</span> <span class="n">tensor_id</span>
         <span class="k">return</span> <span class="n">x</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">as_tensor</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">vTensor</span><span class="o">.</span><span class="n">_from_base</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">_format</span><span class="p">)</span></div>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">vTensor</span><span class="p">(</span>
+            <span class="n">shape</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">_format</span><span class="o">=</span><span class="n">_format</span><span class="p">,</span>
+            <span class="n">tensor_id</span><span class="o">=</span><span class="n">tensor_id</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">x</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">vTensor</span><span class="p">(</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">shape</span> <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span> <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">_format</span><span class="o">=</span><span class="n">_format</span><span class="p">,</span>
+            <span class="n">tensor_id</span><span class="o">=</span><span class="n">tensor_id</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;as_vtensor: cannot convert </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> to vTensor; &quot;</span>
+        <span class="s2">&quot;pass a torch.Tensor, an existing vTensor, or shape/dtype/device kwargs.&quot;</span>
+    <span class="p">)</span></div>
 
 
 
 <span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
-    <span class="n">a</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
-    <span class="n">b</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
+    <span class="c1"># Direct construction</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda:0&quot;</span><span class="p">,</span>
+                <span class="n">_format</span><span class="o">=</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span> <span class="n">tensor_id</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;a:&quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="s2">&quot;padded:&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">padded_shape</span><span class="p">,</span> <span class="s2">&quot;needs_padding:&quot;</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">needs_padding</span><span class="p">())</span>
 
-    <span class="c1"># Allowed: vTensor with scalar</span>
-    <span class="n">y</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="mf">2.0</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;ok scalar:&quot;</span><span class="p">,</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="n">y</span><span class="o">.</span><span class="n">_format</span><span class="p">)</span>
+    <span class="c1"># Pow2 stays unchanged</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+                <span class="n">_format</span><span class="o">=</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span> <span class="n">tensor_id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;p:&quot;</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="s2">&quot;needs_padding:&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">needs_padding</span><span class="p">())</span>
 
-    <span class="c1"># Allowed: vTensor with vTensor (same format)</span>
-    <span class="n">z</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="n">b</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;ok same-format:&quot;</span><span class="p">,</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="n">z</span><span class="o">.</span><span class="n">_format</span><span class="p">)</span>
-
-    <span class="c1"># Disallowed: vTensor with plain Tensor</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">_</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;expected error (plain tensor):&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
-
-    <span class="c1"># Disallowed: different formats</span>
-    <span class="n">c</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">)</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">_</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">c</span>
-    <span class="k">except</span> <span class="ne">RuntimeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;expected error (format mismatch):&quot;</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+    <span class="c1"># Non-pow2 inner dim rounds up</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+                <span class="n">_format</span><span class="o">=</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span> <span class="n">tensor_id</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;q:&quot;</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="s2">&quot;padded:&quot;</span><span class="p">,</span> <span class="n">q</span><span class="o">.</span><span class="n">padded_shape</span><span class="p">,</span> <span class="s2">&quot;needs_padding:&quot;</span><span class="p">,</span> <span class="n">q</span><span class="o">.</span><span class="n">needs_padding</span><span class="p">())</span>
+    <span class="k">assert</span> <span class="n">q</span><span class="o">.</span><span class="n">padded_shape</span> <span class="o">==</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>
 </pre></div>
         </article>
       </div>
@@ -466,7 +558,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -487,8 +579,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.abs.tensor - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -262,12 +262,50 @@
         <article role="main" id="furo-main-content">
           <section id="module-vortex_torch.abs.tensor">
 <span id="vortex-torch-abs-tensor"></span><h1>vortex_torch.abs.tensor<a class="headerlink" href="#module-vortex_torch.abs.tensor" title="Link to this heading">¶</a></h1>
+<p>Pure-metadata tensor type used throughout the vortex graph + compiler.</p>
+<p>A <a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code></a> does <strong>not</strong> carry any real storage. It is a small
+descriptor that records exactly what the rest of the system needs to
+reason about a tensor at graph-construction and codegen time:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">shape</span></code>        — tuple of ints, the <em>real</em> logical shape.</p></li>
+<li><dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">padded_shape</span></code> — tuple of ints, each entry rounded up to the next</dt><dd><p>power of two (only <code class="docutils literal notranslate"><span class="pre">shape[1]</span></code> / <code class="docutils literal notranslate"><span class="pre">shape[2]</span></code> may
+differ from <code class="docutils literal notranslate"><span class="pre">shape</span></code>; <code class="docutils literal notranslate"><span class="pre">shape[0]</span></code> is the leading
+axis and is not subject to Triton block-shape
+pow2 constraints).</p>
+</dd>
+</dl>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dtype</span></code>        — <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.dtype</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">device</span></code>       — <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.device</span></code> / str / <code class="docutils literal notranslate"><span class="pre">None</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_format</span></code>      — <a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><code class="xref py py-class docutils literal notranslate"><span class="pre">FORMAT</span></code></a> (BATCHED / RAGGED / PAGED)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tensor_id</span></code>    — int, the graph-level identity used by the compiler</p></li>
+</ul>
+</div></blockquote>
+<p>Why <code class="docutils literal notranslate"><span class="pre">padded_shape</span></code>: Triton’s block-shape constexprs (<code class="docutils literal notranslate"><span class="pre">tl.zeros</span></code>,
+<code class="docutils literal notranslate"><span class="pre">tl.arange</span></code>, <code class="docutils literal notranslate"><span class="pre">tl.reshape</span></code>, <code class="docutils literal notranslate"><span class="pre">tl.make_block_ptr.block_shape</span></code>, etc.)
+must each be a power of two. Real models (e.g. Qwen3-14B with
+<code class="docutils literal notranslate"><span class="pre">num_attention_heads</span> <span class="pre">//</span> <span class="pre">num_key_value_heads</span> <span class="pre">==</span> <span class="pre">5</span></code>) carry tensors whose
+<code class="docutils literal notranslate"><span class="pre">shape[1]</span></code> is <strong>not</strong> a power of two. The compiler emits tile sizes
+from <code class="docutils literal notranslate"><span class="pre">padded_shape</span></code> while keeping memory-addressing math (strides,
+per-row offsets, divisors in <code class="docutils literal notranslate"><span class="pre">Mean</span></code>) anchored to <code class="docutils literal notranslate"><span class="pre">shape</span></code>; codegens
+add load/store masks that select the real-shape lanes whenever
+<code class="docutils literal notranslate"><span class="pre">padded_shape</span> <span class="pre">!=</span> <span class="pre">shape</span></code>. When <code class="docutils literal notranslate"><span class="pre">shape</span></code> is already pow2,
+<code class="docutils literal notranslate"><span class="pre">padded_shape</span> <span class="pre">==</span> <span class="pre">shape</span></code> and no masking is emitted, so power-of-two
+models pay no overhead.</p>
+<p>It also exposes <code class="docutils literal notranslate"><span class="pre">dim()</span></code> for parity with <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> so existing
+profile-time validation code (<code class="docutils literal notranslate"><span class="pre">assert</span> <span class="pre">x.dim()</span> <span class="pre">==</span> <span class="pre">3</span></code>) keeps working.</p>
+<p>There is intentionally <strong>no</strong> torch op support, no <code class="docutils literal notranslate"><span class="pre">__torch_function__</span></code>
+override, no parent <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> class. <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> is just metadata.
+Real tensors used by the runtime/execute path stay as plain
+<code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> instances.</p>
 <p class="rubric">Functions</p>
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.abs.tensor.as_vtensor" title="vortex_torch.abs.tensor.as_vtensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">as_vtensor</span></code></a>(x[, _format])</p></td>
-<td><p>Wrap an input as <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> without copying storage.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.abs.tensor.as_vtensor" title="vortex_torch.abs.tensor.as_vtensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">as_vtensor</span></code></a>([x, _format, tensor_id, shape, ...])</p></td>
+<td><p>Build a <a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code></a>.</p></td>
 </tr>
 </tbody>
 </table>
@@ -279,15 +317,15 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FORMAT</span></code></a>(*values)</p></td>
 <td><p>Tensor storage/layout format.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vTensor</span></code></a>(data[, _format])</p></td>
-<td><p>Tensor subclass with a <cite>_format</cite> metadata field.</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vTensor</span></code></a>([shape, dtype, device, _format, ...])</p></td>
+<td><p>Pure-metadata virtual tensor.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.abs.tensor.FORMAT">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">FORMAT</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#FORMAT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.FORMAT" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">FORMAT</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#FORMAT"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.FORMAT" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/enum.html#enum.Enum" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <p>Tensor storage/layout format.</p>
 <dl class="py attribute">
@@ -310,67 +348,157 @@
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">BATCHED</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#id0" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">BATCHED</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#id0" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="id1">
-<span class="sig-name descname"><span class="pre">RAGGED</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#id1" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">RAGGED</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#id1" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="id2">
-<span class="sig-name descname"><span class="pre">PAGED</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#id2" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">PAGED</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#id2" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">vTensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">FORMAT.BATCHED</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor" title="Link to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Tensor</span></code></p>
-<p>Tensor subclass with a <cite>_format</cite> metadata field.</p>
-<p>Rules:
-- Torch ops do NOT change <cite>_format</cite>; it must be consistent across all vTensors in the op.
-- vTensor CANNOT participate in ops with plain torch.Tensors (raise RuntimeError).
-- vTensor CAN participate in ops with Python scalars (int/float/bool).</p>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">vTensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.bfloat16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">FORMAT.BATCHED</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tensor_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padded_shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>Pure-metadata virtual tensor.</p>
+<p>Carries the descriptor fields used by the graph builder, the
+compiler, and the codegen layer. It does not own any GPU / CPU
+memory and intentionally cannot participate in torch ops — code
+that wants to compute on real data should hold a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>
+separately and use the <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> only for graph bookkeeping.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>_format</strong> (<a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a>)</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>)</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>_format</strong> (<a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>)</p></li>
+<li><p><strong>tensor_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>padded_shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><em>tuple</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.shape">
+<span class="sig-name descname"><span class="pre">shape</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.shape" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.padded_shape">
+<span class="sig-name descname"><span class="pre">padded_shape</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.padded_shape" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.dtype">
+<span class="sig-name descname"><span class="pre">dtype</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.dtype</span></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.dtype" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.device">
+<span class="sig-name descname"><span class="pre">device</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.device" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.tensor_id">
+<span class="sig-name descname"><span class="pre">tensor_id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.tensor_id" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.dim">
+<span class="sig-name descname"><span class="pre">dim</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor.dim"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.dim" title="Link to this definition">¶</a></dt>
+<dd><p>Number of dimensions; mirrors <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.dim()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 </dl>
 </dd></dl>
 
+<dl class="py property">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.ndim">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">ndim</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.ndim" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.numel">
+<span class="sig-name descname"><span class="pre">numel</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor.numel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.numel" title="Link to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.size">
+<span class="sig-name descname"><span class="pre">size</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor.size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.size" title="Link to this definition">¶</a></dt>
+<dd><p>Mirror of <code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.Tensor.size()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><em>None</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.abs.tensor.vTensor.needs_padding">
+<span class="sig-name descname"><span class="pre">needs_padding</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#vTensor.needs_padding"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.vTensor.needs_padding" title="Link to this definition">¶</a></dt>
+<dd><p>True iff <code class="docutils literal notranslate"><span class="pre">padded_shape</span> <span class="pre">!=</span> <span class="pre">shape</span></code> — i.e. at least one inner
+dim is not already a power of two and codegen must emit
+load/store masks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 <dl class="py function">
 <dt class="sig sig-object py" id="vortex_torch.abs.tensor.as_vtensor">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">as_vtensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">FORMAT.BATCHED</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#as_vtensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.as_vtensor" title="Link to this definition">¶</a></dt>
-<dd><p>Wrap an input as <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> without copying storage.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">x</span></code> is already a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>, this returns the same object (or an
-equivalent wrapper) after updating its format to <code class="docutils literal notranslate"><span class="pre">_format</span></code> when needed.</p>
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.tensor.</span></span><span class="sig-name descname"><span class="pre">as_vtensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">FORMAT.BATCHED</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tensor_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/tensor.html#as_vtensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.tensor.as_vtensor" title="Link to this definition">¶</a></dt>
+<dd><p>Build a <a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code></a>.</p>
+<p>Three calling styles, all returning a fresh <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> (or, for an
+existing <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>, the same object re-tagged):</p>
+<ol class="arabic simple">
+<li><p><strong>Re-tag an existing vTensor</strong> — <code class="docutils literal notranslate"><span class="pre">as_vtensor(vt,</span> <span class="pre">fmt,</span> <span class="pre">tid)</span></code>
+overwrites <code class="docutils literal notranslate"><span class="pre">vt._format</span></code> and <code class="docutils literal notranslate"><span class="pre">vt.tensor_id</span></code> in place and
+returns <code class="docutils literal notranslate"><span class="pre">vt</span></code>. Useful when the caller wants to add an existing
+tensor descriptor to the graph under a fresh id. <code class="docutils literal notranslate"><span class="pre">padded_shape</span></code>
+is preserved.</p></li>
+<li><p><strong>Extract metadata from a torch.Tensor</strong> — <code class="docutils literal notranslate"><span class="pre">as_vtensor(real,</span> <span class="pre">fmt,</span> <span class="pre">tid)</span></code>
+reads <code class="docutils literal notranslate"><span class="pre">shape</span></code>, <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">device</span></code> from <code class="docutils literal notranslate"><span class="pre">real</span></code> and returns
+a brand-new <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>. <code class="docutils literal notranslate"><span class="pre">padded_shape</span></code> is derived from
+<code class="docutils literal notranslate"><span class="pre">shape</span></code>. The original tensor is <strong>not</strong> retained — vTensor is
+pure metadata.</p></li>
+<li><p><strong>Direct construction by kwargs</strong> —
+<code class="docutils literal notranslate"><span class="pre">as_vtensor(_format=fmt,</span> <span class="pre">tensor_id=tid,</span> <span class="pre">shape=...,</span> <span class="pre">dtype=...,</span> <span class="pre">device=...)</span></code>.
+Use this when no real torch tensor is available (the common case
+once the compile path is fully virtualized).</p></li>
+</ol>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em><em> | </em><em>Any</em>) – Input to wrap. Typically a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code>.
-If a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> is passed, it will be returned (format may be updated).</p></li>
-<li><p><strong>_format</strong> (<a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a><em>, </em><em>optional</em>) – Desired tensor storage/layout format.
-Defaults to <code class="docutils literal notranslate"><span class="pre">FORMAT.BATCHED</span></code>.</p></li>
+<li><p><strong>x</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><em>Any</em></a>)</p></li>
+<li><p><strong>_format</strong> (<a class="reference internal" href="#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>)</p></li>
+<li><p><strong>tensor_id</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>shape</strong> (<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Sequence" title="(in Python v3.14)"><em>Sequence</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>] </em><em>| </em><em>None</em>)</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em><em> | </em><em>None</em>)</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em> | </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em> | </em><em>None</em>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> that references the same underlying storage as <code class="docutils literal notranslate"><span class="pre">x</span></code>
-(no data copy). Device, dtype, and shape are preserved unless the target
-<code class="docutils literal notranslate"><span class="pre">_format</span></code> requires metadata-only adjustments.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor">vTensor</a></p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
-<p class="rubric">Example</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">vt</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>  <span class="c1"># FORMAT.BATCHED by default</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">vt_ragged</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">vt</span><span class="p">,</span> <span class="n">_format</span><span class="o">=</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
-</pre></div>
-</div>
 </dd></dl>
 
 </section>
@@ -386,7 +514,7 @@ Defaults to <code class="docutils literal notranslate"><span class="pre">FORMAT.
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -422,7 +550,19 @@ Defaults to <code class="docutils literal notranslate"><span class="pre">FORMAT.
 <li><a class="reference internal" href="#id2"><code class="docutils literal notranslate"><span class="pre">FORMAT.PAGED</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor"><code class="docutils literal notranslate"><span class="pre">vTensor</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor"><code class="docutils literal notranslate"><span class="pre">vTensor</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.shape"><code class="docutils literal notranslate"><span class="pre">vTensor.shape</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.padded_shape"><code class="docutils literal notranslate"><span class="pre">vTensor.padded_shape</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.dtype"><code class="docutils literal notranslate"><span class="pre">vTensor.dtype</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.device"><code class="docutils literal notranslate"><span class="pre">vTensor.device</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.tensor_id"><code class="docutils literal notranslate"><span class="pre">vTensor.tensor_id</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.dim"><code class="docutils literal notranslate"><span class="pre">vTensor.dim()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.ndim"><code class="docutils literal notranslate"><span class="pre">vTensor.ndim</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.numel"><code class="docutils literal notranslate"><span class="pre">vTensor.numel()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.size"><code class="docutils literal notranslate"><span class="pre">vTensor.size()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.tensor.vTensor.needs_padding"><code class="docutils literal notranslate"><span class="pre">vTensor.needs_padding()</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#vortex_torch.abs.tensor.as_vtensor"><code class="docutils literal notranslate"><span class="pre">as_vtensor()</span></code></a></li>
 </ul>
 </li>
@@ -436,8 +576,8 @@ Defaults to <code class="docutils literal notranslate"><span class="pre">FORMAT.
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

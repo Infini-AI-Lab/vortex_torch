@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.elementwise_binary - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,41 +255,37 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.indexer.elementwise_binary</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">as_vtensor</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">vOp</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.triton_kernels.elementwise_binary_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">elementwise_binary_bpr</span><span class="p">,</span> <span class="n">elementwise_binary_rrr</span><span class="p">,</span> <span class="n">elementwise_binary_rpr</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementwiseBinaryOpType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">vOp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ElementwiseBinaryOpType</span><span class="p">,</span> <span class="n">Schedule</span>
 
 <div class="viewcode-block" id="Elementwise_Binary">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Elementwise_Binary</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Binary elementwise dispatcher for rank-3 logical tensors ``[S, C, D]``.</span>
+<span class="sd">    Binary elementwise op for rank-3 logical tensors ``[S, C, D]``.</span>
 
-<span class="sd">    This operator dispatches to a binary elementwise implementation based on the</span>
-<span class="sd">    pair of input formats ``(x._format, y._format)``. The logical output shape:</span>
+<span class="sd">    The logical output shape:</span>
 
 <span class="sd">    - keeps the ``S`` axis from the runtime context (``ctx.max_num_pages``), and</span>
 <span class="sd">    - follows broadcasting over the ``(C, D)`` axes.</span>
 
-<span class="sd">    Scalar parameters ``alpha`` and ``beta`` can be used by certain binary</span>
-<span class="sd">    operations (e.g. an ``axpby``-style op).</span>
+<span class="sd">    Output format rule: ``BATCHED`` if both inputs are ``BATCHED``,</span>
+<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
+<span class="sd">    compiler&#39;s per-workload kernel; no explicit format dispatch is</span>
+<span class="sd">    needed here.</span>
+
+<span class="sd">    Scalar parameters ``alpha`` and ``beta`` can be used by certain</span>
+<span class="sd">    binary operations (e.g. an ``axpby``-style op).</span>
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[Tuple[FORMAT, FORMAT], Tuple[Callable, FORMAT]]</span>
-<span class="sd">        Dispatch table keyed by ``(x_format, y_format)``. Each entry maps to</span>
-<span class="sd">        ``(callable_impl, resolved_output_format)``.</span>
-
 <span class="sd">    alpha : float</span>
 <span class="sd">        Scalar parameter used by some ops. Default is ``1.0``.</span>
 
 <span class="sd">    beta : float</span>
 <span class="sd">        Scalar parameter used by some ops. Default is ``1.0``.</span>
-
-<span class="sd">    impl : Optional[Callable]</span>
-<span class="sd">        The resolved implementation selected during :meth:`profile`.</span>
 
 <span class="sd">    op_type : Optional[ElementwiseBinaryOpType]</span>
 <span class="sd">        The operator type used by the implementation.</span>
@@ -301,24 +297,14 @@
 <span class="sd">        Preallocated output tensor buffer that stores the binary result.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Implementation dispatch table: keyed by (x_format, y_format).</span>
-    <span class="c1"># Value: (callable_impl, resolved_output_format)</span>
-    <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Callable</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span>  <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">):</span> <span class="p">(</span><span class="n">elementwise_binary_rrr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">):</span>  <span class="p">(</span><span class="n">elementwise_binary_bpr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-        <span class="p">(</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span>  <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">):</span>  <span class="p">(</span><span class="n">elementwise_binary_rpr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-        <span class="c1"># Add more pairs as needed.</span>
-    <span class="p">}</span>
-
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ElementwiseBinaryOpType</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span> <span class="o">=</span> <span class="n">alpha</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">beta</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">W</span>
     <span class="c1"># ---------------- profile ----------------</span>
 <div class="viewcode-block" id="Elementwise_Binary.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile">[docs]</a>
@@ -327,19 +313,16 @@
 <span class="sd">        Validate inputs, select implementation, allocate the output buffer,</span>
 <span class="sd">        and return a ``vTensor`` view with the resolved output format.</span>
 
-<span class="sd">        The dispatcher:</span>
+<span class="sd">        Validates rank-3 shapes and broadcastability on ``(C, D)``.</span>
+<span class="sd">        Allocates an output buffer with shape ``[S_ctx, C_out, D_out]`` where</span>
 
-<span class="sd">        - checks that ``x`` and ``y`` are rank-3 tensors of shape ``[S, C, D]``</span>
-<span class="sd">        - enforces broadcastability on the ``C`` and ``D`` dimensions</span>
-<span class="sd">        - selects an implementation using ``(x._format, y._format)``</span>
-<span class="sd">        - allocates an output buffer with shape ``[S_ctx, C_out, D_out]`` where</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">          .. math::</span>
+<span class="sd">           C_{\text{out}} = \max(C_x, C_y), \quad</span>
+<span class="sd">           D_{\text{out}} = \max(D_x, D_y),</span>
 
-<span class="sd">             C_{\text{out}} = \max(C_x, C_y), \quad</span>
-<span class="sd">             D_{\text{out}} = \max(D_x, D_y),</span>
-
-<span class="sd">          and ``S_ctx = ctx.max_num_pages``.</span>
+<span class="sd">        and ``S_ctx = ctx.max_num_pages``. Output format is ``BATCHED``</span>
+<span class="sd">        only when both inputs are ``BATCHED``, otherwise ``RAGGED``.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -356,15 +339,13 @@
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the allocated output buffer, using the</span>
-<span class="sd">            resolved output format from the dispatch table.</span>
+<span class="sd">            A ``vTensor`` view wrapping the allocated output buffer.</span>
 
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        AssertionError</span>
 <span class="sd">            If types are not ``vTensor``, if ranks are not 3, if ``C``/``D``</span>
-<span class="sd">            are not broadcastable, if formats are unsupported, or if devices</span>
-<span class="sd">            of ``x`` and ``y`` do not match.</span>
+<span class="sd">            are not broadcastable, or if devices of ``x`` and ``y`` do not match.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
@@ -385,14 +366,12 @@
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">dim-2 not broadcastable: x.shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">, y.shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
 
-        <span class="c1"># Dispatch</span>
-        <span class="n">x_fmt</span><span class="p">,</span> <span class="n">y_fmt</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">_format</span>
-        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">x_fmt</span><span class="p">,</span> <span class="n">y_fmt</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="n">key</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for (x_fmt=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">, y_fmt=</span><span class="si">{</span><span class="n">y_fmt</span><span class="si">}</span><span class="s2">). &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="c1"># Output preserves BATCHED iff both inputs are BATCHED, else RAGGED.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span> <span class="ow">and</span> <span class="n">y</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">)</span>
+            <span class="k">else</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
 
         <span class="c1"># Device consistency</span>
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">y</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="p">(</span>
@@ -404,70 +383,21 @@
         <span class="n">C_out</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
         <span class="n">D_out</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
 
-        <span class="c1"># Allocate output buffer on x.device with x.dtype</span>
-        <span class="n">S</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span>
-            <span class="p">(</span><span class="n">S</span><span class="p">,</span> <span class="n">C_out</span><span class="p">,</span> <span class="n">D_out</span><span class="p">),</span>
+        <span class="c1"># Pure-metadata vTensor — no torch.empty allocation needed.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span>
+            <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">C_out</span><span class="p">,</span> <span class="n">D_out</span><span class="p">),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">vortex_dtype</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-            <span class="n">dtype</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">,</span>
+            <span class="n">tensor_id</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="p">),</span>
         <span class="p">)</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>
-        
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">:</span>
-                <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_flops</span><span class="p">(</span>
-                    <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-                <span class="p">)</span>
-        
-        <span class="c1"># Return vTensor view with dispatched output format</span>
-        <span class="k">return</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">)</span></div>
+        <span class="c1"># Track auxiliary memory and graph structure in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>  <span class="c1"># Track the output buffer in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">))</span>  <span class="c1"># Map the output tensor to this operation</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>  <span class="c1"># Track this operation in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its input tensors</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its output tensor</span>
 
-
-    <span class="c1"># ---------------- execute ----------------</span>
-<div class="viewcode-block" id="Elementwise_Binary.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Execute the selected binary elementwise implementation into the internal</span>
-<span class="sd">        output buffer and return it.</span>
-
-<span class="sd">        Expected implementation signature::</span>
-
-<span class="sd">            impl(x, y, output, op_type, alpha, beta, ctx)</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : torch.Tensor</span>
-<span class="sd">            Left-hand input tensor on the same device as ``y`` and the output</span>
-<span class="sd">            buffer.</span>
-
-<span class="sd">        y : torch.Tensor</span>
-<span class="sd">            Right-hand input tensor on the same device as ``x`` and the output</span>
-<span class="sd">            buffer.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context passed through to the underlying implementation.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The output tensor stored in ``self.output_buffer``.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`profile` has not been called (no implementation or buffer),</span>
-<span class="sd">            or if there is a device mismatch between inputs and output.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">execute called before profile() (impl is None)&quot;</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">output buffer is None; did profile() run?&quot;</span>
-        <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">y</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">device mismatch: &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;x=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, y=</span><span class="si">{</span><span class="n">y</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, o=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">alpha</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span></div>
 </div>
 
@@ -601,6 +531,80 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">Mul</span></div>
 
 
+
+<div class="viewcode-block" id="WhereEqual">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereEqual">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereEqual</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Comparison mask encoded as ``0`` or ``-inf``.</span>
+
+<span class="sd">    This operator compares the two inputs elementwise and emits:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \operatorname{out}(x, y) =</span>
+<span class="sd">        \begin{cases}</span>
+<span class="sd">            0, &amp; x = y \\</span>
+<span class="sd">            -\infty, &amp; x \ne y</span>
+<span class="sd">        \end{cases}</span>
+
+<span class="sd">    The output is intended for masking score tensors before downstream</span>
+<span class="sd">    operators such as softmax.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereEqual</span></div>
+
+
+
+<div class="viewcode-block" id="WhereNotEqual">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereNotEqual">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereNotEqual</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Emit ``0`` where ``x != y`` and ``-inf`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereNotEqual</span></div>
+
+
+
+<div class="viewcode-block" id="WhereGreater">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereGreater">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereGreater</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Emit ``0`` where ``x &gt; y`` and ``-inf`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereGreater</span></div>
+
+
+
+<div class="viewcode-block" id="WhereGreaterEqual">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereGreaterEqual">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereGreaterEqual</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Emit ``0`` where ``x &gt;= y`` and ``-inf`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereGreaterEqual</span></div>
+
+
+
+<div class="viewcode-block" id="WhereLess">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereLess">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereLess</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Emit ``0`` where ``x &lt; y`` and ``-inf`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereLess</span></div>
+
+
+
+<div class="viewcode-block" id="WhereLessEqual">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise_binary.html#vortex_torch.indexer.elementwise_binary.WhereLessEqual">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WhereLessEqual</span><span class="p">(</span><span class="n">Elementwise_Binary</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Emit ``0`` where ``x &lt;= y`` and ``-inf`` otherwise.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">op_type</span> <span class="o">=</span> <span class="n">ElementwiseBinaryOpType</span><span class="o">.</span><span class="n">WhereLessEqual</span></div>
+
 </pre></div>
         </article>
       </div>
@@ -613,7 +617,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -634,8 +638,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

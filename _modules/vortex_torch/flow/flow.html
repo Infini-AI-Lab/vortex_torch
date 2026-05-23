@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.flow.flow - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,9 +255,12 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.flow.flow</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_dtype</span>
 
 <div class="viewcode-block" id="vFlow">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow">[docs]</a>
@@ -423,6 +426,14 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kv_cache_dtype</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">q_data_type</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_dtype</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_meta_info</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">token_ratio</span> <span class="o">=</span> <span class="kc">None</span>
+
     <span class="c1"># ------------------------------------------------------------------ #</span>
     <span class="c1"># abstract API to be implemented by concrete flows</span>
     <span class="c1"># ------------------------------------------------------------------ #</span>
@@ -550,7 +561,7 @@
     <span class="nd">@abstractmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
         <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
@@ -598,144 +609,84 @@
 <div class="viewcode-block" id="vFlow.get_cache_meta_info">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_cache_meta_info">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_cache_meta_info</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span>
-        <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Get full cache inner-shape metadata, including ``&quot;k&quot;`` and ``&quot;v&quot;``.</span>
-
-<span class="sd">        This wraps :meth:`create_cache` and injects standard inner shapes</span>
-<span class="sd">        for key/value tensors. The resulting dictionary includes:</span>
-
-<span class="sd">        - all user-defined entries from :meth:`create_cache`, and</span>
-<span class="sd">        - two additional entries:</span>
-
-<span class="sd">          - ``&quot;k&quot;`` : ``(page_size, head_dim)``</span>
-<span class="sd">          - ``&quot;v&quot;`` : ``(page_size, head_dim)``</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        page_size : int</span>
-<span class="sd">            Number of tokens per page.</span>
-
-<span class="sd">        head_dim : int</span>
-<span class="sd">            Head dimension.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        Dict[str, Tuple[int, int]]</span>
-<span class="sd">            Mapping from cache tensor names to inner shapes ``(r, c)``.</span>
-<span class="sd">            The runtime will later prepend either a batch axis ``B`` or a</span>
-<span class="sd">            packed-page axis ``S`` when materializing the tensors.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`create_cache` tries to define entries for the</span>
-<span class="sd">            reserved keys ``&quot;k&quot;`` or ``&quot;v&quot;``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">cache_meta_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_cache</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
-        <span class="k">assert</span> <span class="s2">&quot;k&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="s2">&quot;v&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
-        <span class="n">cache_meta_info</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
-        <span class="n">cache_meta_info</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">cache_meta_info</span></div>
+        <span class="bp">self</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">]]:</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_meta_info</span></div>
 
 
 <div class="viewcode-block" id="vFlow.get_token_ratio">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.get_token_ratio">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">get_token_ratio</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_token_ratio</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> 
+        <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">token_ratio</span></div>
+
+
+<div class="viewcode-block" id="vFlow.initialize">
+<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.initialize">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+        <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">kv_cache_dtype</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">q_data_type</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span>
+        <span class="n">intermediate_dtype</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+        <span class="p">):</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Compute the relative cache size in &quot;tokens&quot; compared to a k/v page.</span>
+<span class="sd">        Optional initialization method called by the runtime after cache</span>
+<span class="sd">        tensors are allocated.</span>
 
-<span class="sd">        Using :meth:`get_cache_meta_info`, this computes a simple ratio</span>
-<span class="sd">        that measures how many *equivalent tokens* the entire cache</span>
-<span class="sd">        consumes per head, relative to a baseline page of shape</span>
-<span class="sd">        ``(page_size, head_dim)``.</span>
-
-<span class="sd">        Let :math:`\mathcal{C}` be the set of cache tensors with inner</span>
-<span class="sd">        shapes :math:`(r_{\text{key}}, c_{\text{key}})`. This method</span>
-<span class="sd">        returns</span>
-
-<span class="sd">        .. math::</span>
-
-<span class="sd">            \text{token_ratio}</span>
-<span class="sd">            = \sum_{\text{key} \in \mathcal{C}}</span>
-<span class="sd">              \frac{r_{\text{key}} \cdot c_{\text{key}}}</span>
-<span class="sd">                   {\text{page_size} \cdot \text{head_dim}}.</span>
-
-<span class="sd">        The leading dimension (:math:`B` or :math:`S`) is</span>
-<span class="sd">        not included in this ratio on purpose; it is a per-page</span>
-<span class="sd">        normalization.</span>
+<span class="sd">        This can be used to set up any internal state or invariants needed</span>
+<span class="sd">        by the flow. By default this is a no-op, but concrete flows can</span>
+<span class="sd">        override it if needed.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        page_size : int</span>
-<span class="sd">            Number of tokens per page.</span>
-
+<span class="sd">        block_size : int</span>
+<span class="sd">            Number of tokens per block.</span>
 <span class="sd">        head_dim : int</span>
 <span class="sd">            Head dimension.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        float</span>
-<span class="sd">            Total cache size expressed in units of</span>
-<span class="sd">            ``page_size * head_dim`` (including the standard ``&quot;k&quot;`` and</span>
-<span class="sd">            ``&quot;v&quot;`` entries).</span>
+<span class="sd">        kv_cache_dtype : torch.dtype or str</span>
+<span class="sd">            Data type for key/value caches. Accepts a :class:`torch.dtype`</span>
+<span class="sd">            or one of the canonical strings in</span>
+<span class="sd">            :data:`vortex_torch.utils.DTYPE_STR_TO_TORCH`</span>
+<span class="sd">            (e.g. ``&quot;bfloat16&quot;``, ``&quot;fp8_e5m2&quot;``).</span>
+<span class="sd">        q_data_type : torch.dtype or str</span>
+<span class="sd">            Data type for query tensor. Same string convention as</span>
+<span class="sd">            ``kv_cache_dtype``.</span>
+<span class="sd">        intermediate_dtype : torch.dtype or str</span>
+<span class="sd">            Data type for intermediate tensors. Defaults to ``torch.bfloat16``.</span>
+<span class="sd">            Same string convention as ``kv_cache_dtype``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">token_ratio</span> <span class="o">=</span> <span class="mf">0.0</span>
-        <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_meta_info</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">token_ratio</span> <span class="o">+=</span> <span class="p">(</span><span class="n">cache_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">/</span> <span class="p">(</span><span class="n">page_size</span> <span class="o">*</span> <span class="n">head_dim</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">token_ratio</span></div>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">block_size</span> <span class="o">=</span> <span class="n">block_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">=</span> <span class="n">head_dim</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">kv_cache_dtype</span> <span class="o">=</span> <span class="n">resolve_dtype</span><span class="p">(</span><span class="n">kv_cache_dtype</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">q_data_type</span> <span class="o">=</span> <span class="n">resolve_dtype</span><span class="p">(</span><span class="n">q_data_type</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_dtype</span> <span class="o">=</span> <span class="n">resolve_dtype</span><span class="p">(</span><span class="n">intermediate_dtype</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">token_ratio</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="n">raw_cache_meta_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_cache</span><span class="p">(</span><span class="n">block_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="s2">&quot;k&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">raw_cache_meta_info</span><span class="p">,</span> <span class="s2">&quot;create_cache must not declare &#39;k&#39; key&quot;</span>
+        <span class="k">assert</span> <span class="s2">&quot;v&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">raw_cache_meta_info</span><span class="p">,</span> <span class="s2">&quot;create_cache must not declare &#39;v&#39; key&quot;</span>
+        
+        <span class="n">raw_cache_meta_info</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">block_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
+        <span class="n">raw_cache_meta_info</span><span class="p">[</span><span class="s2">&quot;v&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">block_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
 
-<div class="viewcode-block" id="vFlow.run_indexer_virtual">
-<a class="viewcode-back" href="../../../api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow.run_indexer_virtual">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">run_indexer_virtual</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">total_bytes</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1"># convert to a format that maps key -&gt; ((r, c), dtype) for easier access during indexing and cache updates</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cache_meta_info</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span> <span class="ow">in</span> <span class="n">raw_cache_meta_info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">,</span> <span class="s2">&quot;v&quot;</span><span class="p">]:</span>
+                <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">kv_cache_dtype</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_dtype</span>  <span class="c1"># default dtype for auxiliary tensors; can be customized as needed</span>
+            <span class="n">total_bytes</span> <span class="o">+=</span> <span class="n">r</span> <span class="o">*</span> <span class="n">c</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">_utils</span><span class="o">.</span><span class="n">_element_size</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">cache_meta_info</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">((</span><span class="n">r</span><span class="p">,</span> <span class="n">c</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span>
         
-        <span class="kn">from</span><span class="w"> </span><span class="nn">..indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span> <span class="k">as</span> <span class="n">IContext</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">as_vtensor</span><span class="p">,</span> <span class="n">FORMAT</span>
-        
-        <span class="n">ctx</span> <span class="o">=</span> <span class="n">IContext</span><span class="p">()</span>
-        
-        <span class="n">ctx</span><span class="o">.</span><span class="n">group_size</span> <span class="o">=</span> <span class="n">group_size</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span> <span class="o">=</span> <span class="mi">1</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">num_qo_heads</span> <span class="o">=</span> <span class="n">group_size</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">=</span> <span class="n">head_dim</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span> <span class="o">=</span> <span class="n">page_size</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages_per_request</span> <span class="o">=</span> <span class="mi">0</span>
-        
-        <span class="n">device</span> <span class="o">=</span> <span class="s2">&quot;cuda&quot;</span>
-        <span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span>
-        
-        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-                <span class="c1"># Dummy placeholders: used only for kernel / graph warm-up</span>
-                <span class="n">q_dummy</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">group_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span><span class="p">)</span>
-                <span class="n">o_dummy</span> <span class="o">=</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">)</span>
-                <span class="n">cache_meta_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_cache_meta_info</span><span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)</span>
-                
-                <span class="n">cache_dummy</span> <span class="o">=</span> <span class="p">{</span>
-                        <span class="n">cache_name</span><span class="p">:</span>  <span class="n">as_vtensor</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span>
-                                <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">cache_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
-                                <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
-                                <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
-                            <span class="p">),</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">)</span>
-                        
-                        <span class="k">for</span> <span class="p">(</span><span class="n">cache_name</span><span class="p">,</span> <span class="n">cache_shape</span><span class="p">)</span> <span class="ow">in</span> <span class="n">cache_meta_info</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
-                    <span class="p">}</span>
-                
-                <span class="bp">self</span><span class="o">.</span><span class="n">forward_indexer</span><span class="p">(</span><span class="n">q_dummy</span><span class="p">,</span> <span class="n">o_dummy</span><span class="p">,</span> <span class="n">cache_dummy</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-
-        <span class="k">del</span> <span class="n">q_dummy</span>
-        <span class="k">del</span> <span class="n">o_dummy</span>
-        <span class="k">del</span> <span class="n">cache_dummy</span>
-    
-        <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">_aux_total_flops</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">token_ratio</span> <span class="o">=</span> <span class="n">total_bytes</span> <span class="o">/</span> <span class="p">(</span><span class="n">block_size</span> <span class="o">*</span> <span class="n">head_dim</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">_utils</span><span class="o">.</span><span class="n">_element_size</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kv_cache_dtype</span><span class="p">))</span></div>
 </div>
 
-    
 </pre></div>
         </article>
       </div>
@@ -748,7 +699,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -769,8 +720,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

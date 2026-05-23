@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.utils - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,6 +255,7 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.utils</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_UNSET_T</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="k">return</span> <span class="s2">&quot;UNSET&quot;</span>
@@ -268,6 +269,13 @@
     <span class="n">execute</span> <span class="o">=</span> <span class="mi">1</span></div>
 
 
+<div class="viewcode-block" id="Schedule">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.Schedule">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Schedule</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="n">W</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">S</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+    
 <div class="viewcode-block" id="ReduceType">
 <a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.ReduceType">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ReduceType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
@@ -278,14 +286,19 @@
     <span class="n">Sum</span> <span class="o">=</span> <span class="mi">4</span></div>
 
     
-
 <div class="viewcode-block" id="ElementwiseBinaryOpType">
 <a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ElementwiseBinaryOpType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
     <span class="n">Maximum</span> <span class="o">=</span> <span class="mi">0</span>
     <span class="n">Minimum</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">Add</span> <span class="o">=</span> <span class="mi">2</span>
-    <span class="n">Mul</span> <span class="o">=</span> <span class="mi">3</span></div>
+    <span class="n">Mul</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">WhereEqual</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">WhereNotEqual</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">WhereGreater</span> <span class="o">=</span> <span class="mi">6</span>
+    <span class="n">WhereGreaterEqual</span> <span class="o">=</span> <span class="mi">7</span>
+    <span class="n">WhereLess</span> <span class="o">=</span> <span class="mi">8</span>
+    <span class="n">WhereLessEqual</span> <span class="o">=</span> <span class="mi">9</span></div>
 
     
 
@@ -296,7 +309,112 @@
     <span class="n">Sigmoid</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="n">Silu</span> <span class="o">=</span> <span class="mi">2</span>
     <span class="n">Abs</span> <span class="o">=</span> <span class="mi">3</span>
-    <span class="n">Add_Mul</span> <span class="o">=</span> <span class="mi">4</span></div>
+    <span class="n">Add_Mul</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">Log</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">Exp</span> <span class="o">=</span> <span class="mi">6</span></div>
+
+
+
+<div class="viewcode-block" id="QuantizationType">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.QuantizationType">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">QuantizationType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="n">BF16</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">FP8_E5M2</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">FP8_E4M3</span> <span class="o">=</span> <span class="mi">2</span></div>
+
+
+<span class="n">INDENT</span> <span class="o">=</span> <span class="s2">&quot;    &quot;</span>
+<div class="viewcode-block" id="indent_block">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.indent_block">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">indent_block</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Indent a multi-line text block by the given indentation level.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">prefix</span> <span class="o">=</span> <span class="n">INDENT</span> <span class="o">*</span> <span class="n">level</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prefix</span> <span class="o">+</span> <span class="n">line</span> <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">else</span> <span class="n">line</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># ---------------------------------------------------------------------------</span>
+<span class="c1"># Dtype string &lt;-&gt; torch.dtype</span>
+<span class="c1">#</span>
+<span class="c1"># Canonical string names used in server args, the verify CLI, and anywhere</span>
+<span class="c1"># else a dtype is configured by name. FP8 uses the short ``fp8_`` prefix;</span>
+<span class="c1"># other dtypes use their torch attribute names. Short aliases (``bf16``,</span>
+<span class="c1"># ``fp16``, ``fp32``, ``fp8_e4m3``) map to the same dtype.</span>
+<span class="c1"># ---------------------------------------------------------------------------</span>
+
+<span class="c1">#: Canonical string -&gt; ``torch.dtype``. Keep this one-to-one; aliases go in</span>
+<span class="c1">#: :data:`_DTYPE_ALIASES` so tooling that prints the valid set (``choices=``,</span>
+<span class="c1">#: error messages) can show canonical names without alias noise.</span>
+<span class="n">DTYPE_STR_TO_TORCH</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;bfloat16&quot;</span><span class="p">:</span>    <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span>
+    <span class="s2">&quot;float16&quot;</span><span class="p">:</span>     <span class="n">torch</span><span class="o">.</span><span class="n">float16</span><span class="p">,</span>
+    <span class="s2">&quot;float32&quot;</span><span class="p">:</span>     <span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+    <span class="s2">&quot;fp8_e5m2&quot;</span><span class="p">:</span>    <span class="n">torch</span><span class="o">.</span><span class="n">float8_e5m2</span><span class="p">,</span>
+    <span class="s2">&quot;fp8_e4m3fn&quot;</span><span class="p">:</span>  <span class="n">torch</span><span class="o">.</span><span class="n">float8_e4m3fn</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="c1">#: Accepted short-forms; every value must be a key of :data:`DTYPE_STR_TO_TORCH`.</span>
+<span class="n">_DTYPE_ALIASES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;bf16&quot;</span><span class="p">:</span>      <span class="s2">&quot;bfloat16&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fp16&quot;</span><span class="p">:</span>      <span class="s2">&quot;float16&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fp32&quot;</span><span class="p">:</span>      <span class="s2">&quot;float32&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fp8_e4m3&quot;</span><span class="p">:</span>  <span class="s2">&quot;fp8_e4m3fn&quot;</span><span class="p">,</span>   <span class="c1"># torch only ships the ``fn`` variant</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="resolve_dtype">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.resolve_dtype">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">resolve_dtype</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve a dtype given either a ``torch.dtype`` or a canonical string.</span>
+
+<span class="sd">    Accepts ``None`` (returns ``default``), a ``torch.dtype`` (returned as-is),</span>
+<span class="sd">    a canonical string in :data:`DTYPE_STR_TO_TORCH`, or a short alias in</span>
+<span class="sd">    :data:`_DTYPE_ALIASES`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">default</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">_DTYPE_ALIASES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">DTYPE_STR_TO_TORCH</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;unknown dtype string </span><span class="si">{</span><span class="n">value</span><span class="si">!r}</span><span class="s2">; pick one of &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">DTYPE_STR_TO_TORCH</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(aliases: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_DTYPE_ALIASES</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">DTYPE_STR_TO_TORCH</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cannot resolve dtype from </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="is_hopper_or_newer">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.is_hopper_or_newer">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_hopper_or_newer</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check if the current CUDA device is Hopper architecture or newer.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">major</span><span class="p">,</span> <span class="n">minor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">get_device_capability</span><span class="p">()</span>
+    <span class="c1"># Hopper architecture has compute capability 9.0 and above</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">major</span> <span class="o">&gt;</span> <span class="mi">9</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="n">major</span> <span class="o">==</span> <span class="mi">9</span> <span class="ow">and</span> <span class="n">minor</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="is_hopper">
+<a class="viewcode-back" href="../../api/vortex_torch.utils.html#vortex_torch.utils.is_hopper">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_hopper</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Check if the current CUDA device is exactly Hopper architecture.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="k">return</span> <span class="kc">False</span>
+    <span class="n">major</span><span class="p">,</span> <span class="n">minor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">get_device_capability</span><span class="p">()</span>
+    <span class="c1"># Hopper architecture has compute capability 9.0</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">major</span> <span class="o">==</span> <span class="mi">9</span> <span class="ow">and</span> <span class="n">minor</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span></div>
 
 </pre></div>
         </article>
@@ -310,7 +428,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -331,8 +449,8 @@
     </aside>
   </div>
 </div><script src="../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../_static/copybutton.js?v=f281be69"></script>

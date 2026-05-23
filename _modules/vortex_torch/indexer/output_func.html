@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.output_func - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,11 +255,10 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.indexer.output_func</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch_C</span><span class="w"> </span><span class="kn">import</span> <span class="n">topk_output</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrozenSet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vOp</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">Schedule</span>
 
 <div class="viewcode-block" id="topK">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK">[docs]</a>
@@ -325,21 +324,17 @@
 
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, Callable]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to a callable</span>
-<span class="sd">        implementation.</span>
-<span class="sd">    impl : Optional[Callable]</span>
-<span class="sd">        The resolved implementation selected during :meth:`profile`.</span>
+<span class="sd">    _supported_formats : FrozenSet[FORMAT]</span>
+<span class="sd">        Set of input formats for which a top-k codegen implementation</span>
+<span class="sd">        exists. Used by :meth:`profile` for dispatch validation.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Dispatch by input format; only RAGGED is supported for now.</span>
-    <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">:</span> <span class="n">topk_output</span><span class="p">,</span>
-    <span class="p">}</span>
+    <span class="c1"># Supported input formats; only RAGGED is supported for now.</span>
+    <span class="n">_supported_formats</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">})</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">S</span>
 
     <span class="c1"># ---------------- profile ----------------</span>
 <div class="viewcode-block" id="topK.profile">
@@ -356,7 +351,7 @@
 <span class="sd">        - that ``x`` and ``o`` reside on the same device.</span>
 
 <span class="sd">        No buffers are allocated here and nothing is returned; this call</span>
-<span class="sd">        simply sets :attr:`impl` so that :meth:`execute` can run.</span>
+<span class="sd">        simply validates that ``x._format`` has a registered codegen path.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -408,11 +403,10 @@
 
         <span class="c1"># ---- implementation availability ----</span>
         <span class="n">x_fmt</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span>
-        <span class="k">assert</span> <span class="n">x_fmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
+        <span class="k">assert</span> <span class="n">x_fmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for x._format=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">. &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Supported: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span><span class="w"> </span><span class="n">f</span><span class="p">:</span><span class="w"> </span><span class="n">f</span><span class="o">.</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">x_fmt</span><span class="p">]</span>
 
         <span class="c1"># ---- optional sanity checks on `o` ----</span>
         <span class="c1"># We only assert device consistency and leave exact (S_pack, D0, D1)</span>
@@ -420,83 +414,193 @@
         <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">device</span> <span class="o">==</span> <span class="n">o</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="p">(</span>
             <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">x and o must be on the same device &quot;</span>
             <span class="sa">f</span><span class="s2">&quot;(x.device=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, o.device=</span><span class="si">{</span><span class="n">o</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">)&quot;</span>
-        <span class="p">)</span></div>
-
-
-    <span class="c1"># ---------------- execute ----------------</span>
-<div class="viewcode-block" id="topK.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.topK.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Run the selected piecewise top-k implementation and return ``o``.</span>
-
-<span class="sd">        This method invokes the implementation on the packed input ``x``</span>
-<span class="sd">        using segment boundaries and configuration provided by</span>
-<span class="sd">        :class:`Context`. For each segment in the packed axis, the kernel:</span>
-
-<span class="sd">        - identifies the BOS and EOS reserved pages using</span>
-<span class="sd">          ``page_reserved_bos`` and ``page_reserved_eos``,</span>
-<span class="sd">        - selects an additional ``topk_val`` pages by score, and</span>
-<span class="sd">        - writes the resulting indices/values into ``o``.</span>
-
-<span class="sd">        Expected implementation signature::</span>
-
-<span class="sd">            impl(</span>
-<span class="sd">                x,</span>
-<span class="sd">                dense_kv_indptr,</span>
-<span class="sd">                sparse_kv_indptr,</span>
-<span class="sd">                dense_kv_indices,</span>
-<span class="sd">                o,</span>
-<span class="sd">                batch_heads,</span>
-<span class="sd">                topk_val,</span>
-<span class="sd">                page_reserved_bos,</span>
-<span class="sd">                page_reserved_eos,</span>
-<span class="sd">                max_num_pages_per_request,</span>
-<span class="sd">            )</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : torch.Tensor</span>
-<span class="sd">            Input tensor carrying per-page scalar scores, compatible with the</span>
-<span class="sd">            shape validated in :meth:`profile`.</span>
-
-<span class="sd">        o : torch.Tensor</span>
-<span class="sd">            Preallocated output tensor; will be filled in-place by the</span>
-<span class="sd">            implementation.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing all auxiliary arrays and scalar</span>
-<span class="sd">            parameters needed for segment-wise top-k selection.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The tensor ``o`` after it has been filled by the top-k</span>
-<span class="sd">            implementation.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`profile` has not been called and no implementation is</span>
-<span class="sd">            available.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">execute called before profile() (impl is None)&quot;</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indptr</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">sparse_kv_indptr</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indices</span><span class="p">,</span>
-            <span class="n">o</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">topk_val</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_bos</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_eos</span><span class="p">,</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages_per_request</span><span class="p">,</span>
         <span class="p">)</span>
-        <span class="k">return</span> <span class="n">o</span></div>
+
+        <span class="c1"># Track auxiliary memory and graph structure in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="p">[</span><span class="n">o</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">)</span>   <span class="c1"># Map the output tensor to this operation</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>  <span class="c1"># Track this operation in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its input tensors</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">o</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its output tensor</span></div>
 </div>
+
+
+
+<div class="viewcode-block" id="approxTopK">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.approxTopK">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">approxTopK</span><span class="p">(</span><span class="n">topK</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Approximate top-k page selector with bounded approximation.</span>
+
+<span class="sd">    Drop-in replacement for :class:`topK` that swaps the exact selection</span>
+<span class="sd">    kernel for an **adaptive 8-bit radix top-k** with a tunable</span>
+<span class="sd">    cost/quality knob ``tolerate_ratio``.</span>
+
+<span class="sd">    The radix kernel runs up to four 8-bit refinement rounds (32 bits</span>
+<span class="sd">    total) on fp32-promoted scores. After each round, the threshold bin</span>
+<span class="sd">    is found and ``topk_remaining`` is the number of slots still owed</span>
+<span class="sd">    by that bin. The kernel **stops early** as soon as</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">        \text{topk\_remaining} \;\le\; \text{tolerate\_ratio} \cdot</span>
+<span class="sd">        \text{target\_k},</span>
+
+<span class="sd">    filling the remaining slots from the current candidate set in</span>
+<span class="sd">    atomic-arrival order. The trade-off:</span>
+
+<span class="sd">    - ``tolerate_ratio = 0.0`` → all four rounds always run; result is</span>
+<span class="sd">      bit-exact to :class:`topK` (sorted output is the only difference —</span>
+<span class="sd">      this kernel emits unsorted indices, which `topK` semantics allow).</span>
+<span class="sd">    - ``tolerate_ratio = 1.0`` → kernel always stops after round 0,</span>
+<span class="sd">      cheapest setting. Selection becomes coarse: the top page-bin is</span>
+<span class="sd">      retained but ordering inside it is arrival-driven.</span>
+<span class="sd">    - ``0 &lt; tolerate_ratio &lt; 1`` → adaptive: cheap when scores are</span>
+<span class="sd">      well-separated, refines when they&#39;re tightly bunched.</span>
+
+<span class="sd">    The output set still always contains the reserved BOS / EOS pages</span>
+<span class="sd">    plus exactly ``topk_val`` chosen pages — only the *selection</span>
+<span class="sd">    quality* is traded for speed.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    tolerate_ratio : float, default 0.0</span>
+<span class="sd">        Approximation budget in ``[0.0, 1.0]``. Higher = cheaper but</span>
+<span class="sd">        looser. ``0.0`` recovers exact (radix) top-k. Typical values</span>
+<span class="sd">        for throughput hunting: ``0.05 - 0.15``.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    - Same dispatch as :class:`topK` (only ``RAGGED`` input format).</span>
+<span class="sd">    - Same per-segment contract (BOS/EOS preserved, ``topk_val`` chosen).</span>
+<span class="sd">    - Output indices are **unsorted within each segment** (this matches</span>
+<span class="sd">      ``topk_output_v2`` in the C kernel; downstream consumers must not</span>
+<span class="sd">      assume sorted order).</span>
+<span class="sd">    - Use this op when score distributions are heavy-tailed and the</span>
+<span class="sd">      exact top-k cost dominates indexer time. For score distributions</span>
+<span class="sd">      where many candidates are near the threshold, low</span>
+<span class="sd">      ``tolerate_ratio`` (≤ 0.05) is safer; for distributions with a</span>
+<span class="sd">      clear gap between selected and dropped pages, push higher</span>
+<span class="sd">      (0.2 - 0.5).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tolerate_ratio</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">tol</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">tolerate_ratio</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;approxTopK: tolerate_ratio must be a number in [0.0, 1.0], &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;got </span><span class="si">{</span><span class="n">tolerate_ratio</span><span class="si">!r}</span><span class="s2">&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="mf">0.0</span> <span class="o">&lt;=</span> <span class="n">tol</span> <span class="o">&lt;=</span> <span class="mf">1.0</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;approxTopK: tolerate_ratio=</span><span class="si">{</span><span class="n">tol</span><span class="si">}</span><span class="s2"> out of range [0.0, 1.0]. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;0.0 = exact (4 rounds); 1.0 = cheapest single-round; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;typical sweet spot 0.05 - 0.15.&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tolerate_ratio</span> <span class="o">=</span> <span class="n">tol</span></div>
+
+
+
+<div class="viewcode-block" id="Union">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.Union">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Union</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Merge two ``(block_table, seqlens)`` pairs into the final sparse output.</span>
+
+<span class="sd">    Output function for the trtllm backend that takes two</span>
+<span class="sd">    ``(block_table_i, seqlens_i)`` tuples (typically produced by</span>
+<span class="sd">    :class:`vortex_torch.indexer.TopK` calls), computes the per-row</span>
+<span class="sd">    deduplicated union of their block ids, and overwrites the final</span>
+<span class="sd">    ``sparse_block_tables`` + ``sparse_seqlens`` buffers so the pair can</span>
+<span class="sd">    be fed straight to ``trtllm_batch_decode_with_kv_cache``.</span>
+
+<span class="sd">    Per-row behavior, with</span>
+<span class="sd">    ``dense_block_len = ceil(dense_seqlens[i] / block_size)`` and</span>
+<span class="sd">    ``last_block_len = dense_seqlens[i] mod block_size`` (treated as</span>
+<span class="sd">    ``block_size`` when the remainder is zero):</span>
+
+<span class="sd">      * Compute the deduped union of block ids drawn from</span>
+<span class="sd">        ``block_table_0[i, :blocks_0]`` and ``block_table_1[i, :blocks_1]``,</span>
+<span class="sd">        where ``blocks_j = ceil(seqlens_j[i] / block_size)``. The dense</span>
+<span class="sd">        path&#39;s true last block id (``dense_block_tables[i, dense_block_len-1]``)</span>
+<span class="sd">        is excluded from the dedup walk and re-inserted at the **tail**</span>
+<span class="sd">        of the union so trtllm decode reads the partial token count from</span>
+<span class="sd">        the right slot.</span>
+<span class="sd">      * Write the deduped tail-canonical union into ``o[i, :u+1]`` and</span>
+<span class="sd">        set ``sparse_seqlens[i] = u * block_size + last_block_len``</span>
+<span class="sd">        (where ``u`` is the dedup count, excluding the appended last</span>
+<span class="sd">        block).</span>
+
+<span class="sd">    Invocation</span>
+<span class="sd">    ----------</span>
+<span class="sd">    ::</span>
+
+<span class="sd">        self.output_func = Union()</span>
+<span class="sd">        ...</span>
+<span class="sd">        self.output_func(i_0, i_1, o, ctx=ctx)</span>
+<span class="sd">        # i_0 = (block_table_0, seqlens_0)</span>
+<span class="sd">        # i_1 = (block_table_1, seqlens_1)</span>
+
+<span class="sd">    ``o`` is the framework-provided final block-table output (the trtllm</span>
+<span class="sd">    backend wires it to ``ctx.metadata.sparse_block_tables``). The op</span>
+<span class="sd">    additionally writes ``ctx.metadata.sparse_seqlens`` as a side effect</span>
+<span class="sd">    so the seqlens buffer the trtllm decode call reads is up to date.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_supported_formats</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">S</span>
+
+<div class="viewcode-block" id="Union.profile">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.output_func.html#vortex_torch.indexer.output_func.Union.profile">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i_0</span><span class="p">,</span> <span class="n">i_1</span><span class="p">,</span> <span class="n">o</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">):</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
+
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">i_0</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">i_0</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">i_0 must be a (block_table, seqlens) tuple; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">i_0</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">i_1</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">i_1</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">i_1 must be a (block_table, seqlens) tuple; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">i_1</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+        <span class="n">bt_0</span><span class="p">,</span> <span class="n">sl_0</span> <span class="o">=</span> <span class="n">i_0</span>
+        <span class="n">bt_1</span><span class="p">,</span> <span class="n">sl_1</span> <span class="o">=</span> <span class="n">i_1</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">&quot;bt_0&quot;</span><span class="p">,</span> <span class="n">bt_0</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;sl_0&quot;</span><span class="p">,</span> <span class="n">sl_0</span><span class="p">),</span>
+                        <span class="p">(</span><span class="s2">&quot;bt_1&quot;</span><span class="p">,</span> <span class="n">bt_1</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;sl_1&quot;</span><span class="p">,</span> <span class="n">sl_1</span><span class="p">),</span>
+                        <span class="p">(</span><span class="s2">&quot;o&quot;</span><span class="p">,</span>    <span class="n">o</span><span class="p">)):</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}{</span><span class="n">name</span><span class="si">}</span><span class="s2"> must be a vTensor; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">assert</span> <span class="n">bt_0</span><span class="o">.</span><span class="n">_format</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">bt_0._format=</span><span class="si">{</span><span class="n">bt_0</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2"> not supported&quot;</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="n">bt_1</span><span class="o">.</span><span class="n">_format</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">bt_1._format=</span><span class="si">{</span><span class="n">bt_1</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2"> not supported&quot;</span>
+        <span class="p">)</span>
+        <span class="k">assert</span> <span class="n">o</span><span class="o">.</span><span class="n">_format</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_supported_formats</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">o._format=</span><span class="si">{</span><span class="n">o</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2"> not supported&quot;</span>
+        <span class="p">)</span>
+
+        <span class="n">backend</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;vortex_attention_backend&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;flashinfer&quot;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;trtllm&quot;</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">Union() is only supported under the trtllm attention &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;backend; got vortex_attention_backend=</span><span class="si">{</span><span class="n">backend</span><span class="si">!r}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Claim ``o`` as the op&#39;s single output.</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="p">[</span><span class="n">o</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span>
+            <span class="n">bt_0</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span> <span class="n">sl_0</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span>
+            <span class="n">bt_1</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span> <span class="n">sl_1</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">,</span>
+        <span class="p">])</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">o</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span></div>
+</div>
+
+
 
 </pre></div>
         </article>
@@ -510,7 +614,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -531,8 +635,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

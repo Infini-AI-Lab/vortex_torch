@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.indexer.scan" href="vortex_torch.indexer.scan.html"><link rel="prev" title="vortex_torch.indexer.reduce" href="vortex_torch.indexer.reduce.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.save_load - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -277,7 +277,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Save">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.save_load.</span></span><span class="sig-name descname"><span class="pre">Save</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Save" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.save_load.</span></span><span class="sig-name descname"><span class="pre">Save</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Save" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Format-aware save (copy/convert) dispatcher.</p>
 <p>This operator copies or converts data from an input tensor <code class="docutils literal notranslate"><span class="pre">x</span></code> into a
@@ -300,22 +300,11 @@ validated and written into directly.</p></li>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Save._impl_map">
 <span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.save_load.Save._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
+<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to the
+resolved output format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Save.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.save_load.Save.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.save_load.Save.profile" title="vortex_torch.indexer.save_load.Save.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>, <a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -326,7 +315,7 @@ validated and written into directly.</p></li>
 <dd><p>The expected output format for <code class="docutils literal notranslate"><span class="pre">o</span></code> as determined in <a class="reference internal" href="#vortex_torch.indexer.save_load.Save.profile" title="vortex_torch.indexer.save_load.Save.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -349,9 +338,9 @@ destination.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor to be copied/converted. Expected logical shape
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor to be copied/converted. Expected logical shape
 <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
-<li><p><strong>o</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Preallocated output tensor. Must have logical shape compatible
+<li><p><strong>o</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Preallocated output tensor. Must have logical shape compatible
 with <code class="docutils literal notranslate"><span class="pre">x</span></code> (matching <code class="docutils literal notranslate"><span class="pre">D_0</span></code> and <code class="docutils literal notranslate"><span class="pre">D_1</span></code>) and the format expected
 by the selected implementation.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context (included for API symmetry; not used for buffer
@@ -362,7 +351,7 @@ allocation in this dispatcher).</p></li>
 <dd class="field-even"><p>The same object as <code class="docutils literal notranslate"><span class="pre">o</span></code>, returned as the resolved output view.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types, ranks, shapes, formats, or devices are incompatible,
@@ -371,39 +360,11 @@ allocation in this dispatcher).</p></li>
 </dl>
 </dd></dl>
 
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Save.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Save.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Save.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Execute the resolved save operation from <code class="docutils literal notranslate"><span class="pre">x</span></code> into <code class="docutils literal notranslate"><span class="pre">o</span></code>.</p>
-<p>The selected implementation is expected to copy or convert the
-contents of <code class="docutils literal notranslate"><span class="pre">x</span></code> into the preallocated tensor <code class="docutils literal notranslate"><span class="pre">o</span></code> without
-changing its shape or device.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor to be copied/converted.</p></li>
-<li><p><strong>o</strong> (<em>torch.Tensor</em>) – Preallocated output tensor that will receive the data.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The same tensor as <code class="docutils literal notranslate"><span class="pre">o</span></code>, after the copy/convert operation.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.save_load.Save.profile" title="vortex_torch.indexer.save_load.Save.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called and no implementation
-    is available.</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Load">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.save_load.</span></span><span class="sig-name descname"><span class="pre">Load</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Load" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.save_load.</span></span><span class="sig-name descname"><span class="pre">Load</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Load" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Format-aware load (copy/convert) dispatcher.</p>
 <p>This operator copies or converts data from an input tensor <code class="docutils literal notranslate"><span class="pre">x</span></code> into an
@@ -428,22 +389,11 @@ wrapping the internal buffer as a <code class="xref py py-class docutils literal
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Load._impl_map">
 <span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.save_load.Load._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
+<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to the
+resolved output format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Load.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.save_load.Load.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.save_load.Load.profile" title="vortex_torch.indexer.save_load.Load.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>, <a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -454,7 +404,7 @@ wrapping the internal buffer as a <code class="xref py py-class docutils literal
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.save_load.Load.profile" title="vortex_torch.indexer.save_load.Load.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -466,7 +416,7 @@ wrapping the internal buffer as a <code class="xref py py-class docutils literal
 <code class="docutils literal notranslate"><span class="pre">[S_out,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, where <code class="docutils literal notranslate"><span class="pre">S_out</span></code> comes from the runtime context.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[torch.Tensor]</p>
+<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -487,7 +437,7 @@ match the runtime configuration for the leading dimension.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor to be loaded from, with logical shape
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor to be loaded from, with logical shape
 <code class="docutils literal notranslate"><span class="pre">[S_in,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> for the leading
 dimension and tracking auxiliary memory usage.</p></li>
@@ -498,40 +448,11 @@ dimension and tracking auxiliary memory usage.</p></li>
 buffer with the resolved output format.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code>, if its rank is not 3, or if
     no implementation is registered for <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Load.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Load.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Load.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Run the selected load operation into the internally allocated buffer.</p>
-<p>The selected implementation is expected to copy or convert the
-contents of <code class="docutils literal notranslate"><span class="pre">x</span></code> into the internal buffer stored in
-<a class="reference internal" href="#vortex_torch.indexer.save_load.Load.output_buffer" title="vortex_torch.indexer.save_load.Load.output_buffer"><code class="xref py py-attr docutils literal notranslate"><span class="pre">output_buffer</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor to be copied/converted, on the same device as the
-internal output buffer.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The internally allocated output tensor stored in
-<a class="reference internal" href="#vortex_torch.indexer.save_load.Load.output_buffer" title="vortex_torch.indexer.save_load.Load.output_buffer"><code class="xref py py-attr docutils literal notranslate"><span class="pre">output_buffer</span></code></a>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.save_load.Load.profile" title="vortex_torch.indexer.save_load.Load.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called (no implementation or
-    internal output buffer available).</p>
 </dd>
 </dl>
 </dd></dl>
@@ -570,7 +491,7 @@ internal output buffer.</p></li>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -599,19 +520,15 @@ internal output buffer.</p></li>
 <li><a class="reference internal" href="#">vortex_torch.indexer.save_load</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save"><code class="docutils literal notranslate"><span class="pre">Save</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save._impl_map"><code class="docutils literal notranslate"><span class="pre">Save._impl_map</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save.impl"><code class="docutils literal notranslate"><span class="pre">Save.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save.output_format"><code class="docutils literal notranslate"><span class="pre">Save.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save.profile"><code class="docutils literal notranslate"><span class="pre">Save.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save.execute"><code class="docutils literal notranslate"><span class="pre">Save.execute()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load"><code class="docutils literal notranslate"><span class="pre">Load</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load._impl_map"><code class="docutils literal notranslate"><span class="pre">Load._impl_map</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.impl"><code class="docutils literal notranslate"><span class="pre">Load.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.output_format"><code class="docutils literal notranslate"><span class="pre">Load.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.output_buffer"><code class="docutils literal notranslate"><span class="pre">Load.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.profile"><code class="docutils literal notranslate"><span class="pre">Load.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.execute"><code class="docutils literal notranslate"><span class="pre">Load.execute()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -626,11 +543,11 @@ internal output buffer.</p></li>
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

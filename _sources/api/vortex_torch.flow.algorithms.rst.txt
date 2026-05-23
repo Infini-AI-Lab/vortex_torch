@@ -9,9 +9,13 @@ vortex\_torch.flow.algorithms
    .. rubric:: Classes
 
    .. autosummary::
-   
+
       BlockSparseAttention
       GQABlockSparseAttention
-      GQADynamicHybridSparseAttention
       GQAQuestSparseAttention
-   
+      LServeSparseAttention
+      LServeCentroidSparseAttention
+      MaskedQuestSparseAttention
+      CenteredBlockSparseAttention
+      RunningAvgBlockSparse
+      VEnergyGatedCentroid

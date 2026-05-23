@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="vortex_torch.indexer" href="api/vortex_torch.indexer.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -262,73 +262,87 @@
         <article role="main" id="furo-main-content">
           <section id="vortex">
 <h1>Vortex<a class="headerlink" href="#vortex" title="Link to this heading">¶</a></h1>
+<p><strong>Vortex</strong> is a JIT-compiled <strong>sparse-attention</strong> framework for fast LLM
+decoding. You describe a sparse-attention <em>flow</em> in a few lines of high-level
+Python ops, and Vortex compiles it into fused Triton kernels that plug straight
+into <a class="reference external" href="https://github.com/sgl-project/sglang">SGLang</a>’s decode loop — no manual
+kernel writing required.</p>
+<p>A flow is just three methods on a <a class="reference internal" href="api/vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a>:</p>
+<ul class="simple">
+<li><p><strong>create_cache</strong> — declare the auxiliary per-page state you want to keep
+(e.g. a centroid, a min/max envelope) alongside the K/V cache.</p></li>
+<li><p><strong>forward_cache</strong> — fill that state from the keys/values as each page
+completes (runs once per page).</p></li>
+<li><p><strong>forward_indexer</strong> — score the cached pages against the query and emit the
+sparse set of pages to attend to (runs every decode step).</p></li>
+</ul>
+<p>See <a class="reference internal" href="api/vortex_torch.flow.algorithms.html#module-vortex_torch.flow.algorithms" title="vortex_torch.flow.algorithms"><code class="xref py py-mod docutils literal notranslate"><span class="pre">vortex_torch.flow.algorithms</span></code></a> for ready-made flows
+(block-sparse, Quest-style envelopes, LServe sub-block centroids, …).</p>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>-b<span class="w"> </span>v1<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/Infini-AI-Lab/vortex_torch.git
-<span class="nb">cd</span><span class="w"> </span>third_party/sglang
-bash<span class="w"> </span>install.sh
-<span class="nb">cd</span><span class="w"> </span>../../
 <span class="nb">cd</span><span class="w"> </span>vortex_torch
+<span class="nb">cd</span><span class="w"> </span>third_party/sglang/v0.5.9/sglang
+bash<span class="w"> </span>install.sh
+<span class="nb">cd</span><span class="w"> </span>../../../../
 pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
 </div>
 </section>
 <section id="quick-example">
 <h2>Quick Example<a class="headerlink" href="#quick-example" title="Link to this heading">¶</a></h2>
+<p>Define a custom flow — centroid-based block-sparse routing in a dozen lines:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">CustomSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
 
- <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-     <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
-     <span class="c1"># Indexer-side ops</span>
-     <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span> <span class="o">=</span> <span class="n">GeMV</span><span class="p">()</span>
-     <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># Indexer-side ops (run every decode step)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span> <span class="o">=</span> <span class="n">GeMV</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>
+        <span class="c1"># Cache-side ops (run once per finished page)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-     <span class="c1"># Cache-side ops</span>
-     <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>                  <span class="c1"># viewed as [B, H_q, D]</span>
+        <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>   <span class="c1"># viewed as [S, r, c] per create_cache()</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">q_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>   <span class="c1"># must end in topK / approxTopK</span>
 
- <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span>
-     <span class="bp">self</span><span class="p">,</span>
-     <span class="n">q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="c1"># viewed as [1, H_q, D]</span>
-     <span class="n">o</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-     <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="c1"># viewed as [S, r, c] depending on create_cache()</span>
-     <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
- <span class="p">):</span>
-     <span class="n">q_mean</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-     <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemv</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-     <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>   <span class="c1"># viewed as [B, r, c] per create_cache()</span>
+        <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># triggered only when a page is finished</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
 
- <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span>
-     <span class="bp">self</span><span class="p">,</span>
-     <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="c1"># viewed as [B, r, c] depending on create_cache()</span>
-     <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-     <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">,</span>
- <span class="p">):</span>
-     <span class="c1"># computation is triggered only when a page is finished</span>
-     <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-
- <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
-
-     <span class="k">return</span> <span class="p">{</span>
-         <span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
-     <span class="p">}</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="c1"># &quot;k&quot; and &quot;v&quot; are provided automatically — do not declare them</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)}</span>
 </pre></div>
 </div>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">llm</span> <span class="o">=</span> <span class="n">sgl</span><span class="o">.</span><span class="n">Engine</span><span class="p">(</span><span class="n">model_path</span><span class="o">=</span><span class="s2">&quot;Qwen/Qwen3-0.6B&quot;</span><span class="p">,</span>
-                 <span class="n">disable_cuda_graph</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-                 <span class="n">page_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
-                 <span class="n">vortex_topk_val</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
-                 <span class="n">disable_overlap_schedule</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>  <span class="c1"># Mandatory</span>
-                 <span class="n">attention_backend</span><span class="o">=</span><span class="s2">&quot;flashinfer&quot;</span><span class="p">,</span> <span class="c1"># Mandatory</span>
-                 <span class="n">enable_vortex_sparsity</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="c1"># otherwise will compute full attention</span>
-                 <span class="n">vortex_page_reserved_bos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-                 <span class="n">vortex_page_reserved_eos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-                 <span class="n">vortex_layers_skip</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)),</span> <span class="c1"># full attention for layer 0</span>
-                 <span class="n">vortex_module_path</span><span class="o">=</span><span class="s2">&quot;path/to/custom_sparse_attention.py&quot;</span> <span class="c1">#if not specify, vortex will try to search in vortex_torch.flow.algorithms</span>
-                 <span class="n">vortex_module_name</span><span class="o">=</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">,</span>
-                 <span class="n">vortex_max_seq_lens</span><span class="o">=</span><span class="mi">8192</span><span class="p">,</span>
-                 <span class="n">mem_fraction_static</span><span class="o">=</span><span class="mf">0.6</span>
-                 <span class="p">)</span>
+<p>Then run it through an SGLang engine:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">llm</span> <span class="o">=</span> <span class="n">sgl</span><span class="o">.</span><span class="n">Engine</span><span class="p">(</span>
+    <span class="n">model_path</span><span class="o">=</span><span class="s2">&quot;Qwen/Qwen3-0.6B&quot;</span><span class="p">,</span>
+    <span class="n">page_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">attention_backend</span><span class="o">=</span><span class="s2">&quot;flashinfer&quot;</span><span class="p">,</span>      <span class="c1"># SGLang&#39;s base backend</span>
+    <span class="n">enable_vortex_sparsity</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>          <span class="c1"># otherwise computes full attention</span>
+    <span class="n">vortex_topk_val</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>                   <span class="c1"># pages kept per request</span>
+    <span class="n">vortex_block_reserved_bos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>          <span class="c1"># always-attended prefix blocks</span>
+    <span class="n">vortex_block_reserved_eos</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>          <span class="c1"># always-attended recent blocks</span>
+    <span class="n">vortex_layers_skip</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>               <span class="c1"># full attention for layer 0</span>
+    <span class="n">vortex_module_name</span><span class="o">=</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">,</span>
+    <span class="n">vortex_module_path</span><span class="o">=</span><span class="s2">&quot;path/to/custom_sparse_attention.py&quot;</span><span class="p">,</span>  <span class="c1"># omit to search vortex_torch.flow.algorithms</span>
+    <span class="n">vortex_max_seq_lens</span><span class="o">=</span><span class="mi">8192</span><span class="p">,</span>
+    <span class="n">mem_fraction_static</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -371,7 +385,7 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -413,8 +427,8 @@ pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </s
     </aside>
   </div>
 </div><script src="_static/documentation_options.js?v=8d563738"></script>
-    <script src="_static/doctools.js?v=9bcbadda"></script>
-    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="_static/copybutton.js?v=f281be69"></script>

@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.cache" href="vortex_torch.cache.html"><link rel="prev" title="vortex_torch.indexer.transpose" href="vortex_torch.indexer.transpose.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.utils_sglang - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -266,181 +266,86 @@
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose" title="vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chunkwise_hn2nh_transpose</span></code></a>(x, y, indptr, ...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_decode_planner</span></code></a>([policy])</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3" title="vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chunkwise_hn2nh_transpose_fa3</span></code></a>(x, indptr, ...)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm" title="vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_decode_planner_trtllm</span></code></a>([policy])</p></td>
+<td><p>Decode planner variant that emits trtllm-ready outputs directly.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose" title="vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">chunkwise_nh2hn_transpose</span></code></a>(x, indptr, ...)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_prefill_planner" title="vortex_torch.indexer.utils_sglang.get_prefill_planner"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_prefill_planner</span></code></a>()</p></td>
+<td><p>Mirror of <a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a> for the prefill path.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.indices_to_page_table" title="vortex_torch.indexer.utils_sglang.indices_to_page_table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">indices_to_page_table</span></code></a>(page_table, ctx)</p></td>
-<td><p></p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose" title="vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_chunkwise_nh2hn_transpose</span></code></a>()</p></td>
+<td><p>Factory for the <code class="docutils literal notranslate"><span class="pre">Chunkwise_NH2HN_Transpose</span></code> kernel; mirrors <a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a>'s closure pattern so the module reference is bound once at backend init.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_decode" title="vortex_torch.indexer.utils_sglang.plan_decode"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plan_decode</span></code></a>(cached_seq_lens, req_to_token, ...)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_decode_fa3" title="vortex_torch.indexer.utils_sglang.plan_decode_fa3"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plan_decode_fa3</span></code></a>(cached_seq_lens, ...)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_prefill" title="vortex_torch.indexer.utils_sglang.plan_prefill"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plan_prefill</span></code></a>(cached_seq_lens, ...)</p></td>
-<td><p></p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_prefill_fa3" title="vortex_torch.indexer.utils_sglang.plan_prefill_fa3"><code class="xref py py-obj docutils literal notranslate"><span class="pre">plan_prefill_fa3</span></code></a>(cached_seq_lens, ...)</p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose" title="vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_chunkwise_hn2nh_transpose</span></code></a>()</p></td>
+<td><p>Factory for the <code class="docutils literal notranslate"><span class="pre">Chunkwise_HN2NH_Transpose</span></code> kernel; mirrors <a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a>'s closure pattern.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
 <dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.plan_decode">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">plan_decode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cached_seq_lens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_to_token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#plan_decode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.plan_decode" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.get_decode_planner">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">get_decode_planner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#get_decode_planner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cached_seq_lens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_to_token</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_indices</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
+<dd class="field-odd"><p><strong>policy</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.plan_prefill">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">plan_prefill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cached_seq_lens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_kv_indptr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_kv_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input_seq_lens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qo_indptr_ragged</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qo_indptr_paged</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kv_last_page_len</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_to_token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kv_heads</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#plan_prefill"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.plan_prefill" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cached_seq_lens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>dense_kv_indptr</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>dense_kv_indices</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>input_seq_lens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>qo_indptr_ragged</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>qo_indptr_paged</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>kv_last_page_len</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_to_token</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_indices</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>batch_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>num_kv_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">get_decode_planner_trtllm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#get_decode_planner_trtllm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm" title="Link to this definition">¶</a></dt>
+<dd><p>Decode planner variant that emits trtllm-ready outputs directly.</p>
+<p>The trtllm planner is <strong>indptr-free</strong>: it never reads or writes
+<code class="docutils literal notranslate"><span class="pre">dense_kv_indptr</span></code> / <code class="docutils literal notranslate"><span class="pre">sparse_kv_indptr</span></code> / <code class="docutils literal notranslate"><span class="pre">dense_kv_indices</span></code> /
+<code class="docutils literal notranslate"><span class="pre">sparse_kv_indices</span></code>. Outputs filled by the underlying CUDA kernel:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ctx.dense_block_tables</span></code>  — every selected page for the dense path</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ctx.sparse_block_tables</span></code> — only the BOS+EOS slots; the middle is
+filled by the topk kernel later</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ctx.dense_seqlens</span></code> / <code class="docutils literal notranslate"><span class="pre">ctx.sparse_seqlens</span></code> — int32 token counts
+consumed by <code class="docutils literal notranslate"><span class="pre">trtllm_batch_decode_with_kv_cache</span></code>, the trtllm topk
+kernels, and the Schedule.S Triton kernels (which derive per-row
+block counts via <code class="docutils literal notranslate"><span class="pre">ceil(tokens</span> <span class="pre">/</span> <span class="pre">block_size)</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ctx.kv_last_page_len</span></code> — same semantics as before</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ctx.winfo_*</span></code> — workload-scheduler outputs; <code class="docutils literal notranslate"><span class="pre">winfo_kv_offsets[j]</span></code>
+carries <code class="docutils literal notranslate"><span class="pre">row</span> <span class="pre">*</span> <span class="pre">max_blocks_per_seq</span> <span class="pre">+</span> <span class="pre">col</span></code> so the Schedule.W kernel
+preamble (with <code class="docutils literal notranslate"><span class="pre">indices</span> <span class="pre">=</span> <span class="pre">dense_block_tables.view(-1)</span></code>) resolves
+page ids correctly.</p></li>
 </ul>
+</div></blockquote>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>policy</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">chunkwise_nh2hn_transpose</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indptr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_qo_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kv_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#chunkwise_nh2hn_transpose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>indptr</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>batch_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>num_qo_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>num_kv_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>torch.Tensor</p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.get_prefill_planner">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">get_prefill_planner</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#get_prefill_planner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.get_prefill_planner" title="Link to this definition">¶</a></dt>
+<dd><p>Mirror of <a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a> for the prefill path.</p>
+<p>Triggers a one-time JIT compile of the prefill module on first call,
+then returns a closure that calls <code class="docutils literal notranslate"><span class="pre">sglang_plan_prefill</span></code> with the
+module reference baked in (no per-call lookup).</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">chunkwise_hn2nh_transpose</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indptr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_qo_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kv_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#chunkwise_hn2nh_transpose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>y</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>indptr</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>batch_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>num_qo_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>num_kv_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.14)"><em>Tuple</em></a>[torch.Tensor, torch.Tensor]</p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">get_chunkwise_nh2hn_transpose</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#get_chunkwise_nh2hn_transpose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose" title="Link to this definition">¶</a></dt>
+<dd><p>Factory for the <code class="docutils literal notranslate"><span class="pre">Chunkwise_NH2HN_Transpose</span></code> kernel; mirrors
+<a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a>’s closure pattern so the module reference
+is bound once at backend init.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.plan_prefill_fa3">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">plan_prefill_fa3</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cached_seq_lens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cu_seqlens_q</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_to_token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kv_heads</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#plan_prefill_fa3"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.plan_prefill_fa3" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cached_seq_lens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>cu_seqlens_q</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_to_token</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_indices</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>page_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>batch_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>num_kv_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.plan_decode_fa3">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">plan_decode_fa3</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cached_seq_lens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_to_token</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">req_indices</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_page_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dense_cache_seqlens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparse_page_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sparse_cache_seqlens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#plan_decode_fa3"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.plan_decode_fa3" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>cached_seq_lens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_to_token</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>req_indices</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>dense_page_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>dense_cache_seqlens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>sparse_page_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>sparse_cache_seqlens</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">chunkwise_hn2nh_transpose_fa3</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">indptr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_qo_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_kv_heads</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">head_dim</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#chunkwise_hn2nh_transpose_fa3"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>indptr</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>batch_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>num_qo_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>num_kv_heads</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-<li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.indices_to_page_table">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">indices_to_page_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">page_table</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#indices_to_page_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.indices_to_page_table" title="Link to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>page_table</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose">
+<span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.utils_sglang.</span></span><span class="sig-name descname"><span class="pre">get_chunkwise_hn2nh_transpose</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/utils_sglang.html#get_chunkwise_hn2nh_transpose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose" title="Link to this definition">¶</a></dt>
+<dd><p>Factory for the <code class="docutils literal notranslate"><span class="pre">Chunkwise_HN2NH_Transpose</span></code> kernel; mirrors
+<a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner" title="vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a>’s closure pattern.</p>
 </dd></dl>
 
 </section>
@@ -474,7 +379,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -501,14 +406,11 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.utils_sglang</a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_decode"><code class="docutils literal notranslate"><span class="pre">plan_decode()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_prefill"><code class="docutils literal notranslate"><span class="pre">plan_prefill()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose"><code class="docutils literal notranslate"><span class="pre">chunkwise_nh2hn_transpose()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose"><code class="docutils literal notranslate"><span class="pre">chunkwise_hn2nh_transpose()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_prefill_fa3"><code class="docutils literal notranslate"><span class="pre">plan_prefill_fa3()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.plan_decode_fa3"><code class="docutils literal notranslate"><span class="pre">plan_decode_fa3()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3"><code class="docutils literal notranslate"><span class="pre">chunkwise_hn2nh_transpose_fa3()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.indices_to_page_table"><code class="docutils literal notranslate"><span class="pre">indices_to_page_table()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner"><code class="docutils literal notranslate"><span class="pre">get_decode_planner()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm"><code class="docutils literal notranslate"><span class="pre">get_decode_planner_trtllm()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_prefill_planner"><code class="docutils literal notranslate"><span class="pre">get_prefill_planner()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose"><code class="docutils literal notranslate"><span class="pre">get_chunkwise_nh2hn_transpose()</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose"><code class="docutils literal notranslate"><span class="pre">get_chunkwise_hn2nh_transpose()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -521,8 +423,8 @@
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

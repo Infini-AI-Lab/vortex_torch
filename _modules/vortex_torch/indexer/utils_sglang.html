@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.utils_sglang - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,222 +255,214 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.indexer.utils_sglang</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch_C</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-<span class="n">sglang_plan_decode</span><span class="p">,</span> 
-<span class="n">sglang_plan_prefill</span><span class="p">,</span> 
-<span class="n">sglang_plan_decode_fa3</span><span class="p">,</span>
-<span class="n">sglang_plan_prefill_fa3</span><span class="p">,</span> 
-<span class="n">Chunkwise_NH2HN_Transpose</span><span class="p">,</span> 
-<span class="n">Chunkwise_HN2NH_Transpose</span><span class="p">,</span>
-<span class="n">Chunkwise_HN2NH_Transpose_FA3</span>
-<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.planner_sglang</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_sglang_plan_decode_v2_module</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.prefill_sglang</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_sglang_prefill_module</span>
 
 
-<div class="viewcode-block" id="plan_decode">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_decode">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">plan_decode</span><span class="p">(</span>
-<span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
-<span class="p">):</span>
-    <span class="n">sglang_plan_decode</span><span class="p">(</span>
-        <span class="n">cached_seq_lens</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indptr</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">sparse_kv_indptr</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">sparse_kv_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">kv_last_page_len</span><span class="p">,</span>
-        <span class="n">req_to_token</span><span class="p">,</span>
-        <span class="n">req_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_q_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_kv_offsets</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_kv_lens</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_num_workloads</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_chunk_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">topk_val</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_bos</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_eos</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">max_chunk_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">min_chunk_size</span>
+<div class="viewcode-block" id="get_decode_planner">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.get_decode_planner">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_decode_planner</span><span class="p">(</span><span class="n">policy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+
+    <span class="n">module</span> <span class="o">=</span> <span class="n">get_sglang_plan_decode_v2_module</span><span class="p">(</span>
+        <span class="n">policy_body</span><span class="o">=</span><span class="n">policy</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">fallback_to_default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
-    
-    <span class="n">ctx</span><span class="o">.</span><span class="n">set_batch_size</span><span class="p">(</span><span class="n">cached_seq_lens</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div>
-
-
-
-<div class="viewcode-block" id="plan_prefill">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_prefill">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">plan_prefill</span><span class="p">(</span>
-<span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">dense_kv_indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">dense_kv_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">input_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">qo_indptr_ragged</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">qo_indptr_paged</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">kv_last_page_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span>
-<span class="p">):</span>
-    <span class="n">sglang_plan_prefill</span><span class="p">(</span>
-        <span class="n">cached_seq_lens</span><span class="p">,</span>
-        <span class="n">dense_kv_indptr</span><span class="p">,</span>
-        <span class="n">dense_kv_indices</span><span class="p">,</span>
-        <span class="n">input_seq_lens</span><span class="p">,</span>
-        <span class="n">qo_indptr_ragged</span><span class="p">,</span>
-        <span class="n">qo_indptr_paged</span><span class="p">,</span>
-        <span class="n">kv_last_page_len</span><span class="p">,</span>
-        <span class="n">req_to_token</span><span class="p">,</span>
-        <span class="n">req_indices</span><span class="p">,</span>
-        <span class="n">batch_table</span><span class="p">,</span>
-        <span class="n">page_size</span><span class="p">,</span>
-        <span class="n">num_kv_heads</span>
-    <span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="chunkwise_nh2hn_transpose">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_nh2hn_transpose">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">chunkwise_nh2hn_transpose</span><span class="p">(</span>
-<span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-    
-    
-    <span class="n">x_t</span> <span class="o">=</span> <span class="n">Chunkwise_NH2HN_Transpose</span><span class="p">(</span>
-        <span class="n">x</span><span class="p">,</span> <span class="n">indptr</span><span class="p">,</span> <span class="n">batch_table</span><span class="p">,</span> <span class="n">num_qo_heads</span><span class="p">,</span> <span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">head_dim</span>
-    <span class="p">)</span>
-    
-    <span class="k">return</span> <span class="n">x_t</span></div>
-
-
-
-
-
-<div class="viewcode-block" id="chunkwise_hn2nh_transpose">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">chunkwise_hn2nh_transpose</span><span class="p">(</span>
-<span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-    
-    <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span> <span class="o">=</span> <span class="n">Chunkwise_HN2NH_Transpose</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">indptr</span><span class="p">,</span> <span class="n">batch_table</span><span class="p">,</span> <span class="n">num_qo_heads</span><span class="p">,</span> <span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">head_dim</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">plan_decode</span><span class="p">(</span>
+        <span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
+    <span class="p">):</span>
+        <span class="n">md</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span>
+        <span class="n">module</span><span class="o">.</span><span class="n">sglang_plan_decode_v2</span><span class="p">(</span>
+            <span class="n">cached_seq_lens</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">dense_kv_indptr</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">dense_kv_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">sparse_kv_indptr</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">sparse_kv_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">kv_last_page_len</span><span class="p">,</span>
+            <span class="n">req_to_token</span><span class="p">,</span>
+            <span class="n">req_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_q_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_is_first_workload_per_batch</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_kv_offsets</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_kv_lens</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_num_workloads</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_chunk_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">topk_val</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">topk_ratio</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_reserved_bos</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_reserved_eos</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">workload_chunk_size</span>
         <span class="p">)</span>
-    
-    <span class="k">return</span> <span class="n">x_t</span><span class="p">,</span> <span class="n">y_t</span></div>
+
+        <span class="n">md</span><span class="o">.</span><span class="n">set_batch_size</span><span class="p">(</span><span class="n">cached_seq_lens</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">plan_decode</span></div>
 
 
 
-<div class="viewcode-block" id="plan_prefill_fa3">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_prefill_fa3">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">plan_prefill_fa3</span><span class="p">(</span>
-<span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">cu_seqlens_q</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">page_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span>
-<span class="p">):</span>
-    <span class="n">sglang_plan_prefill_fa3</span><span class="p">(</span>
-        <span class="n">cached_seq_lens</span><span class="p">,</span>
-        <span class="n">cu_seqlens_q</span><span class="p">,</span>
-        <span class="n">req_to_token</span><span class="p">,</span>
-        <span class="n">req_indices</span><span class="p">,</span>
-        <span class="n">page_table</span><span class="p">,</span>
-        <span class="n">batch_table</span><span class="p">,</span>
-        <span class="n">page_size</span><span class="p">,</span>
-        <span class="n">num_kv_heads</span>
-    <span class="p">)</span></div>
+<div class="viewcode-block" id="get_decode_planner_trtllm">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.get_decode_planner_trtllm">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_decode_planner_trtllm</span><span class="p">(</span><span class="n">policy</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode planner variant that emits trtllm-ready outputs directly.</span>
 
-    
+<span class="sd">    The trtllm planner is **indptr-free**: it never reads or writes</span>
+<span class="sd">    ``dense_kv_indptr`` / ``sparse_kv_indptr`` / ``dense_kv_indices`` /</span>
+<span class="sd">    ``sparse_kv_indices``. Outputs filled by the underlying CUDA kernel:</span>
 
-<div class="viewcode-block" id="plan_decode_fa3">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.plan_decode_fa3">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">plan_decode_fa3</span><span class="p">(</span>
-<span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">dense_page_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">dense_cache_seqlens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">sparse_page_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">sparse_cache_seqlens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
-<span class="p">):</span>
-    <span class="n">sglang_plan_decode_fa3</span><span class="p">(</span>
-        <span class="n">cached_seq_lens</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indptr</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">dense_kv_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">sparse_kv_indptr</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">sparse_kv_indices</span><span class="p">,</span>
-        <span class="n">dense_page_table</span><span class="p">,</span>
-        <span class="n">dense_cache_seqlens</span><span class="p">,</span>
-        <span class="n">sparse_page_table</span><span class="p">,</span>
-        <span class="n">sparse_cache_seqlens</span><span class="p">,</span>
-        <span class="n">req_to_token</span><span class="p">,</span>
-        <span class="n">req_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_q_indices</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_kv_offsets</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_kv_lens</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_num_workloads</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">winfo_chunk_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">topk_val</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_bos</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">page_reserved_eos</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">max_chunk_size</span><span class="p">,</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">min_chunk_size</span>
+<span class="sd">      * ``ctx.dense_block_tables``  — every selected page for the dense path</span>
+<span class="sd">      * ``ctx.sparse_block_tables`` — only the BOS+EOS slots; the middle is</span>
+<span class="sd">        filled by the topk kernel later</span>
+<span class="sd">      * ``ctx.dense_seqlens`` / ``ctx.sparse_seqlens`` — int32 token counts</span>
+<span class="sd">        consumed by ``trtllm_batch_decode_with_kv_cache``, the trtllm topk</span>
+<span class="sd">        kernels, and the Schedule.S Triton kernels (which derive per-row</span>
+<span class="sd">        block counts via ``ceil(tokens / block_size)``)</span>
+<span class="sd">      * ``ctx.kv_last_page_len`` — same semantics as before</span>
+<span class="sd">      * ``ctx.winfo_*`` — workload-scheduler outputs; ``winfo_kv_offsets[j]``</span>
+<span class="sd">        carries ``row * max_blocks_per_seq + col`` so the Schedule.W kernel</span>
+<span class="sd">        preamble (with ``indices = dense_block_tables.view(-1)``) resolves</span>
+<span class="sd">        page ids correctly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">get_sglang_plan_decode_v2_module</span><span class="p">(</span>
+        <span class="n">policy_body</span><span class="o">=</span><span class="n">policy</span><span class="p">,</span>
+        <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">fallback_to_default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span>
-    
-    <span class="n">ctx</span><span class="o">.</span><span class="n">set_batch_size</span><span class="p">(</span><span class="n">cached_seq_lens</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div>
 
-   
-
-<div class="viewcode-block" id="chunkwise_hn2nh_transpose_fa3">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.chunkwise_hn2nh_transpose_fa3">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">chunkwise_hn2nh_transpose_fa3</span><span class="p">(</span>
-<span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-    
-    <span class="n">x_t</span> <span class="o">=</span> <span class="n">Chunkwise_HN2NH_Transpose_FA3</span><span class="p">(</span>
-            <span class="n">x</span><span class="p">,</span> <span class="n">indptr</span><span class="p">,</span> <span class="n">batch_table</span><span class="p">,</span> <span class="n">num_qo_heads</span><span class="p">,</span> <span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">head_dim</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">plan_decode_trtllm</span><span class="p">(</span>
+        <span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">md</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">metadata</span>
+        <span class="n">module</span><span class="o">.</span><span class="n">sglang_plan_decode_v2_trtllm</span><span class="p">(</span>
+            <span class="n">cached_seq_lens</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">kv_last_page_len</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">dense_block_tables</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">sparse_block_tables</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">dense_seqlens</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">sparse_seqlens</span><span class="p">,</span>
+            <span class="n">req_to_token</span><span class="p">,</span>
+            <span class="n">req_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_q_indices</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_is_first_workload_per_batch</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_kv_offsets</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_kv_lens</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_num_workloads</span><span class="p">,</span>
+            <span class="n">md</span><span class="o">.</span><span class="n">winfo_chunk_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">page_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_size</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">topk_val</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">topk_ratio</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_reserved_bos</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">block_reserved_eos</span><span class="p">,</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">workload_chunk_size</span><span class="p">,</span>
         <span class="p">)</span>
-    
-    <span class="k">return</span> <span class="n">x_t</span></div>
+        <span class="n">md</span><span class="o">.</span><span class="n">set_batch_size</span><span class="p">(</span><span class="n">cached_seq_lens</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">plan_decode_trtllm</span></div>
 
 
 
-<div class="viewcode-block" id="indices_to_page_table">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.indices_to_page_table">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">indices_to_page_table</span><span class="p">(</span>
-<span class="n">page_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
-<span class="p">):</span>
-    <span class="k">pass</span></div>
+<div class="viewcode-block" id="get_prefill_planner">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.get_prefill_planner">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_prefill_planner</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Mirror of :func:`get_decode_planner` for the prefill path.</span>
+
+<span class="sd">    Triggers a one-time JIT compile of the prefill module on first call,</span>
+<span class="sd">    then returns a closure that calls ``sglang_plan_prefill`` with the</span>
+<span class="sd">    module reference baked in (no per-call lookup).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">get_sglang_prefill_module</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">plan_prefill</span><span class="p">(</span>
+        <span class="n">cached_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">dense_kv_indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">dense_kv_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">input_seq_lens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">qo_indptr_ragged</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">qo_indptr_paged</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">kv_last_page_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_to_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">req_indices</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">page_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">module</span><span class="o">.</span><span class="n">sglang_plan_prefill</span><span class="p">(</span>
+            <span class="n">cached_seq_lens</span><span class="p">,</span>
+            <span class="n">dense_kv_indptr</span><span class="p">,</span>
+            <span class="n">dense_kv_indices</span><span class="p">,</span>
+            <span class="n">input_seq_lens</span><span class="p">,</span>
+            <span class="n">qo_indptr_ragged</span><span class="p">,</span>
+            <span class="n">qo_indptr_paged</span><span class="p">,</span>
+            <span class="n">kv_last_page_len</span><span class="p">,</span>
+            <span class="n">req_to_token</span><span class="p">,</span>
+            <span class="n">req_indices</span><span class="p">,</span>
+            <span class="n">batch_table</span><span class="p">,</span>
+            <span class="n">page_size</span><span class="p">,</span>
+            <span class="n">num_kv_heads</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">plan_prefill</span></div>
+
+
+
+<div class="viewcode-block" id="get_chunkwise_nh2hn_transpose">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.get_chunkwise_nh2hn_transpose">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_chunkwise_nh2hn_transpose</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Factory for the ``Chunkwise_NH2HN_Transpose`` kernel; mirrors</span>
+<span class="sd">    :func:`get_decode_planner`&#39;s closure pattern so the module reference</span>
+<span class="sd">    is bound once at backend init.&quot;&quot;&quot;</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">get_sglang_prefill_module</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">chunkwise_nh2hn_transpose</span><span class="p">(</span>
+        <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">module</span><span class="o">.</span><span class="n">Chunkwise_NH2HN_Transpose</span><span class="p">(</span>
+            <span class="n">x</span><span class="p">,</span> <span class="n">indptr</span><span class="p">,</span> <span class="n">batch_table</span><span class="p">,</span> <span class="n">num_qo_heads</span><span class="p">,</span> <span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">chunkwise_nh2hn_transpose</span></div>
+
+
+
+<div class="viewcode-block" id="get_chunkwise_hn2nh_transpose">
+<a class="viewcode-back" href="../../../api/vortex_torch.indexer.utils_sglang.html#vortex_torch.indexer.utils_sglang.get_chunkwise_hn2nh_transpose">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_chunkwise_hn2nh_transpose</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Factory for the ``Chunkwise_HN2NH_Transpose`` kernel; mirrors</span>
+<span class="sd">    :func:`get_decode_planner`&#39;s closure pattern.&quot;&quot;&quot;</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">get_sglang_prefill_module</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">chunkwise_hn2nh_transpose</span><span class="p">(</span>
+        <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">indptr</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">batch_table</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+        <span class="n">num_qo_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">num_kv_heads</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="n">module</span><span class="o">.</span><span class="n">Chunkwise_HN2NH_Transpose</span><span class="p">(</span>
+            <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">indptr</span><span class="p">,</span> <span class="n">batch_table</span><span class="p">,</span> <span class="n">num_qo_heads</span><span class="p">,</span> <span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">chunkwise_hn2nh_transpose</span></div>
+
 
 </pre></div>
         </article>
@@ -484,7 +476,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -505,8 +497,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

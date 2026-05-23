@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.abs.context_base - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -274,7 +274,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.context_base.</span></span><span class="sig-name descname"><span class="pre">ContextBase</span></span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.abs.context_base.</span></span><span class="sig-name descname"><span class="pre">ContextBase</span></span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/abc.html#abc.ABC" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code></a></p>
 <p>Abstract base class for runtime contexts.</p>
 <p>This class defines the minimal contract that all context implementations
@@ -288,24 +288,30 @@ carry additional internal state as needed, but the public surface should stay
 minimal and consistent.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase.name">
-<span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></em><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.name" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.name" title="Link to this definition">¶</a></dt>
 <dd><p>Human-readable context name.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase.mode">
-<span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'profile'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'execute'</span></span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.mode" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">mode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.14)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'profile'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'execute'</span></span><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.mode" title="Link to this definition">¶</a></dt>
 <dd><p>Current operating mode.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase.vortex_dtype">
+<span class="sig-name descname"><span class="pre">vortex_dtype</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">torch.dtype</span></span><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.vortex_dtype" title="Link to this definition">¶</a></dt>
+<dd><p>Intermediate-tensor dtype (default <code class="docutils literal notranslate"><span class="pre">torch.bfloat16</span></code>).</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase.created">
-<em class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">created</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></em><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.created" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">created</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.created" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.abs.context_base.ContextBase.create">
-<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.create" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.create" title="Link to this definition">¶</a></dt>
 <dd><p>Populate the context (idempotency/overwrite rules are up to the subclass).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -325,7 +331,7 @@ minimal and consistent.</p>
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.profile" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -335,7 +341,7 @@ minimal and consistent.</p>
 <span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.execute" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -345,7 +351,7 @@ minimal and consistent.</p>
 <span class="sig-name descname"><span class="pre">assert_created</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.assert_created"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.assert_created" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -355,7 +361,7 @@ minimal and consistent.</p>
 <span class="sig-name descname"><span class="pre">missing</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.missing"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.missing" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)">list</a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a>]</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -374,7 +380,7 @@ computed via <code class="xref py py-meth docutils literal notranslate"><span cl
 <dd class="field-even"><p>The number of bytes that were added to the auxiliary total.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><ul class="simple">
@@ -396,7 +402,7 @@ that share storage (or on the same tensor) will double-count.</p>
 <dd class="field-odd"><p><strong>nflops</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -407,7 +413,7 @@ that share storage (or on the same tensor) will double-count.</p>
 <dd><p>Reset the total auxiliary memory to zero.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -417,7 +423,7 @@ that share storage (or on the same tensor) will double-count.</p>
 <span class="sig-name descname"><span class="pre">clear_aux_flops</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/abs/context_base.html#ContextBase.clear_aux_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.abs.context_base.ContextBase.clear_aux_flops" title="Link to this definition">¶</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -428,7 +434,7 @@ that share storage (or on the same tensor) will double-count.</p>
 <dd><p>Print fields; tensor fields show shape/dtype/device, and append memory totals incl. auxiliary.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None</p>
+<dd class="field-odd"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
@@ -448,7 +454,7 @@ that share storage (or on the same tensor) will double-count.</p>
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -478,6 +484,7 @@ that share storage (or on the same tensor) will double-count.</p>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase"><code class="docutils literal notranslate"><span class="pre">ContextBase</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.name"><code class="docutils literal notranslate"><span class="pre">ContextBase.name</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.mode"><code class="docutils literal notranslate"><span class="pre">ContextBase.mode</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.vortex_dtype"><code class="docutils literal notranslate"><span class="pre">ContextBase.vortex_dtype</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.created"><code class="docutils literal notranslate"><span class="pre">ContextBase.created</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.create"><code class="docutils literal notranslate"><span class="pre">ContextBase.create()</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.abs.context_base.ContextBase.profile"><code class="docutils literal notranslate"><span class="pre">ContextBase.profile()</span></code></a></li>
@@ -503,8 +510,8 @@ that share storage (or on the same tensor) will double-count.</p>
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>

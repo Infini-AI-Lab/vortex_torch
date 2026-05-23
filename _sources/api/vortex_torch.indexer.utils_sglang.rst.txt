@@ -9,13 +9,9 @@ vortex\_torch.indexer.utils\_sglang
    .. rubric:: Functions
 
    .. autosummary::
-   
-      chunkwise_hn2nh_transpose
-      chunkwise_hn2nh_transpose_fa3
-      chunkwise_nh2hn_transpose
-      indices_to_page_table
-      plan_decode
-      plan_decode_fa3
-      plan_prefill
-      plan_prefill_fa3
-   
+
+      get_decode_planner
+      get_decode_planner_trtllm
+      get_prefill_planner
+      get_chunkwise_nh2hn_transpose
+      get_chunkwise_hn2nh_transpose

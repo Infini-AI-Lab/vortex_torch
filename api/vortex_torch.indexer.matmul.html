@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.indexer.output_func" href="vortex_torch.indexer.output_func.html"><link rel="prev" title="vortex_torch.indexer.elementwise_binary" href="vortex_torch.indexer.elementwise_binary.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.matmul - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -277,7 +277,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMV</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMV"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMV</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMV"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>General matrix-vector multiplication (GEMV) dispatcher.</p>
 <p>This operator computes a <em>piecewise</em> batched matrix-vector product.
@@ -324,38 +324,17 @@ X_i = X[i, 0, :] \in \mathbb{R}^{1 \times D}.\]</div>
 \in \mathbb{R}^{S_{\text{pack}} \times 1 \times 1}.\end{split}\]</div>
 </div>
 <p>In the runtime, <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> is given by
-<code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> and the dispatch is keyed by the pair of input
-formats <code class="docutils literal notranslate"><span class="pre">(x_format,</span> <span class="pre">y_format)</span></code>.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV._impl_map">
-<span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">(x_format,</span> <span class="pre">y_format)</span></code>. Each entry maps
-to <code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[Tuple[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>], Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.profile" title="vortex_torch.indexer.matmul.GeMV.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
-</dd>
-</dl>
-</dd></dl>
-
+<code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>. Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff both
+inputs are <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> (both have their <code class="docutils literal notranslate"><span class="pre">S</span></code> axis already collapsed
+to 1), otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by
+the compiler’s per-workload kernel.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV.output_format">
 <span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV.output_format" title="Link to this definition">¶</a></dt>
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.profile" title="vortex_torch.indexer.matmul.GeMV.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -366,7 +345,7 @@ to <code class="docutils literal notranslate"><span class="pre">(callable_impl,<
 <dd><p>Preallocated output tensor buffer of shape <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[torch.Tensor]</p>
+<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -374,8 +353,8 @@ to <code class="docutils literal notranslate"><span class="pre">(callable_impl,<
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMV.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, select an implementation, allocate the output buffer,
-and return an <code class="xref py py-func docutils literal notranslate"><span class="pre">as_vtensor()</span></code> view with the resolved format.</p>
+<dd><p>Validate inputs, allocate the output buffer, and return a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
 <p>The method enforces the logical shapes</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">x</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
@@ -398,39 +377,11 @@ from the runtime context as <code class="docutils literal notranslate"><span cla
 </dl>
 </dd></dl>
 
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMV.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMV.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Launch the selected GEMV implementation into the internal output buffer.</p>
-<p>Expected kernel signature:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor corresponding to the batched vector(s), with shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> and on the same device as <code class="docutils literal notranslate"><span class="pre">y</span></code> and the output.</p></li>
-<li><p><strong>y</strong> (<em>torch.Tensor</em>) – Input tensor corresponding to the packed matrix rows, with shape
-<code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">D]</span></code> and on the same device as <code class="docutils literal notranslate"><span class="pre">x</span></code> and the output.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the underlying implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The output tensor stored in <code class="docutils literal notranslate"><span class="pre">self.output_buffer</span></code> with shape
-<code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMM</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMM</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>General matrix-matrix multiplication (GeMM) dispatcher.</p>
 <p>Logically this computes, for each logical <code class="docutils literal notranslate"><span class="pre">S</span></code>-slice, a matrix-matrix
@@ -462,38 +413,17 @@ dimension is interpreted as either a batch size <span class="math notranslate no
 </li>
 <li><p>The output tensor <code class="docutils literal notranslate"><span class="pre">O</span></code> has logical shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code>.</p></li>
 </ul>
-<p>At runtime, the logical <code class="docutils literal notranslate"><span class="pre">S</span></code> is taken from <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>, and
-dispatch is keyed by the pair of tensor formats <code class="docutils literal notranslate"><span class="pre">(x_format,</span> <span class="pre">y_format)</span></code>.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM._impl_map">
-<span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">(x_format,</span> <span class="pre">y_format)</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[Tuple[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>], Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.profile" title="vortex_torch.indexer.matmul.GeMM.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
-</dd>
-</dl>
-</dd></dl>
-
+<p>At runtime, the logical <code class="docutils literal notranslate"><span class="pre">S</span></code> is taken from <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>.
+Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff both inputs are <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>,
+otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
+compiler’s per-workload kernel.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM.output_format">
 <span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM.output_format" title="Link to this definition">¶</a></dt>
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.profile" title="vortex_torch.indexer.matmul.GeMM.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -504,7 +434,7 @@ dispatch is keyed by the pair of tensor formats <code class="docutils literal no
 <dd><p>Preallocated output tensor buffer of shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[torch.Tensor]</p>
+<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -512,8 +442,8 @@ dispatch is keyed by the pair of tensor formats <code class="docutils literal no
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMM.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, select implementation, allocate the output buffer,
-and return an <code class="xref py py-func docutils literal notranslate"><span class="pre">as_vtensor()</span></code> view with the resolved format.</p>
+<dd><p>Validate inputs, allocate the output buffer, and return a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
 <p>The method enforces that both inputs are rank-3 tensors and that the
 inner dimension <span class="math notranslate nohighlight">\(K\)</span> matches:</p>
 <ul>
@@ -529,59 +459,22 @@ coincide with <span class="math notranslate nohighlight">\(S\)</span>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Right-hand operand (transposed in the mathematical view), with
-shape <code class="docutils literal notranslate"><span class="pre">[B_or_S,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code> and a format participating in the
-<code class="docutils literal notranslate"><span class="pre">(x_format,</span> <span class="pre">y_format)</span></code> dispatch.</p></li>
-<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Left-hand operand with shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code>.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Right-hand operand (transposed in the mathematical view), with
+shape <code class="docutils literal notranslate"><span class="pre">[B_or_S,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code>.</p></li>
+<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Left-hand operand with shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> for the logical
 <code class="docutils literal notranslate"><span class="pre">S</span></code> dimension and tracking auxiliary memory.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the allocated output buffer with the
-resolved output format.</p>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the allocated output buffer.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types are not <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>, ranks are not 3, the inner
-    dimensions <span class="math notranslate nohighlight">\(K\)</span> do not match, or there is no implementation
-    for the pair <code class="docutils literal notranslate"><span class="pre">(x._format,</span> <span class="pre">y._format)</span></code>.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.matmul.GeMM.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMM.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Launch the selected GeMM implementation into the internal buffer.</p>
-<p>Expected kernel signature:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Right-hand operand (transposed in the mathematical view), with
-shape <code class="docutils literal notranslate"><span class="pre">[B_or_S,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code> on the same device as <code class="docutils literal notranslate"><span class="pre">y</span></code> and the
-output buffer.</p></li>
-<li><p><strong>y</strong> (<em>torch.Tensor</em>) – Left-hand operand with shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code> on the same device
-as <code class="docutils literal notranslate"><span class="pre">x</span></code> and the output buffer.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the underlying implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The output tensor stored in <code class="docutils literal notranslate"><span class="pre">self.output_buffer</span></code> with shape
-<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.profile" title="vortex_torch.indexer.matmul.GeMM.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called (no implementation or
-    buffer), or if there is a device mismatch between <code class="docutils literal notranslate"><span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">y</span></code>
-    and the output buffer.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types are not <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>, ranks are not 3, or the inner
+    dimensions <span class="math notranslate nohighlight">\(K\)</span> do not match.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -619,7 +512,7 @@ as <code class="docutils literal notranslate"><span class="pre">x</span></code> 
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -647,21 +540,15 @@ as <code class="docutils literal notranslate"><span class="pre">x</span></code> 
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.matmul</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV"><code class="docutils literal notranslate"><span class="pre">GeMV</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV._impl_map"><code class="docutils literal notranslate"><span class="pre">GeMV._impl_map</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.impl"><code class="docutils literal notranslate"><span class="pre">GeMV.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.output_format"><code class="docutils literal notranslate"><span class="pre">GeMV.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.output_buffer"><code class="docutils literal notranslate"><span class="pre">GeMV.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.profile"><code class="docutils literal notranslate"><span class="pre">GeMV.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMV.execute"><code class="docutils literal notranslate"><span class="pre">GeMV.execute()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM"><code class="docutils literal notranslate"><span class="pre">GeMM</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM._impl_map"><code class="docutils literal notranslate"><span class="pre">GeMM._impl_map</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.impl"><code class="docutils literal notranslate"><span class="pre">GeMM.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.output_format"><code class="docutils literal notranslate"><span class="pre">GeMM.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.output_buffer"><code class="docutils literal notranslate"><span class="pre">GeMM.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.profile"><code class="docutils literal notranslate"><span class="pre">GeMM.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.matmul.GeMM.execute"><code class="docutils literal notranslate"><span class="pre">GeMM.execute()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -676,11 +563,11 @@ as <code class="docutils literal notranslate"><span class="pre">x</span></code> 
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

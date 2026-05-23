@@ -1,4 +1,6 @@
-﻿vortex\_torch
+﻿:orphan:
+
+vortex\_torch
 =============
 
 .. automodule:: vortex_torch

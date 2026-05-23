@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.indexer.transpose" href="vortex_torch.indexer.transpose.html"><link rel="prev" title="vortex_torch.indexer.save_load" href="vortex_torch.indexer.save_load.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.scan - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -277,7 +277,7 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.scan.Softmax">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.scan.</span></span><span class="sig-name descname"><span class="pre">Softmax</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Softmax"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.scan.</span></span><span class="sig-name descname"><span class="pre">Softmax</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Softmax"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>In-place softmax dispatcher over a packed leading axis.</p>
 <p>The input is treated as a rank-3 tensor</p>
@@ -332,11 +332,11 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.scan.Softmax._impl_map">
 <span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
+<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to the
+resolved output format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>, <a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -348,7 +348,7 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> dimension.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -360,18 +360,7 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 (i.e. computes softmax of <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">scale</span></code>).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Softmax.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile" title="vortex_torch.indexer.scan.Softmax.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -382,7 +371,7 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile" title="vortex_torch.indexer.scan.Softmax.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -400,7 +389,7 @@ softmax is applied along <code class="docutils literal notranslate"><span class=
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor to be modified in-place, with logical shape
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor to be modified in-place, with logical shape
 <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context (included for API symmetry; not used for
 buffer allocation here).</p></li>
@@ -410,40 +399,11 @@ buffer allocation here).</p></li>
 <dd class="field-even"><p>The same object as <code class="docutils literal notranslate"><span class="pre">x</span></code>, returned as the output view.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code>, if its rank is not 3, or if
     no implementation is registered for <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Softmax.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Softmax.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Execute the in-place scaled softmax and return the input tensor.</p>
-<p>Conceptually, this computes a segment-wise softmax of
-<code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">scale</span></code> along the packed axis <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">0</span></code>, where the
-segments along that axis correspond to
-<span class="math notranslate nohighlight">\(S_0, S_1, \dots, S_{B-1}\)</span> and are treated independently.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor to be modified in-place. Must be compatible with
-the shape and format validated during <a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile" title="vortex_torch.indexer.scan.Softmax.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the implementation.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The same tensor instance <code class="docutils literal notranslate"><span class="pre">x</span></code>, after the in-place softmax.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile" title="vortex_torch.indexer.scan.Softmax.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called and no implementation is
-    available.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -461,7 +421,7 @@ the shape and format validated during <a class="reference internal" href="#vorte
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.scan.Normalize">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.scan.</span></span><span class="sig-name descname"><span class="pre">Normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.scan.</span></span><span class="sig-name descname"><span class="pre">Normalize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Normalize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>In-place normalization dispatcher over a packed leading axis.</p>
 <p>The input is treated as a rank-3 tensor</p>
@@ -516,11 +476,11 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.scan.Normalize._impl_map">
 <span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to
-<code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
+<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to the
+resolved output format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>, <a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -532,18 +492,7 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> dimension.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)">int</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Normalize.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile" title="vortex_torch.indexer.scan.Normalize.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -554,7 +503,7 @@ on <code class="docutils literal notranslate"><span class="pre">x</span></code> 
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile" title="vortex_torch.indexer.scan.Normalize.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -573,7 +522,7 @@ segment.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor to be normalized in-place, with logical shape
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor to be normalized in-place, with logical shape
 <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context (included for API symmetry; not used for
 buffer allocation here).</p></li>
@@ -583,7 +532,7 @@ buffer allocation here).</p></li>
 <dd class="field-even"><p>The same object as <code class="docutils literal notranslate"><span class="pre">x</span></code>, returned as the output view.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code>, if its rank is not 3, or if
@@ -592,31 +541,124 @@ buffer allocation here).</p></li>
 </dl>
 </dd></dl>
 
+</section>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.scan.</span></span><span class="sig-name descname"><span class="pre">Conv1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weight</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">torch.bfloat16</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Conv1d"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
+<p>Causal 1D convolution dispatcher over a packed leading axis.</p>
+<p>The input is treated as a rank-3 tensor</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[X \in \mathbb{R}^{S_{\text{pack}} \times D_0 \times D_1},\]</div>
+</div>
+<p>where the leading dimension <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> is a packed
+concatenation of <span class="math notranslate nohighlight">\(B\)</span> segments of lengths <span class="math notranslate nohighlight">\(S_b\)</span>. For each
+segment <span class="math notranslate nohighlight">\(b\)</span> and each fixed <span class="math notranslate nohighlight">\((d_0, d_1)\)</span>, this operator
+applies a depth-wise causal 1D convolution of kernel size <span class="math notranslate nohighlight">\(K\)</span>
+along the packed axis <strong>within</strong> the segment, restricted to the range
+that excludes the reserved BOS and EOS pages:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathcal{I}_b^{\text{mid}}
+= [\,b_{\text{bos}},\; S_b - b_{\text{eos}}\,),\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(b_{\text{bos}}\)</span> and <span class="math notranslate nohighlight">\(b_{\text{eos}}\)</span> are
+<code class="docutils literal notranslate"><span class="pre">ctx.block_reserved_bos</span></code> and <code class="docutils literal notranslate"><span class="pre">ctx.block_reserved_eos</span></code>.</p>
+<p>For <span class="math notranslate nohighlight">\(s \in \mathcal{I}_b^{\text{mid}}\)</span> (local index within the
+mid-range),</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y[s, d_0, d_1]
+= \sum_{k=0}^{K-1} W[k, d_0, d_1] \cdot X[s - k, d_0, d_1],\]</div>
+</div>
+<p>where positions <span class="math notranslate nohighlight">\(s - k &lt; 0\)</span> (within the mid-range) are treated
+as zero. The BOS/EOS reserved regions are neither read nor written.</p>
+<section id="id2">
+<h2>Key properties<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Only <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">0</span></code> is supported.</p></li>
+<li><p>Dispatch is keyed by the input tensor format <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p></li>
+<li><p>The convolution is depth-wise: each <span class="math notranslate nohighlight">\((d_0, d_1)\)</span> channel has
+its own <span class="math notranslate nohighlight">\(K\)</span>-tap filter.</p></li>
+<li><p>Out-of-place: a fresh output buffer is allocated.</p></li>
+</ul>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d._impl_map">
+<span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d._impl_map" title="Link to this definition">¶</a></dt>
+<dd><p>Dispatch table keyed by <code class="docutils literal notranslate"><span class="pre">x_format</span></code>. Each entry maps to the
+resolved output format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Dict</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>, <a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d.dim">
+<span class="sig-name descname"><span class="pre">dim</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d.dim" title="Link to this definition">¶</a></dt>
+<dd><p>Convolution axis. Must be <code class="docutils literal notranslate"><span class="pre">0</span></code> and corresponds to the packed
+<span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> dimension.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d.weight">
+<span class="sig-name descname"><span class="pre">weight</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d.weight" title="Link to this definition">¶</a></dt>
+<dd><p>Convolution weight with shape <code class="docutils literal notranslate"><span class="pre">[K,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, materialized
+from the nested Python list passed at construction.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d.kernel_size">
+<span class="sig-name descname"><span class="pre">kernel_size</span></span><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d.kernel_size" title="Link to this definition">¶</a></dt>
+<dd><p>Kernel length <span class="math notranslate nohighlight">\(K\)</span>, derived from <code class="docutils literal notranslate"><span class="pre">weight.shape[0]</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Normalize.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Normalize.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Execute the in-place normalization and return the input tensor.</p>
-<p>Conceptually, this performs segment-wise normalization along the
-packed axis <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">0</span></code>, where the segments along that axis
-correspond to <span class="math notranslate nohighlight">\(S_0, S_1, \dots, S_{B-1}\)</span> and are treated
-independently.</p>
+<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d.profile">
+<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Conv1d.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d.profile" title="Link to this definition">¶</a></dt>
+<dd><p>Validate the input, select an implementation, allocate the output
+buffer, and return a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view with the resolved format.</p>
+<p>The input is expected to have logical shape <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>,
+and the weight stored on <code class="docutils literal notranslate"><span class="pre">self</span></code> must have shape
+<code class="docutils literal notranslate"><span class="pre">[K,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code> with matching inner dimensions.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor to be normalized in-place. Must be compatible with
-the shape and format validated during <a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile" title="vortex_torch.indexer.scan.Normalize.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context passed through to the implementation.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor with logical shape <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> for the
+output buffer leading dimension.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The same tensor instance <code class="docutils literal notranslate"><span class="pre">x</span></code>, after in-place normalization.</p>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the internally allocated output
+buffer with the resolved output format.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile" title="vortex_torch.indexer.scan.Normalize.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> has not been called and no implementation is
-    available.</p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -624,7 +666,12 @@ the shape and format validated during <a class="reference internal" href="#vorte
 </section>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>weight</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a>)</p></li>
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>dtype</strong> (<em>torch.dtype</em>)</p></li>
+<li><p><strong>device</strong> (<em>torch.device</em><em> | </em><em>None</em>)</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -660,7 +707,7 @@ the shape and format validated during <a class="reference internal" href="#vorte
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -691,19 +738,23 @@ the shape and format validated during <a class="reference internal" href="#vorte
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax._impl_map"><code class="docutils literal notranslate"><span class="pre">Softmax._impl_map</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.dim"><code class="docutils literal notranslate"><span class="pre">Softmax.dim</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.scale"><code class="docutils literal notranslate"><span class="pre">Softmax.scale</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.impl"><code class="docutils literal notranslate"><span class="pre">Softmax.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.output_format"><code class="docutils literal notranslate"><span class="pre">Softmax.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile"><code class="docutils literal notranslate"><span class="pre">Softmax.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.execute"><code class="docutils literal notranslate"><span class="pre">Softmax.execute()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize"><code class="docutils literal notranslate"><span class="pre">Normalize</span></code></a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize._impl_map"><code class="docutils literal notranslate"><span class="pre">Normalize._impl_map</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.dim"><code class="docutils literal notranslate"><span class="pre">Normalize.dim</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.impl"><code class="docutils literal notranslate"><span class="pre">Normalize.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.output_format"><code class="docutils literal notranslate"><span class="pre">Normalize.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile"><code class="docutils literal notranslate"><span class="pre">Normalize.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.execute"><code class="docutils literal notranslate"><span class="pre">Normalize.execute()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d"><code class="docutils literal notranslate"><span class="pre">Conv1d</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d._impl_map"><code class="docutils literal notranslate"><span class="pre">Conv1d._impl_map</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d.dim"><code class="docutils literal notranslate"><span class="pre">Conv1d.dim</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d.weight"><code class="docutils literal notranslate"><span class="pre">Conv1d.weight</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d.kernel_size"><code class="docutils literal notranslate"><span class="pre">Conv1d.kernel_size</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d.profile"><code class="docutils literal notranslate"><span class="pre">Conv1d.profile()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -718,11 +769,11 @@ the shape and format validated during <a class="reference internal" href="#vorte
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

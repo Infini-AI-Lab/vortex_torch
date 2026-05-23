@@ -4,10 +4,10 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.reduce - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -255,22 +255,19 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.indexer.reduce</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">Context</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">as_vtensor</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">vOp</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.triton_kernels.reduce_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">reduce_rr</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReduceType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">,</span> <span class="n">vOp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReduceType</span><span class="p">,</span> <span class="n">Schedule</span>
 
 <div class="viewcode-block" id="Reduce">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Reduce</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Generic reduction dispatcher for rank-3 logical tensors ``[N, D_0, D_1]``.</span>
+<span class="sd">    Generic reduction op for rank-3 logical tensors ``[N, D_0, D_1]``.</span>
 
-<span class="sd">    This operator performs a 1D reduction over either the ``D_0`` or ``D_1``</span>
-<span class="sd">    axis of a 3D tensor. The leading dimension ``N`` is generic and may</span>
-<span class="sd">    represent a batch axis (``B``) or a sequence/page axis (``S``); the</span>
-<span class="sd">    reduction is applied independently for each of the ``N`` slices.</span>
+<span class="sd">    This operator performs a 1D reduction over the leading ``N`` axis,</span>
+<span class="sd">    the ``D_0`` axis, or the ``D_1`` axis of a 3D tensor.</span>
 
 <span class="sd">    Given an input tensor</span>
 
@@ -281,6 +278,10 @@
 <span class="sd">    the output logical shape depends on the configured reduction dimension</span>
 <span class="sd">    ``dim``:</span>
 
+<span class="sd">    - ``dim == 0`` (reduce over the packed leading axis):</span>
+<span class="sd">      collapses ``N`` to one row per ``(batch, kv_head)``; produces a</span>
+<span class="sd">      ``BATCHED`` output (custom standalone kernel, requires</span>
+<span class="sd">      ``RAGGED`` input).</span>
 <span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
 
 <span class="sd">      .. math::</span>
@@ -293,28 +294,22 @@
 
 <span class="sd">         \text{out} \in \mathbb{R}^{N \times D_0 \times 1}.</span>
 
+<span class="sd">    For ``dim ∈ {1, 2}`` the output is ``BATCHED`` iff the input is</span>
+<span class="sd">    ``BATCHED`` (per-row reduction preserves the leading-axis layout);</span>
+<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
+<span class="sd">    compiler&#39;s per-workload kernel.</span>
+
 <span class="sd">    The specific reduction operation (e.g. mean, max, min, L2-norm, sum)</span>
 <span class="sd">    is selected via :attr:`reduce_type`.</span>
 
-<span class="sd">    Dispatch is keyed only by the input format ``x._format``.</span>
-
 <span class="sd">    Attributes</span>
 <span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, Tuple[Callable, FORMAT]]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to</span>
-<span class="sd">        ``(callable_impl, resolved_output_format)``.</span>
-
 <span class="sd">    dim : int</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor: must be either</span>
-
-<span class="sd">        - ``1`` for reduction over the :math:`D_0` axis, or</span>
-<span class="sd">        - ``2`` for reduction over the :math:`D_1` axis.</span>
+<span class="sd">        Reduction dimension in the logical 3D tensor: must be ``0``,</span>
+<span class="sd">        ``1``, or ``2``.</span>
 
 <span class="sd">    reduce_type : Optional[ReduceType]</span>
 <span class="sd">        The type of reduction to perform (e.g. mean, max, min, L2-norm, sum).</span>
-
-<span class="sd">    impl : Optional[Callable]</span>
-<span class="sd">        The resolved implementation selected during :meth:`profile`.</span>
 
 <span class="sd">    output_format : Optional[FORMAT]</span>
 <span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
@@ -325,25 +320,20 @@
 <span class="sd">        ``dim`` as described above.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Implementation dispatch table: keyed only by x_format.</span>
-    <span class="c1"># Value: (callable_impl, resolved_output_format)</span>
-    <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Callable</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{</span>
-        <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">:</span> <span class="p">(</span><span class="n">reduce_rr</span><span class="p">,</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">),</span>
-        <span class="c1"># Add more entries if you support other formats, e.g.:</span>
-        <span class="c1"># FORMAT.PAGED: (reduce_pp, FORMAT.PAGED),</span>
-    <span class="p">}</span>
-
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">reduce_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ReduceType</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-
-        <span class="c1"># Validate reduction dimension at construction</span>
+        <span class="c1"># dim==0 reduces across the packed leading axis; the result is one</span>
+        <span class="c1"># summary per (batch, kv_head), so it can&#39;t fuse into a per-block</span>
+        <span class="c1"># workload kernel — schedule it standalone.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">schedule</span> <span class="o">=</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">S</span> <span class="k">if</span> <span class="n">dim</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">Schedule</span><span class="o">.</span><span class="n">W</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">__init__: dim must be 1 or 2, got dim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">__init__: dim must be 0, 1, or 2, got dim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
 
     <span class="c1"># ---------------- profile ----------------</span>
 <div class="viewcode-block" id="Reduce.profile">
@@ -394,90 +384,48 @@
             <span class="sa">f</span><span class="s2">&quot;got ndim=</span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span><span class="si">}</span><span class="s2"> shape=</span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
 
-        <span class="c1"># Dispatch by input format</span>
-        <span class="n">x_fmt</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span>
-        <span class="k">assert</span> <span class="n">x_fmt</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">no implementation for x_fmt=</span><span class="si">{</span><span class="n">x_fmt</span><span class="si">}</span><span class="s2">. &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;Available keys: </span><span class="si">{</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_impl_map</span><span class="p">[</span><span class="n">x_fmt</span><span class="p">]</span>
-
-        <span class="c1"># Compute output logical shape according to `dim`</span>
-        <span class="c1"># The leading dimension N is taken from the runtime context,</span>
-        <span class="c1"># not from x.shape[0], to remain consistent with other ops.</span>
-        <span class="n">N</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">max_num_pages</span>
         <span class="n">D0</span><span class="p">,</span> <span class="n">D1</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-        <span class="n">out_D0</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">D0</span>   <span class="c1"># D_0 collapsed when reducing over dim=1</span>
-        <span class="n">out_D1</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">else</span> <span class="n">D1</span>   <span class="c1"># D_1 collapsed when reducing over dim=2</span>
 
-        <span class="c1"># Allocate output buffer on x.device with x.dtype</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span>
-            <span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">out_D0</span><span class="p">,</span> <span class="n">out_D1</span><span class="p">),</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Cross-row reduction: collapse the packed leading axis into one</span>
+            <span class="c1"># summary per (batch, kv_head). Input must be RAGGED (per-page or</span>
+            <span class="c1"># per-token); the compiler allocates a BATCHED buffer with leading</span>
+            <span class="c1"># dim ``ctx.max_bs * ctx.num_kv_heads`` (see indexer interface).</span>
+            <span class="k">assert</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">,</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">dim=0 reduce requires RAGGED input, got </span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">_format</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span>
+            <span class="n">out_D0</span><span class="p">,</span> <span class="n">out_D1</span> <span class="o">=</span> <span class="n">D0</span><span class="p">,</span> <span class="n">D1</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Output is BATCHED iff the input is BATCHED; otherwise RAGGED.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">BATCHED</span> <span class="k">else</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span>
+            <span class="p">)</span>
+            <span class="n">out_D0</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">D0</span>
+            <span class="n">out_D1</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">else</span> <span class="n">D1</span>
+
+        <span class="c1"># Pure-metadata vTensor — no torch.empty allocation needed.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="o">=</span> <span class="n">vTensor</span><span class="p">(</span>
+            <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">out_D0</span><span class="p">,</span> <span class="n">out_D1</span><span class="p">),</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">vortex_dtype</span><span class="p">,</span>
             <span class="n">device</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
-            <span class="n">dtype</span><span class="o">=</span><span class="n">x</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">_format</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">,</span>
+            <span class="n">tensor_id</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="p">),</span>
         <span class="p">)</span>
 
-        <span class="c1"># Account auxiliary memory</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_memory</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">[</span><span class="n">x</span><span class="p">]:</span>
-            <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">_format</span> <span class="o">==</span> <span class="n">FORMAT</span><span class="o">.</span><span class="n">PAGED</span><span class="p">:</span>
-                <span class="n">ctx</span><span class="o">.</span><span class="n">add_aux_flops</span><span class="p">(</span>
-                    <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">t</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-                <span class="p">)</span>
-                
+        <span class="c1"># Track auxiliary memory and graph structure in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">)</span>  <span class="c1"># Track the output buffer in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">output_tensor_to_op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="p">))</span>  <span class="c1"># Map the output tensor to this operation</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>  <span class="c1"># Track this operation in the context</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_input_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">x</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its input tensors</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>  <span class="c1"># Map this op to its output tensor</span>
+        
         <span class="c1"># Return vTensor view carrying the dispatched output format</span>
-        <span class="k">return</span> <span class="n">as_vtensor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_format</span><span class="p">)</span></div>
-
-
-    <span class="c1"># ---------------- execute ----------------</span>
-<div class="viewcode-block" id="Reduce.execute">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.execute">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Run the selected reduction implementation into the internal buffer</span>
-<span class="sd">        and return the result.</span>
-
-<span class="sd">        The underlying implementation is expected to follow the signature::</span>
-
-<span class="sd">            impl(x, output, dim, reduce_type, ctx)</span>
-
-<span class="sd">        where ``dim`` specifies which logical axis to reduce and</span>
-<span class="sd">        :attr:`reduce_type` selects the reduction operation.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : torch.Tensor</span>
-<span class="sd">            Input tensor with shape ``[N, D_0, D_1]`` on the same device as</span>
-<span class="sd">            the preallocated output buffer.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context passed through to the implementation.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        torch.Tensor</span>
-<span class="sd">            The output tensor stored in ``self.output_buffer``, with logical</span>
-<span class="sd">            shape determined by :attr:`dim` as described in :meth:`profile`.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If :meth:`profile` has not been called (no implementation or</span>
-<span class="sd">            output buffer).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">impl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">execute called before profile() (impl is None)&quot;</span>
-        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">output buffer is None; did profile() run?&quot;</span>
-
-        <span class="c1"># Expected signature: impl(x, output, dim, reduce_type, ctx)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">reduce_type</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span></div>
 </div>
 
 
 
-    
 <div class="viewcode-block" id="Max">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Max">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Max</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
@@ -728,7 +676,7 @@
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -749,8 +697,8 @@
     </aside>
   </div>
 </div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../../../_static/copybutton.js?v=f281be69"></script>

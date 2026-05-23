@@ -5,10 +5,10 @@
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="vortex_torch.indexer.elementwise_binary" href="vortex_torch.indexer.elementwise_binary.html"><link rel="prev" title="vortex_torch.indexer.context" href="vortex_torch.indexer.context.html">
 
-    <!-- Generated with Sphinx 8.2.3 and Furo 2025.09.25 -->
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>vortex_torch.indexer.elementwise - Vortex Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
-    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=580074bf" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
@@ -273,7 +273,7 @@
 <td><p>Affine elementwise transform.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Elementwise</span></code></a>([alpha, beta])</p></td>
-<td><p>Unary elementwise dispatcher for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></td>
+<td><p>Unary elementwise op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise.Relu" title="vortex_torch.indexer.elementwise.Relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Relu</span></code></a>([alpha, beta])</p></td>
 <td><p>ReLU-style elementwise operator.</p></td>
@@ -289,13 +289,12 @@
 </div>
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Elementwise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Elementwise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Elementwise</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Elementwise"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Unary elementwise dispatcher for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p>
-<p>This operator dispatches implementation <strong>only based on the input format</strong>
-(<code class="docutils literal notranslate"><span class="pre">x._format</span></code>). The output tensor has the same logical shape as the input.
-Optional scalar parameters <code class="docutils literal notranslate"><span class="pre">alpha</span></code> and <code class="docutils literal notranslate"><span class="pre">beta</span></code> may be used by certain
-elementwise operations.</p>
+<p>Unary elementwise op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p>
+<p>Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff the input is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> (its
+<code class="docutils literal notranslate"><span class="pre">S</span></code> axis is already collapsed to 1), otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format
+compatibility is enforced by the compiler’s per-workload kernel.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -305,24 +304,12 @@ elementwise operations.</p>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise._impl_map">
-<span class="sig-name descname"><span class="pre">_impl_map</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise._impl_map" title="Link to this definition">¶</a></dt>
-<dd><p>Implementation dispatch table keyed by input format.
-Each entry maps to <code class="docutils literal notranslate"><span class="pre">(callable_impl,</span> <span class="pre">resolved_output_format)</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Dict[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>, Tuple[Callable, <a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise.alpha">
 <span class="sig-name descname"><span class="pre">alpha</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise.alpha" title="Link to this definition">¶</a></dt>
 <dd><p>Scalar parameter used by some ops. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -333,18 +320,7 @@ Each entry maps to <code class="docutils literal notranslate"><span class="pre">
 <dd><p>Scalar parameter used by some ops. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)">float</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise.impl">
-<span class="sig-name descname"><span class="pre">impl</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise.impl" title="Link to this definition">¶</a></dt>
-<dd><p>The resolved implementation selected during <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.profile" title="vortex_torch.indexer.elementwise.Elementwise.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[Callable]</p>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -355,7 +331,7 @@ Each entry maps to <code class="docutils literal notranslate"><span class="pre">
 <dd><p>The operator type used by the implementation.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType" title="vortex_torch.utils.ElementwiseOpType">ElementwiseOpType</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ElementwiseOpType" title="vortex_torch.utils.ElementwiseOpType"><em>ElementwiseOpType</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -366,7 +342,7 @@ Each entry maps to <code class="docutils literal notranslate"><span class="pre">
 <dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.profile" title="vortex_torch.indexer.elementwise.Elementwise.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.FORMAT" title="vortex_torch.abs.FORMAT">FORMAT</a>]</p>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -377,7 +353,7 @@ Each entry maps to <code class="docutils literal notranslate"><span class="pre">
 <dd><p>Preallocated output tensor buffer.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Optional[torch.Tensor]</p>
+<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -385,52 +361,25 @@ Each entry maps to <code class="docutils literal notranslate"><span class="pre">
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Elementwise.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate input, select the implementation based on <code class="docutils literal notranslate"><span class="pre">x._format</span></code>,
-allocate the output buffer, and return a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
+<dd><p>Validate input, allocate the output buffer, and return a
+<code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view. The output is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff the input is
+<code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>, otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor"><em>vTensor</em></a>) – Input tensor. Must be rank-3 with shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor. Must be rank-3 with shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></li>
 <li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing runtime <code class="docutils literal notranslate"><span class="pre">S</span></code> (<code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>)
 and memory tracking.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the allocated output buffer, using the
-resolved output format.</p>
+<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the allocated output buffer.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.html#vortex_torch.abs.vTensor" title="vortex_torch.abs.vTensor">vTensor</a></p>
+<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 <dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If input tensor type, rank, or format is invalid.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Elementwise.execute">
-<span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Elementwise.execute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Elementwise.execute" title="Link to this definition">¶</a></dt>
-<dd><p>Execute the selected implementation into the internal output buffer.</p>
-<p>Expected implementation signature:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">impl</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">op_type</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input tensor on the same device as the output buffer.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The output tensor stored in <code class="docutils literal notranslate"><span class="pre">self.output_buffer</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>torch.Tensor</p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">profile</span></code> was not called, or device mismatch occurs.</p>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If input tensor type or rank is invalid.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -439,7 +388,7 @@ resolved output format.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Relu">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Relu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Relu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Relu" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Relu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Relu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Relu" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
 <p>ReLU-style elementwise operator.</p>
 <p>This operator applies a thresholded linear function:</p>
@@ -463,7 +412,7 @@ resolved output format.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Silu">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Silu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Silu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Silu" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Silu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Silu"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Silu" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
 <p>SiLU-style elementwise operator with affine pre-transform.</p>
 <p>This operator applies:</p>
@@ -489,7 +438,7 @@ Default is <code class="docutils literal notranslate"><span class="pre">0.0</spa
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Sigmoid">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Sigmoid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Sigmoid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Sigmoid" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Sigmoid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Sigmoid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Sigmoid" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
 <p>Sigmoid elementwise operator with affine argument.</p>
 <p>This operator applies:</p>
@@ -514,7 +463,7 @@ Default is <code class="docutils literal notranslate"><span class="pre">0.0</spa
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Add_Mul">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Add_Mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Add_Mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Add_Mul" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Add_Mul</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Add_Mul"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Add_Mul" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
 <p>Affine elementwise transform.</p>
 <p>This operator applies a simple affine mapping:</p>
@@ -536,7 +485,7 @@ the identity transform <span class="math notranslate nohighlight">\(\operatornam
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Abs">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Abs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Abs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Abs" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Abs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Abs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Abs" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
 <p>Absolute value of an affine transform.</p>
 <p>This operator applies:</p>
@@ -552,6 +501,54 @@ reduces to the standard absolute value <span class="math notranslate nohighlight
 <li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Additive bias term inside the absolute value, used in
 <span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p></li>
 <li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Multiplicative scale term inside the absolute value, used in
+<span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Log">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Log" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
+<p>Natural logarithm of an affine transform.</p>
+<p>This operator applies:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\operatorname{out}(x) = \log(\beta x + \alpha)\]</div>
+</div>
+<p>With the defaults <span class="math notranslate nohighlight">\(\alpha = 0\)</span> and <span class="math notranslate nohighlight">\(\beta = 1\)</span>, this
+reduces to the standard natural logarithm <span class="math notranslate nohighlight">\(\log(x)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Additive bias term inside the logarithm, used in
+<span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Multiplicative scale term inside the logarithm, used in
+<span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise.Exp">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise.</span></span><span class="sig-name descname"><span class="pre">Exp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise.html#Exp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise.Exp" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise" title="vortex_torch.indexer.elementwise.Elementwise"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise</span></code></a></p>
+<p>Exponential of an affine transform.</p>
+<p>This operator applies:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\operatorname{out}(x) = \exp(\beta x + \alpha)\]</div>
+</div>
+<p>With the defaults <span class="math notranslate nohighlight">\(\alpha = 0\)</span> and <span class="math notranslate nohighlight">\(\beta = 1\)</span>, this
+reduces to the standard exponential <span class="math notranslate nohighlight">\(\exp(x)\)</span>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Additive bias term inside the exponential, used in
+<span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Multiplicative scale term inside the exponential, used in
 <span class="math notranslate nohighlight">\(\beta x + \alpha\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
 </ul>
 </dd>
@@ -589,7 +586,7 @@ reduces to the standard absolute value <span class="math notranslate nohighlight
         <div class="bottom-of-page">
           <div class="left-details">
             <div class="copyright">
-                Copyright &#169; 2025, Zhuoming Chen
+                Copyright &#169; 2026, Zhuoming Chen
             </div>
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
@@ -617,15 +614,12 @@ reduces to the standard absolute value <span class="math notranslate nohighlight
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.elementwise</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise"><code class="docutils literal notranslate"><span class="pre">Elementwise</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise._impl_map"><code class="docutils literal notranslate"><span class="pre">Elementwise._impl_map</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.alpha"><code class="docutils literal notranslate"><span class="pre">Elementwise.alpha</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.beta"><code class="docutils literal notranslate"><span class="pre">Elementwise.beta</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.impl"><code class="docutils literal notranslate"><span class="pre">Elementwise.impl</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.op_type"><code class="docutils literal notranslate"><span class="pre">Elementwise.op_type</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.output_format"><code class="docutils literal notranslate"><span class="pre">Elementwise.output_format</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.output_buffer"><code class="docutils literal notranslate"><span class="pre">Elementwise.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.profile"><code class="docutils literal notranslate"><span class="pre">Elementwise.profile()</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Elementwise.execute"><code class="docutils literal notranslate"><span class="pre">Elementwise.execute()</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Relu"><code class="docutils literal notranslate"><span class="pre">Relu</span></code></a></li>
@@ -633,6 +627,8 @@ reduces to the standard absolute value <span class="math notranslate nohighlight
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Sigmoid"><code class="docutils literal notranslate"><span class="pre">Sigmoid</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Add_Mul"><code class="docutils literal notranslate"><span class="pre">Add_Mul</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Abs"><code class="docutils literal notranslate"><span class="pre">Abs</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Log"><code class="docutils literal notranslate"><span class="pre">Log</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.elementwise.Exp"><code class="docutils literal notranslate"><span class="pre">Exp</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -645,11 +641,11 @@ reduces to the standard absolute value <span class="math notranslate nohighlight
     </aside>
   </div>
 </div><script src="../_static/documentation_options.js?v=8d563738"></script>
-    <script src="../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
-    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>
