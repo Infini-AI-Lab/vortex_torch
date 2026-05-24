@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -275,13 +275,17 @@
 
 <span class="sd">    :Math:</span>
 <span class="sd">        For input :math:`X\in\mathbb{R}^{N\times D_0\times D_1}` and a</span>
-<span class="sd">        reduction :math:`\rho` (mean / max / min / L2-norm / sum, fixed by the</span>
-<span class="sd">        subclass): ``dim=1`` →</span>
-<span class="sd">        :math:`\text{out}[n,0,d_1]=\rho_{d_0}\,X[n,d_0,d_1]` (shape</span>
-<span class="sd">        ``[N, 1, D_1]``); ``dim=2`` →</span>
-<span class="sd">        :math:`\text{out}[n,d_0,0]=\rho_{d_1}\,X[n,d_0,d_1]` (shape</span>
-<span class="sd">        ``[N, D_0, 1]``); ``dim=0`` collapses the packed leading axis to one</span>
-<span class="sd">        row per ``(batch, kv_head)``.</span>
+<span class="sd">        per-axis reduction :math:`\rho` (mean / max / min / L2-norm / sum,</span>
+<span class="sd">        fixed by the subclass):</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}\ \ (\text{dim}=2).</span>
+
+<span class="sd">        ``dim=0`` collapses the packed leading axis to one row per</span>
+<span class="sd">        ``(batch, kv\_head)``.</span>
 <span class="sd">    :__init__:</span>
 <span class="sd">        ``Reduce(dim=1)`` — logical axis to reduce, one of ``0`` / ``1`` / ``2``.</span>
 <span class="sd">    :__call__:</span>
@@ -372,8 +376,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Max reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\max_{d_0}X[n,d_0,d_1]`;</span>
-<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\max_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).</span>
 <span class="sd">    :__init__: ``Max(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -391,8 +399,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Min reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\min_{d_0}X[n,d_0,d_1]`;</span>
-<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\min_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).</span>
 <span class="sd">    :__init__: ``Min(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -410,8 +422,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Mean reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\frac{1}{D_0}\sum_{d_0}X[n,d_0,d_1]`;</span>
-<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\frac{1}{D_1}\sum_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).</span>
 <span class="sd">    :__init__: ``Mean(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -429,8 +445,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    L2-norm reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\sqrt{\sum_{d_0}X[n,d_0,d_1]^2}`;</span>
-<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\sqrt{\sum_{d_1}X[n,d_0,d_1]^2}`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}\ \ (\text{dim}=2).</span>
 <span class="sd">    :__init__: ``L2Norm(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -448,8 +468,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Sum reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\sum_{d_0}X[n,d_0,d_1]`;</span>
-<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\sum_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
+
+<span class="sd">            Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),</span>
+<span class="sd">            \qquad</span>
+<span class="sd">            Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).</span>
 <span class="sd">    :__init__: ``Sum(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>

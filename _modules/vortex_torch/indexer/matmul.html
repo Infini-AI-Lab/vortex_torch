@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -274,11 +274,16 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Per-request batched matrix–vector product, :math:`O = Y X^{\top}`.</span>
 
-<span class="sd">    :Math: with a batched query :math:`X\in\mathbb{R}^{B\times 1\times D}` and</span>
-<span class="sd">        packed pages :math:`Y\in\mathbb{R}^{S\times 1\times D}`, each page</span>
-<span class="sd">        :math:`s` of request :math:`i` scores as</span>
-<span class="sd">        :math:`O[s]=\langle Y[s],\,X[i]\rangle`, giving</span>
-<span class="sd">        :math:`O\in\mathbb{R}^{S\times 1\times 1}`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        Batched query :math:`X\in\mathbb{R}^{B\times 1\times D}`, packed pages</span>
+<span class="sd">        :math:`Y\in\mathbb{R}^{S\times 1\times D}`; for page :math:`s` in</span>
+<span class="sd">        request :math:`i(s)`,</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            O_{s,0,0} = \sum_{d=0}^{D-1} Y_{s,0,d}\,X_{i(s),0,d}</span>
+<span class="sd">                      = \langle Y_s,\, X_{i(s)} \rangle,</span>
+<span class="sd">            \qquad O\in\mathbb{R}^{S\times 1\times 1}.</span>
 <span class="sd">    :__init__: ``GeMV()`` — no arguments.</span>
 <span class="sd">    :__call__: ``o = op(x, y, ctx=ctx)`` — ``x`` is ``[B, 1, D]``, ``y`` is</span>
 <span class="sd">        ``[S, 1, D]`` (matching ``D``); returns ``o`` ``[S, 1, 1]``. Output is</span>
@@ -348,11 +353,15 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Per-page matrix–matrix product, :math:`O[s] = Y[s]\,X[s]^{\top}`.</span>
 
-<span class="sd">    :Math: with :math:`Y\in\mathbb{R}^{S\times N_y\times K}` and</span>
-<span class="sd">        :math:`X\in\mathbb{R}^{(B\,\text{or}\,S)\times N_x\times K}`, per page</span>
-<span class="sd">        :math:`s`:</span>
-<span class="sd">        :math:`O[s]=Y[s]\,X[s]^{\top}\in\mathbb{R}^{N_y\times N_x}` — i.e.</span>
-<span class="sd">        ``GeMM(x, y) = y xᵀ``. Output :math:`O\in\mathbb{R}^{S\times N_y\times N_x}`.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        :math:`Y\in\mathbb{R}^{S\times N_y\times K}`,</span>
+<span class="sd">        :math:`X\in\mathbb{R}^{(B\text{ or }S)\times N_x\times K}`; per page</span>
+<span class="sd">        :math:`s` this is :math:`O_s = Y_s X_s^{\top}` (i.e. ``GeMM(x, y) = y xᵀ``):</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            O_{s,a,b} = \sum_{k=0}^{K-1} Y_{s,a,k}\,X_{s,b,k},</span>
+<span class="sd">            \qquad O\in\mathbb{R}^{S\times N_y\times N_x}.</span>
 <span class="sd">    :__init__: ``GeMM()`` — no arguments.</span>
 <span class="sd">    :__call__: ``o = op(x, y, ctx=ctx)`` — ``x`` is ``[B|S, N_x, K]``, ``y`` is</span>
 <span class="sd">        ``[S, N_y, K]`` (matching ``K``); returns ``o`` ``[S, N_y, N_x]``.</span>

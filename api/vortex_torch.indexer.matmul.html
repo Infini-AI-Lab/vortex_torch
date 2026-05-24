@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -287,13 +287,17 @@
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMV</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMV"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMV" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Per-request batched matrix–vector product, <span class="math notranslate nohighlight">\(O = Y X^{\top}\)</span>.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p>with a batched query <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{B\times 1\times D}\)</span> and
-packed pages <span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{S\times 1\times D}\)</span>, each page
-<span class="math notranslate nohighlight">\(s\)</span> of request <span class="math notranslate nohighlight">\(i\)</span> scores as
-<span class="math notranslate nohighlight">\(O[s]=\langle Y[s],\,X[i]\rangle\)</span>, giving
-<span class="math notranslate nohighlight">\(O\in\mathbb{R}^{S\times 1\times 1}\)</span>.</p>
+<dd class="field-odd"><p>Batched query <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{B\times 1\times D}\)</span>, packed pages
+<span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{S\times 1\times D}\)</span>; for page <span class="math notranslate nohighlight">\(s\)</span> in
+request <span class="math notranslate nohighlight">\(i(s)\)</span>,</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[O_{s,0,0} = \sum_{d=0}^{D-1} Y_{s,0,d}\,X_{i(s),0,d}
+          = \langle Y_s,\, X_{i(s)} \rangle,
+\qquad O\in\mathbb{R}^{S\times 1\times 1}.\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">GeMV()</span></code> — no arguments.</p>
@@ -331,13 +335,16 @@ output (see the class docstring).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMM</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/matmul.html#GeMM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.matmul.GeMM" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Per-page matrix–matrix product, <span class="math notranslate nohighlight">\(O[s] = Y[s]\,X[s]^{\top}\)</span>.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p>with <span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{S\times N_y\times K}\)</span> and
-<span class="math notranslate nohighlight">\(X\in\mathbb{R}^{(B\,\text{or}\,S)\times N_x\times K}\)</span>, per page
-<span class="math notranslate nohighlight">\(s\)</span>:
-<span class="math notranslate nohighlight">\(O[s]=Y[s]\,X[s]^{\top}\in\mathbb{R}^{N_y\times N_x}\)</span> — i.e.
-<code class="docutils literal notranslate"><span class="pre">GeMM(x,</span> <span class="pre">y)</span> <span class="pre">=</span> <span class="pre">y</span> <span class="pre">xᵀ</span></code>. Output <span class="math notranslate nohighlight">\(O\in\mathbb{R}^{S\times N_y\times N_x}\)</span>.</p>
+<dd class="field-odd"><p><span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{S\times N_y\times K}\)</span>,
+<span class="math notranslate nohighlight">\(X\in\mathbb{R}^{(B\text{ or }S)\times N_x\times K}\)</span>; per page
+<span class="math notranslate nohighlight">\(s\)</span> this is <span class="math notranslate nohighlight">\(O_s = Y_s X_s^{\top}\)</span> (i.e. <code class="docutils literal notranslate"><span class="pre">GeMM(x,</span> <span class="pre">y)</span> <span class="pre">=</span> <span class="pre">y</span> <span class="pre">xᵀ</span></code>):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[O_{s,a,b} = \sum_{k=0}^{K-1} Y_{s,a,k}\,X_{s,b,k},
+\qquad O\in\mathbb{R}^{S\times N_y\times N_x}.\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">GeMM()</span></code> — no arguments.</p>

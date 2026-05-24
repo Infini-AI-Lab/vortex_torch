@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -276,10 +276,17 @@
 <span class="sd">    The terminal op of a ``forward_indexer``: it turns per-page scores into the</span>
 <span class="sd">    sparse set of pages each request attends to.</span>
 
-<span class="sd">    :Math: for each request&#39;s packed score segment</span>
-<span class="sd">        :math:`X\in\mathbb{R}^{S\times 1\times 1}`, the selected page set is the</span>
-<span class="sd">        first ``block_reserved_bos`` pages, the last ``block_reserved_eos``</span>
-<span class="sd">        pages, and the ``topk_val`` highest-scoring of the remaining pages.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For a request&#39;s per-page scores :math:`X_p` (:math:`p=0,\dots,S-1`),</span>
+<span class="sd">        with reserved prefix :math:`\mathcal{B}=\{0,\dots,n_{\mathrm{bos}}-1\}`</span>
+<span class="sd">        and suffix :math:`\mathcal{E}=\{S-n_{\mathrm{eos}},\dots,S-1\}`, the</span>
+<span class="sd">        selected page set is</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            \mathcal{S} = \mathcal{B}\,\cup\,\mathcal{E}\,\cup\,</span>
+<span class="sd">            \operatorname*{top\text{-}k}_{\,p\,\notin\,\mathcal{B}\cup\mathcal{E}} X_p,</span>
+<span class="sd">            \qquad k = \texttt{topk\_val}.</span>
 <span class="sd">    :__init__: ``topK()`` — no arguments; the budget ``topk_val`` and the</span>
 <span class="sd">        reserved BOS/EOS counts are read from :class:`Context` at runtime.</span>
 <span class="sd">    :__call__: ``op(score, o, ctx=ctx)`` — ``score`` is ``[S, 1, 1]`` (one</span>
@@ -355,11 +362,17 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Approximate :class:`topK` — faster adaptive 8-bit radix selection.</span>
 
-<span class="sd">    :Math: same selection as :class:`topK` (reserved BOS/EOS pages +</span>
-<span class="sd">        ``topk_val`` by score), but the top-``topk_val`` set is found with an</span>
-<span class="sd">        adaptive 8-bit radix kernel that stops early once the slots still owed</span>
-<span class="sd">        by the threshold bin fall within ``tolerate_ratio`` of the target,</span>
-<span class="sd">        filling any remainder in arrival order.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        The selected set :math:`\mathcal{S}` matches :class:`topK`, but the</span>
+<span class="sd">        top-:math:`k` search over the non-reserved pages stops at the first</span>
+<span class="sd">        radix round whose count :math:`r` still owed by the threshold bin</span>
+<span class="sd">        satisfies</span>
+
+<span class="sd">        .. math::</span>
+
+<span class="sd">            r \;\le\; \texttt{tolerate\_ratio}\cdot k,</span>
+
+<span class="sd">        with any remaining slots filled in arrival order.</span>
 <span class="sd">    :__init__: ``approxTopK(tolerate_ratio=0.0)`` — approximation budget in</span>
 <span class="sd">        ``[0, 1]``: ``0.0`` = exact (all radix rounds run), higher = cheaper</span>
 <span class="sd">        but looser (typical throughput sweet spot ``0.05–0.15``).</span>

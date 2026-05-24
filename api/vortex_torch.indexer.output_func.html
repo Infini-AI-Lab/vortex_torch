@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -286,12 +286,18 @@
 <p>Per-request top-k page selector with reserved BOS/EOS pages.</p>
 <p>The terminal op of a <code class="docutils literal notranslate"><span class="pre">forward_indexer</span></code>: it turns per-page scores into the
 sparse set of pages each request attends to.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p>for each request’s packed score segment
-<span class="math notranslate nohighlight">\(X\in\mathbb{R}^{S\times 1\times 1}\)</span>, the selected page set is the
-first <code class="docutils literal notranslate"><span class="pre">block_reserved_bos</span></code> pages, the last <code class="docutils literal notranslate"><span class="pre">block_reserved_eos</span></code>
-pages, and the <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> highest-scoring of the remaining pages.</p>
+<dd class="field-odd"><p>For a request’s per-page scores <span class="math notranslate nohighlight">\(X_p\)</span> (<span class="math notranslate nohighlight">\(p=0,\dots,S-1\)</span>),
+with reserved prefix <span class="math notranslate nohighlight">\(\mathcal{B}=\{0,\dots,n_{\mathrm{bos}}-1\}\)</span>
+and suffix <span class="math notranslate nohighlight">\(\mathcal{E}=\{S-n_{\mathrm{eos}},\dots,S-1\}\)</span>, the
+selected page set is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\mathcal{S} = \mathcal{B}\,\cup\,\mathcal{E}\,\cup\,
+\operatorname*{top\text{-}k}_{\,p\,\notin\,\mathcal{B}\cup\mathcal{E}} X_p,
+\qquad k = \texttt{topk\_val}.\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">topK()</span></code> — no arguments; the budget <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> and the
@@ -334,13 +340,17 @@ and returns nothing — <code class="docutils literal notranslate"><span class="
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.output_func.</span></span><span class="sig-name descname"><span class="pre">approxTopK</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tolerate_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/output_func.html#approxTopK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.output_func.approxTopK" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a></p>
 <p>Approximate <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> — faster adaptive 8-bit radix selection.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p>same selection as <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> (reserved BOS/EOS pages +
-<code class="docutils literal notranslate"><span class="pre">topk_val</span></code> by score), but the top-<code class="docutils literal notranslate"><span class="pre">topk_val</span></code> set is found with an
-adaptive 8-bit radix kernel that stops early once the slots still owed
-by the threshold bin fall within <code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span></code> of the target,
-filling any remainder in arrival order.</p>
+<dd class="field-odd"><p>The selected set <span class="math notranslate nohighlight">\(\mathcal{S}\)</span> matches <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a>, but the
+top-<span class="math notranslate nohighlight">\(k\)</span> search over the non-reserved pages stops at the first
+radix round whose count <span class="math notranslate nohighlight">\(r\)</span> still owed by the threshold bin
+satisfies</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[r \;\le\; \texttt{tolerate\_ratio}\cdot k,\]</div>
+</div>
+<p>with any remaining slots filled in arrival order.</p>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">approxTopK(tolerate_ratio=0.0)</span></code> — approximation budget in

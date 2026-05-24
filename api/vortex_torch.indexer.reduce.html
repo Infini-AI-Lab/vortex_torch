@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=08b433e3" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -299,16 +299,19 @@
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Reduce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Reduce" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Generic 1-D reduction over one axis of a rank-3 logical tensor.</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><p>For input <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{N\times D_0\times D_1}\)</span> and a
-reduction <span class="math notranslate nohighlight">\(\rho\)</span> (mean / max / min / L2-norm / sum, fixed by the
-subclass): <code class="docutils literal notranslate"><span class="pre">dim=1</span></code> →
-<span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\rho_{d_0}\,X[n,d_0,d_1]\)</span> (shape
-<code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">1,</span> <span class="pre">D_1]</span></code>); <code class="docutils literal notranslate"><span class="pre">dim=2</span></code> →
-<span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\rho_{d_1}\,X[n,d_0,d_1]\)</span> (shape
-<code class="docutils literal notranslate"><span class="pre">[N,</span> <span class="pre">D_0,</span> <span class="pre">1]</span></code>); <code class="docutils literal notranslate"><span class="pre">dim=0</span></code> collapses the packed leading axis to one
-row per <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">kv_head)</span></code>.</p>
+per-axis reduction <span class="math notranslate nohighlight">\(\rho\)</span> (mean / max / min / L2-norm / sum,
+fixed by the subclass):</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">dim=0</span></code> collapses the packed leading axis to one row per
+<code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">kv\_head)</span></code>.</p>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Reduce(dim=1)</span></code> — logical axis to reduce, one of <code class="docutils literal notranslate"><span class="pre">0</span></code> / <code class="docutils literal notranslate"><span class="pre">1</span></code> / <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p>
@@ -352,10 +355,14 @@ output (see the class docstring for shapes).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Max" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Max reduction over one logical axis (a <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">dim=1</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\max_{d_0}X[n,d_0,d_1]\)</span>;
-<code class="docutils literal notranslate"><span class="pre">dim=2</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\max_{d_1}X[n,d_0,d_1]\)</span>.</p>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Max(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>,
@@ -376,10 +383,14 @@ output (see the class docstring for shapes).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Min" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Min reduction over one logical axis (a <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">dim=1</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\min_{d_0}X[n,d_0,d_1]\)</span>;
-<code class="docutils literal notranslate"><span class="pre">dim=2</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\min_{d_1}X[n,d_0,d_1]\)</span>.</p>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Min(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>,
@@ -400,10 +411,14 @@ output (see the class docstring for shapes).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Mean" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Mean reduction over one logical axis (a <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">dim=1</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\frac{1}{D_0}\sum_{d_0}X[n,d_0,d_1]\)</span>;
-<code class="docutils literal notranslate"><span class="pre">dim=2</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\frac{1}{D_1}\sum_{d_1}X[n,d_0,d_1]\)</span>.</p>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Mean(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>,
@@ -424,10 +439,14 @@ output (see the class docstring for shapes).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">L2Norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#L2Norm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.L2Norm" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>L2-norm reduction over one logical axis (a <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">dim=1</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\sqrt{\sum_{d_0}X[n,d_0,d_1]^2}\)</span>;
-<code class="docutils literal notranslate"><span class="pre">dim=2</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\sqrt{\sum_{d_1}X[n,d_0,d_1]^2}\)</span>.</p>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}\ \ (\text{dim}=2).\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">L2Norm(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>,
@@ -448,10 +467,14 @@ output (see the class docstring for shapes).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.reduce.</span></span><span class="sig-name descname"><span class="pre">Sum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/reduce.html#Sum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.reduce.Sum" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
 <p>Sum reduction over one logical axis (a <a class="reference internal" href="#vortex_torch.indexer.reduce.Reduce" title="vortex_torch.indexer.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
-<dl class="field-list simple">
+<dl class="field-list">
 <dt class="field-odd">Math<span class="colon">:</span></dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">dim=1</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,0,d_1]=\sum_{d_0}X[n,d_0,d_1]\)</span>;
-<code class="docutils literal notranslate"><span class="pre">dim=2</span></code>: <span class="math notranslate nohighlight">\(\text{out}[n,d_0,0]=\sum_{d_1}X[n,d_0,d_1]\)</span>.</p>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),
+\qquad
+Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+</div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Sum(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>,
