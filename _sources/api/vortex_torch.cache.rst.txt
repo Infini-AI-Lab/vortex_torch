@@ -14,5 +14,8 @@ vortex\_torch.cache
    elementwise
    elementwise_binary
    fill
+   mask
    matmul
    reduce
+   reduce_interleave
+   reshape

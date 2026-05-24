@@ -13,10 +13,14 @@ vortex\_torch.indexer
    context
    elementwise
    elementwise_binary
+   kron
+   mask
    matmul
    output_func
    reduce
+   reshape
    save_load
    scan
+   select
    transpose
    utils_sglang

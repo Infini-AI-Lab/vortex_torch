@@ -3,7 +3,6 @@ vortex\_torch.indexer.utils\_sglang
 
 .. automodule:: vortex_torch.indexer.utils_sglang
    :members:
-   :undoc-members:
    :show-inheritance:
    
    .. rubric:: Functions
