@@ -38,16 +38,26 @@ Define a custom flow — centroid-based block-sparse routing in a dozen lines:
 
 .. code-block:: python
 
+   from typing import Dict
+   import torch
+
+   from vortex_torch.flow import vFlow, register
+   from vortex_torch.indexer import GeMM, Mean, topK
+   from vortex_torch.cache import Mean as CMean
+   from vortex_torch.abs import ContextBase
+
+
    @register("custom_sparse_attention")
    class CustomSparseAttention(vFlow):
 
        def __init__(self):
            super().__init__()
            # Indexer-side ops (run every decode step)
-           self.gemv = GeMV()
-           self.output_func = topK()
+           self.mean = Mean(dim=1)        # average over the query heads
+           self.gemm = GeMM()             # GeMM(x, y) = y @ xᵀ
+           self.output_func = topK()      # must end in topK / approxTopK
            # Cache-side ops (run once per finished page)
-           self.reduction = CMean(dim=1)
+           self.reduction = CMean(dim=1)  # one centroid (mean key) per page
 
        def forward_indexer(
            self,
@@ -56,9 +66,10 @@ Define a custom flow — centroid-based block-sparse routing in a dozen lines:
            cache: Dict[str, torch.Tensor],   # viewed as [S, r, c] per create_cache()
            ctx: ContextBase,
        ):
-           q_mean = self.mean(q, ctx=ctx)
-           score = self.gemv(q_mean, cache["centroids"], ctx=ctx)
-           self.output_func(score, o, ctx=ctx)   # must end in topK / approxTopK
+           # No native torch ops here — every tensor flows through vortex ops.
+           q_mean = self.mean(q, ctx=ctx)                          # [B, 1, D]
+           score = self.gemm(q_mean, cache["centroids"], ctx=ctx)  # [S, 1, 1]
+           self.output_func(score, o, ctx=ctx)                     # selected pages -> o
 
        def forward_cache(
            self,
@@ -69,7 +80,7 @@ Define a custom flow — centroid-based block-sparse routing in a dozen lines:
            # triggered only when a page is finished
            self.reduction(cache["k"], cache["centroids"], loc=loc, ctx=ctx)
 
-       def create_cache(self, page_size: int, head_dim: int):
+       def create_cache(self, block_size: int, head_dim: int):
            # "k" and "v" are provided automatically — do not declare them
            return {"centroids": (1, head_dim)}
 
@@ -80,7 +91,8 @@ Then run it through an SGLang engine:
    llm = sgl.Engine(
        model_path="Qwen/Qwen3-0.6B",
        page_size=16,
-       attention_backend="flashinfer",      # SGLang's base backend
+       attention_backend="flashinfer",      # mandatory: SGLang's base backend
+       disable_overlap_schedule=True,        # mandatory for vortex sparsity
        enable_vortex_sparsity=True,          # otherwise computes full attention
        vortex_topk_val=30,                   # pages kept per request
        vortex_block_reserved_bos=1,          # always-attended prefix blocks
