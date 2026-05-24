@@ -300,14 +300,14 @@
 </div>
 <dl class="py exception">
 <dt class="sig sig-object py" id="vortex_torch.flow.registry.RegistryError">
-<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.registry.</span></span><span class="sig-name descname"><span class="pre">RegistryError</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#RegistryError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.RegistryError" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">RegistryError</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#RegistryError"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.RegistryError" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#Exception" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Exception</span></code></a></p>
 <p>Errors related to class registration and lookup.</p>
 </dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="vortex_torch.flow.registry.register">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.registry.</span></span><span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.register" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">register</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#register"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.register" title="Link to this definition">¶</a></dt>
 <dd><p>Decorator used by users to register their vFlow subclasses.
 .. rubric:: Example</p>
 <p>&#64;register(“cls_a”)
@@ -321,7 +321,7 @@ class MyFlow(vFlow): …</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="vortex_torch.flow.registry.get">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.registry.</span></span><span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.get" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.get" title="Link to this definition">¶</a></dt>
 <dd><p>Return the registered class for a given name, or raise if not found.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -335,7 +335,7 @@ class MyFlow(vFlow): …</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="vortex_torch.flow.registry.has">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.registry.</span></span><span class="sig-name descname"><span class="pre">has</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#has"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.has" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">has</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#has"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.has" title="Link to this definition">¶</a></dt>
 <dd><p>Check whether a name is registered.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -349,7 +349,7 @@ class MyFlow(vFlow): …</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="vortex_torch.flow.registry.list_keys">
-<span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.registry.</span></span><span class="sig-name descname"><span class="pre">list_keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#list_keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.list_keys" title="Link to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">list_keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/flow/registry.html#list_keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.registry.list_keys" title="Link to this definition">¶</a></dt>
 <dd><p>List all registered names.</p>
 </dd></dl>
 
