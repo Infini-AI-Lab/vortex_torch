@@ -272,51 +272,24 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reshape.html#vortex_torch.indexer.reshape.Reshape">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Reshape</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Same-numel reshape of the inner two axes of a rank-3 indexer tensor.</span>
+<span class="sd">    Same-numel reshape of the inner two axes (indexer side).</span>
 
-<span class="sd">    Given an input</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">            X\in\mathbb{R}^{S\times x_1\times y_1} \;\longrightarrow\;</span>
+<span class="sd">            Y\in\mathbb{R}^{S\times x_2\times y_2},\qquad x_2\,y_2 = x_1\,y_1,</span>
 
-<span class="sd">        X \in \mathbb{R}^{S \times x_1 \times y_1},</span>
-
-<span class="sd">    this op produces</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y \in \mathbb{R}^{S \times x_2 \times y_2},</span>
-<span class="sd">        \qquad \text{with} \qquad x_2 \cdot y_2 \;=\; x_1 \cdot y_1,</span>
-
-<span class="sd">    by interpreting the flat ``x_1 * y_1`` elements row-major into the</span>
-<span class="sd">    new ``(x_2, y_2)`` layout, independently for each of the ``S``</span>
-<span class="sd">    slices. The leading axis is preserved and must be passed as</span>
-<span class="sd">    ``-1`` to the constructor as a placeholder, mirroring</span>
-<span class="sd">    ``torch.reshape``&#39;s &quot;infer this dim&quot; convention.</span>
-
-<span class="sd">    No data movement happens beyond the existing per-workload load /</span>
-<span class="sd">    store — the loaded ``(W, x_1, y_1)`` block is reshaped at the</span>
-<span class="sd">    Triton-tile level via :func:`tl.reshape` to ``(W, x_2, y_2)``.</span>
-<span class="sd">    The constraint ``x_1 * y_1 == x_2 * y_2`` is enforced at</span>
-<span class="sd">    :meth:`profile` time (and again by ``tl.reshape`` at compile</span>
-<span class="sd">    time as a numel check).</span>
-
-<span class="sd">    Output format rule: ``BATCHED`` iff the input is ``BATCHED``,</span>
-<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    Constructor</span>
-<span class="sd">    -----------</span>
-<span class="sd">    ``Reshape(-1, x2, y2)`` — three integers; the leading must be</span>
-<span class="sd">    ``-1`` (the leading ``S`` axis is preserved automatically).</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    x2, y2 : int</span>
-<span class="sd">        Target inner-axis sizes.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        Resolved output format from :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[vTensor]</span>
-<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
+<span class="sd">        reading the flat :math:`x_1 y_1` elements row-major into the new</span>
+<span class="sd">        :math:`(x_2, y_2)` layout, independently per leading index :math:`s`</span>
+<span class="sd">        (a Triton-tile :func:`tl.reshape`; no data movement beyond the</span>
+<span class="sd">        existing load/store).</span>
+<span class="sd">    :__init__: ``Reshape(-1, x2, y2)`` — the leading dim must be ``-1`` (the</span>
+<span class="sd">        ``S`` axis is preserved); ``x2*y2`` must equal the input&#39;s ``x1*y1``</span>
+<span class="sd">        (checked at trace time).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, x_1, y_1]`` →</span>
+<span class="sd">        ``[S, x_2, y_2]``. ``BATCHED`` iff the input is ``BATCHED``, else</span>
+<span class="sd">        ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x2</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">y2</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
@@ -344,16 +317,9 @@
 <div class="viewcode-block" id="Reshape.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reshape.html#vortex_torch.indexer.reshape.Reshape.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate, resolve format, and register this reshape in the</span>
-<span class="sd">        indexer graph.</span>
-
-<span class="sd">        Checks ``x.dim() == 3`` and the same-numel constraint</span>
-<span class="sd">        ``x.shape[1] * x.shape[2] == self.x2 * self.y2``. The leading</span>
-<span class="sd">        axis is preserved (the metadata vTensor is allocated with a</span>
-<span class="sd">        placeholder leading dim — the runtime knows the actual one</span>
-<span class="sd">        from the pipeline).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, x1, y1]`` and the same-numel</span>
+<span class="sd">        constraint (``x1*y1 == x2*y2``), resolve the output format, register</span>
+<span class="sd">        the op, and return a ``vTensor`` view of the ``[S, x2, y2]`` output.&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="p">(</span>

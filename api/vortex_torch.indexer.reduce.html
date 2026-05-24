@@ -306,9 +306,10 @@ per-axis reduction <span class="math notranslate nohighlight">\(\rho\)</span> (m
 fixed by the subclass):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}.
+\end{aligned}\end{split}\]</div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">dim=0</span></code> collapses the packed leading axis to one row per
 <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">kv\_head)</span></code>.</p>
@@ -359,9 +360,10 @@ output (see the class docstring for shapes).</p>
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}.
+\end{aligned}\end{split}\]</div>
 </div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
@@ -387,9 +389,10 @@ Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}.
+\end{aligned}\end{split}\]</div>
 </div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
@@ -415,9 +418,10 @@ Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}.
+\end{aligned}\end{split}\]</div>
 </div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
@@ -443,9 +447,10 @@ Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}.
+\end{aligned}\end{split}\]</div>
 </div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>
@@ -471,9 +476,10 @@ Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}\ \ (\text{dim}=2).\]<
 <dt class="field-odd">Math<span class="colon">:</span></dt>
 <dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),
-\qquad
-Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}.
+\end{aligned}\end{split}\]</div>
 </div>
 </dd>
 <dt class="field-even">__init__<span class="colon">:</span></dt>

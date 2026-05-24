@@ -284,61 +284,33 @@
 <div class="viewcode-block" id="TopK">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.select.html#vortex_torch.indexer.select.TopK">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">TopK</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Block-table top-k for the trtllm backend (k explicit, multi-output).</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Explicit-``k`` block-table top-k (trtllm backend, two outputs).</span>
 
-<span class="sd">    Distinct from :class:`vortex_torch.indexer.topK` (lowercase ``t``,</span>
-<span class="sd">    a.k.a. *TopKOut*): :class:`topK` writes selected block ids into a</span>
-<span class="sd">    caller-supplied ``o`` and has a *predetermined* k (sourced from</span>
-<span class="sd">    ``ctx.topk_val`` / ``ctx.sparse_kv_indptr`` diff at runtime). This</span>
-<span class="sd">    :class:`TopK` is **trtllm-only**, takes the top-k budget ``k`` as an</span>
-<span class="sd">    *explicit* constructor argument, and **returns its own</span>
-<span class="sd">    ``(block_tables, seqlens)`` tuple** — both auto-allocated as</span>
-<span class="sd">    intermediate buffers by the compiler&#39;s ``memory_initiazation_str``.</span>
-<span class="sd">    A separate op (developed elsewhere) is responsible for copying these</span>
-<span class="sd">    intermediates into the final output buffers consumed by</span>
-<span class="sd">    ``trtllm_batch_decode_with_kv_cache``.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For request row :math:`i` with score :math:`s` over its dense blocks,</span>
+<span class="sd">        ``bos`` / ``eos`` reserved blocks and</span>
+<span class="sd">        :math:`L_i = \lceil \text{seqlen}_i / \text{block\_size}\rceil`:</span>
 
-<span class="sd">    Per-row behavior, with ``bos = ctx.block_reserved_bos``,</span>
-<span class="sd">    ``eos = ctx.block_reserved_eos``, ``block_len = ceil(dense_seqlens[i] / block_size)``:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">      * If ``block_len &lt;= bos + k + eos`` → copy the entire dense row</span>
-<span class="sd">        into ``block_tables[i, :block_len]`` and set ``seqlens[i] =</span>
-<span class="sd">        dense_seqlens[i]``. No selection — the row is already small</span>
-<span class="sd">        enough to fit the budget.</span>
-<span class="sd">      * Otherwise → write a sparse row of ``bos + k + eos`` blocks:</span>
+<span class="sd">            \mathcal{B}_i = \begin{cases}</span>
+<span class="sd">                \{0,\dots,L_i-1\}, &amp; L_i \le \text{bos}+k+\text{eos}, \\[2pt]</span>
+<span class="sd">                [0,\text{bos}) \;\cup\; \operatorname*{top\text{-}k}_{\,\text{bos}\le j&lt;L_i-\text{eos}} s_j</span>
+<span class="sd">                \;\cup\; [L_i-\text{eos}, L_i), &amp; \text{otherwise}.</span>
+<span class="sd">            \end{cases}</span>
 
-<span class="sd">        - ``[0:bos)`` ← first ``bos`` dense blocks</span>
-<span class="sd">        - ``[bos:bos+k)`` ← top-``k`` blocks by score over</span>
-<span class="sd">          ``[bos, block_len-eos)`` of the dense row</span>
-<span class="sd">        - ``[bos+k:bos+k+eos)`` ← last ``eos`` dense blocks</span>
-
-<span class="sd">        and set ``seqlens[i] = (bos+k+eos-1) * block_size + last_block_len``,</span>
-<span class="sd">        where ``last_block_len`` is the per-row trailing block&#39;s token count</span>
-<span class="sd">        (so the last block contributes the exact token count trtllm decode</span>
-<span class="sd">        expects).</span>
-
-<span class="sd">    Constructor</span>
-<span class="sd">    -----------</span>
-<span class="sd">    ``k`` : int — number of *selected* blocks (excludes the reserved</span>
-<span class="sd">    BOS+EOS slots). The total per-row sparse block count is</span>
-<span class="sd">    ``bos + k + eos``.</span>
-
-<span class="sd">    Invocation</span>
-<span class="sd">    ----------</span>
-<span class="sd">    ::</span>
-
-<span class="sd">        block_tables, seqlens = self.topk(score, ctx=ctx)</span>
-
-<span class="sd">    ``score`` is the per-block RAGGED scores ``[S_pack, 1, 1]``. The op</span>
-<span class="sd">    returns two new intermediate vTensors:</span>
-
-<span class="sd">      * ``block_tables`` — RAGGED int32, leading dim ``ctx.max_num_blocks``</span>
-<span class="sd">        (= ``eff_bs * max_blocks_per_seq``). The CUDA kernel addresses it</span>
-<span class="sd">        as the contiguous 2D ``[eff_bs, max_blocks_per_seq]`` memory it is.</span>
-<span class="sd">      * ``seqlens`` — BATCHED int32, leading dim ``ctx.max_bs * num_kv_heads``.</span>
-
-<span class="sd">    Both are allocated by ``interface.generate_entry_point``&#39;s</span>
-<span class="sd">    ``memory_initiazation_str`` (no aliasing with ``ctx.metadata``).</span>
+<span class="sd">        Rows that already fit the budget are copied dense; larger rows keep</span>
+<span class="sd">        the leading ``bos`` and trailing ``eos`` blocks and fill the middle</span>
+<span class="sd">        with the top-``k`` by score.</span>
+<span class="sd">    :__init__: ``TopK(k)`` — number of *selected* blocks (excludes the</span>
+<span class="sd">        reserved BOS/EOS); per-row sparse block count is ``bos + k + eos``.</span>
+<span class="sd">    :__call__: ``block_tables, seqlens = op(score, ctx=ctx)`` — ``score`` RAGGED</span>
+<span class="sd">        ``[S, 1, 1]`` → ``block_tables`` (RAGGED int32) and ``seqlens``</span>
+<span class="sd">        (BATCHED int32), both auto-allocated. Feed the pair to</span>
+<span class="sd">        :class:`Union` before ``trtllm_batch_decode_with_kv_cache``.</span>
+<span class="sd">    :Note: **trtllm only** — asserts under flashinfer; use :func:`topK` for</span>
+<span class="sd">        flashinfer / CSR layouts.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">_supported_formats</span><span class="p">:</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="n">FORMAT</span><span class="o">.</span><span class="n">RAGGED</span><span class="p">})</span>

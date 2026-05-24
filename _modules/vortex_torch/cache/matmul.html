@@ -272,49 +272,21 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.matmul.html#vortex_torch.cache.matmul.GeMM">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GeMM</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    General matrix-matrix multiplication for page/token-tiled layouts.</span>
+<span class="sd">    Per-block matrix–matrix product, :math:`O_b = Y_b X_b^{\top}` (cache side).</span>
 
-<span class="sd">    This operator computes a batched GEMM of the form</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For :math:`X\in\mathbb{R}^{B\times N_x\times K}`,</span>
+<span class="sd">        :math:`Y\in\mathbb{R}^{B\times N_y\times K}`:</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        O_b = Y_b X_b^\top, \qquad b = 0, \dots, B-1,</span>
-
-<span class="sd">    where, for each batch index :math:`b`,</span>
-
-<span class="sd">    - :math:`X_b \in \mathbb{R}^{N_x \times K}`,</span>
-<span class="sd">    - :math:`Y_b \in \mathbb{R}^{N_y \times K}`, and</span>
-<span class="sd">    - :math:`O_b \in \mathbb{R}^{N_y \times N_x}`.</span>
-
-<span class="sd">    In the logical 3D layout, the tensors have shapes</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X &amp;\in \mathbb{R}^{B \times N_x \times K}, \\</span>
-<span class="sd">        Y &amp;\in \mathbb{R}^{B \times N_y \times K}, \\</span>
-<span class="sd">        O &amp;\in \mathbb{R}^{B \times N_y \times N_x},</span>
-
-<span class="sd">    where the leading dimension :math:`B` is a batch-like axis typically</span>
-<span class="sd">    derived from the runtime (for example,</span>
-<span class="sd">    ``max_new_tokens_per_batch * head_num`` in an attention-style kernel).</span>
-
-<span class="sd">    Output format rule: if a caller-provided ``output`` is supplied with</span>
-<span class="sd">    ``PAGED`` format, the output is ``PAGED``; in every other case the</span>
-<span class="sd">    output is ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-block kernel.</span>
-
-<span class="sd">    The shared inner dimension :math:`K` must match:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        K_x = x.\text{shape}[2], \quad K_y = y.\text{shape}[2], \quad K_x = K_y.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[vTensor]</span>
-<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
+<span class="sd">            O_{b,a,c} = \sum_{k=0}^{K-1} Y_{b,a,k}\,X_{b,c,k},</span>
+<span class="sd">            \qquad O\in\mathbb{R}^{B\times N_y\times N_x}.</span>
+<span class="sd">    :__init__: ``GeMM()`` — no arguments.</span>
+<span class="sd">    :__call__: ``o = op(x, y, output, loc=loc, ctx=ctx)`` — ``x``</span>
+<span class="sd">        ``[B, N_x, K]``, ``y`` ``[B, N_y, K]`` (matching ``K``); ``o``</span>
+<span class="sd">        ``[B, N_y, N_x]``. ``PAGED`` iff a ``PAGED`` ``output`` is supplied,</span>
+<span class="sd">        else ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>

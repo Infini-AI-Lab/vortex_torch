@@ -271,35 +271,21 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.save_load.html#vortex_torch.indexer.save_load.Save">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Save</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Format-aware save (copy/convert) dispatcher.</span>
+<span class="sd">    Persist a per-page indexer value across decode steps (paired with</span>
+<span class="sd">    :class:`Load`) by copying it into a preallocated cache field.</span>
 
-<span class="sd">    This operator copies or converts data from an input tensor ``x`` into a</span>
-<span class="sd">    preallocated output tensor ``o``. Both tensors are treated as rank-3</span>
-<span class="sd">    objects with logical shape</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">            O \leftarrow X</span>
 
-<span class="sd">        [S, D_0, D_1],</span>
-
-<span class="sd">    where :math:`S` is a generic leading dimension (it may represent a batch,</span>
-<span class="sd">    a sequence length, or a page count, depending on the surrounding runtime).</span>
-
-<span class="sd">    Key properties:</span>
-
-<span class="sd">    - Dispatch is keyed **only** by the format of ``x`` (``x._format``).</span>
-<span class="sd">    - No internal buffer is allocated; the provided output tensor ``o`` is</span>
-<span class="sd">      validated and written into directly.</span>
-<span class="sd">    - The output format is determined by the dispatch table and must match</span>
-<span class="sd">      ``o._format``.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, FORMAT]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to the</span>
-<span class="sd">        resolved output format.</span>
-
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The expected output format for ``o`` as determined in :meth:`profile`.</span>
+<span class="sd">        (a format/layout copy ``RAGGED`` → ``PAGED``; no arithmetic).</span>
+<span class="sd">    :__init__: ``Save()`` — no arguments.</span>
+<span class="sd">    :__call__: ``op(x, o, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` (``RAGGED``) is</span>
+<span class="sd">        written **in place** into the preallocated ``o`` (``PAGED``, matching</span>
+<span class="sd">        ``D_0`` / ``D_1``). Returns nothing.</span>
+<span class="sd">    :Note: write side of the persistent-state pattern; a flow that uses</span>
+<span class="sd">        ``Save`` requires the engine to set ``disable_radix_cache=True``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Dispatch table keyed by x_format -&gt; resolved output format.</span>
@@ -317,47 +303,9 @@
 <div class="viewcode-block" id="Save.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.save_load.html#vortex_torch.indexer.save_load.Save.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">o</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs, resolve the implementation, and return ``o`` as</span>
-<span class="sd">        the output view.</span>
-
-<span class="sd">        This method checks:</span>
-
-<span class="sd">        - that both ``x`` and ``o`` are rank-3 ``vTensor`` instances with</span>
-<span class="sd">          logical shape ``[S, D_0, D_1]``,</span>
-<span class="sd">        - that their inner dimensions ``D_0`` and ``D_1`` match,</span>
-<span class="sd">        - that a save implementation is registered for ``x._format``, and</span>
-<span class="sd">        - that ``o._format`` matches the format required by the dispatch.</span>
-
-<span class="sd">        No new buffers are allocated; the provided ``o`` will be used as the</span>
-<span class="sd">        destination.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be copied/converted. Expected logical shape</span>
-<span class="sd">            ``[S, D_0, D_1]``.</span>
-
-<span class="sd">        o : vTensor</span>
-<span class="sd">            Preallocated output tensor. Must have logical shape compatible</span>
-<span class="sd">            with ``x`` (matching ``D_0`` and ``D_1``) and the format expected</span>
-<span class="sd">            by the selected implementation.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context (included for API symmetry; not used for buffer</span>
-<span class="sd">            allocation in this dispatcher).</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            The same object as ``o``, returned as the resolved output view.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If types, ranks, shapes, formats, or devices are incompatible,</span>
-<span class="sd">            or if no implementation is registered for ``x._format``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` / ``o`` (rank-3, matching ``D_0`` /</span>
+<span class="sd">        ``D_1``, compatible formats), register the op, and return ``o`` as the</span>
+<span class="sd">        output view (no buffer is allocated).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>
@@ -420,38 +368,19 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.save_load.html#vortex_torch.indexer.save_load.Load">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Load</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Format-aware load (copy/convert) dispatcher.</span>
+<span class="sd">    Read back a per-page value persisted by :class:`Save` (the read side of</span>
+<span class="sd">    the cross-decode-step persistent-state pattern).</span>
 
-<span class="sd">    This operator copies or converts data from an input tensor ``x`` into an</span>
-<span class="sd">    internally allocated output buffer. Both input and output are treated as</span>
-<span class="sd">    rank-3 tensors with logical shape</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">            Y \leftarrow X</span>
 
-<span class="sd">        [S, D_0, D_1],</span>
-
-<span class="sd">    where :math:`S` is a generic leading dimension (it may represent a batch</span>
-<span class="sd">    size, a sequence length, or a page count, depending on the surrounding</span>
-<span class="sd">    runtime).</span>
-
-<span class="sd">    Key properties</span>
-<span class="sd">    --------------</span>
-<span class="sd">    - Dispatch is keyed **only** by the format of ``x`` (``x._format``).</span>
-<span class="sd">    - The output buffer is allocated during :meth:`profile` using the runtime</span>
-<span class="sd">      value ``ctx.max_num_pages`` for the leading dimension.</span>
-<span class="sd">    - The output format is determined by the dispatch table and used when</span>
-<span class="sd">      wrapping the internal buffer as a :class:`vTensor`.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, FORMAT]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to the</span>
-<span class="sd">        resolved output format.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer with logical shape</span>
-<span class="sd">        ``[S_out, D_0, D_1]``, where ``S_out`` comes from the runtime context.</span>
+<span class="sd">        (a format/layout copy ``PAGED`` → ``RAGGED``; no arithmetic).</span>
+<span class="sd">    :__init__: ``Load()`` — no arguments.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` (``PAGED``);</span>
+<span class="sd">        returns a freshly-allocated ``RAGGED`` view of the same inner shape.</span>
+<span class="sd">    :Note: read side of the persistent-state pattern (see :class:`Save`).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Dispatch table keyed by x_format -&gt; resolved output format.</span>
@@ -470,42 +399,9 @@
 <div class="viewcode-block" id="Load.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.save_load.html#vortex_torch.indexer.save_load.Load.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input, select an implementation, allocate the output</span>
-<span class="sd">        buffer, and return an :func:`as_vtensor` view with the resolved format.</span>
-
-<span class="sd">        The input tensor is expected to have logical shape ``[S_in, D_0, D_1]``.</span>
-<span class="sd">        The output tensor is allocated with shape</span>
-
-<span class="sd">        .. math::</span>
-
-<span class="sd">            [S_{\text{out}}, D_0, D_1],</span>
-
-<span class="sd">        where :math:`S_{\text{out}}` is taken from ``ctx.max_num_pages`` to</span>
-<span class="sd">        match the runtime configuration for the leading dimension.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be loaded from, with logical shape</span>
-<span class="sd">            ``[S_in, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing ``ctx.max_num_pages`` for the leading</span>
-<span class="sd">            dimension and tracking auxiliary memory usage.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the internally allocated output</span>
-<span class="sd">            buffer with the resolved output format.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor`, if its rank is not 3, or if</span>
-<span class="sd">            no implementation is registered for ``x._format``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, D_0, D_1]``, register the op, and</span>
+<span class="sd">        return a freshly-allocated ``vTensor`` view of the loaded value (same</span>
+<span class="sd">        inner shape, ``RAGGED``).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>

@@ -272,19 +272,18 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.fill.html#vortex_torch.cache.fill.Fill">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Fill</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    In-place page-wise fill dispatcher (codegen path only).</span>
+<span class="sd">    In-place page-wise fill with a scalar.</span>
 
-<span class="sd">    Overwrites selected page tiles of a rank-3 tensor with a scalar</span>
-<span class="sd">    ``alpha``. Structurally a **pure producer** of its input tensor:</span>
-<span class="sd">    ``Fill`` takes no graph-level inputs, and its output tensor id is</span>
-<span class="sd">    the same as the input tensor id (cache field being initialized).</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _supported_formats : FrozenSet[FORMAT]</span>
-<span class="sd">        Input formats for which a codegen implementation exists.</span>
-<span class="sd">    alpha : float</span>
-<span class="sd">        Scalar fill value written into selected positions.</span>
+<span class="sd">            Y_{b,n,d} = \alpha \quad\text{(over the selected page tiles).}</span>
+<span class="sd">    :__init__: ``Fill(alpha=0.0)`` — scalar fill value :math:`\alpha`.</span>
+<span class="sd">    :__call__: ``op(x, loc=loc, ctx=ctx)`` — overwrites the page tiles of ``x``</span>
+<span class="sd">        (``PAGED``) at ``loc`` with :math:`\alpha`. A **pure producer**: its</span>
+<span class="sd">        output *is* ``x`` (used e.g. to zero a cache field before</span>
+<span class="sd">        :class:`vortex_torch.indexer.Save` / :class:`vortex_torch.indexer.Load`).</span>
+<span class="sd">    :Note: ``PAGED`` input only.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Supported input formats; only PAGED is wired up for now.</span>

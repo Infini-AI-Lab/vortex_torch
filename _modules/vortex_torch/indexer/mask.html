@@ -272,53 +272,22 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.mask.html#vortex_torch.indexer.mask.MaskSlice">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MaskSlice</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Position-dependent slice mask over one inner axis of a rank-3 tensor.</span>
+<span class="sd">    Position-dependent slice mask over one inner axis.</span>
 
-<span class="sd">    For an input tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For target axis ``dim`` (``1`` → :math:`D_0`, ``2`` → :math:`D_1`) and</span>
+<span class="sd">        index :math:`i` along it (other axes broadcast unchanged):</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{S \times D_0 \times D_1}</span>
-
-<span class="sd">    and a target axis :attr:`dim` (``1`` for :math:`D_0`, ``2`` for</span>
-<span class="sd">    :math:`D_1`), ``MaskSlice`` writes</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y[\ldots, i, \ldots] =</span>
-<span class="sd">        \begin{cases}</span>
-<span class="sd">            \alpha, &amp; \text{if } \text{start} \le i &lt; \text{end}, \\</span>
-<span class="sd">            \beta,  &amp; \text{otherwise},</span>
-<span class="sd">        \end{cases}</span>
-
-<span class="sd">    where :math:`i` is the index along the chosen axis. The other axes</span>
-<span class="sd">    are broadcast unchanged. The output shape exactly matches</span>
-<span class="sd">    :attr:`x.shape`.</span>
-
-<span class="sd">    Notes</span>
-<span class="sd">    -----</span>
-<span class="sd">    - Only ``dim in {1, 2}`` is supported. The packed ``S`` axis is</span>
-<span class="sd">      structural (its global index is only known after unpacking</span>
-<span class="sd">      workload metadata), so a position-dependent mask along it does</span>
-<span class="sd">      not fit cleanly into the inline W-kernel template; model that</span>
-<span class="sd">      in user code via an explicit index op instead.</span>
-<span class="sd">    - The input ``x`` is read by the surrounding workload kernel but its</span>
-<span class="sd">      values are not used by the output — ``MaskSlice`` is a pure</span>
-<span class="sd">      position-based writer. The dependency edge is preserved so the</span>
-<span class="sd">      compiler still fuses it with its neighbours.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    start : int</span>
-<span class="sd">        Inclusive lower bound along ``dim``.</span>
-<span class="sd">    end : int</span>
-<span class="sd">        Exclusive upper bound along ``dim``.</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Axis to slice (1 = :math:`D_0`, 2 = :math:`D_1`).</span>
-<span class="sd">    alpha : float</span>
-<span class="sd">        Value written for positions inside ``[start, end)``.</span>
-<span class="sd">    beta : float</span>
-<span class="sd">        Value written for positions outside.</span>
+<span class="sd">            Y_{\dots,i,\dots} = \begin{cases} \alpha, &amp; \text{start} \le i &lt; \text{end}, \\ \beta, &amp; \text{otherwise}. \end{cases}</span>
+<span class="sd">    :__init__: ``MaskSlice(start, end, dim, alpha=1.0, beta=0.0)`` — write</span>
+<span class="sd">        :math:`\alpha` on ``[start, end)`` of axis ``dim`` (1 or 2) and</span>
+<span class="sd">        :math:`\beta` elsewhere.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` → same shape. A</span>
+<span class="sd">        pure **position** writer (``x`` values are unused); output is</span>
+<span class="sd">        ``BATCHED`` iff ``x`` is.</span>
+<span class="sd">    :Note: only ``dim ∈ {1, 2}`` (the packed ``S`` axis is structural).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>

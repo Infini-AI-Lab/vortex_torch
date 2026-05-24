@@ -274,7 +274,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.mask.MaskSlice" title="vortex_torch.cache.mask.MaskSlice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaskSlice</span></code></a>(start, end, dim[, alpha, beta])</p></td>
-<td><p>Position-dependent slice mask over one inner axis of a rank-3 tensor.</p></td>
+<td><p>Position-dependent slice mask over one inner axis (cache side).</p></td>
 </tr>
 </tbody>
 </table>
@@ -283,32 +283,35 @@
 <dt class="sig sig-object py" id="vortex_torch.cache.mask.MaskSlice">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.mask.</span></span><span class="sig-name descname"><span class="pre">MaskSlice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/mask.html#MaskSlice"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.mask.MaskSlice" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Position-dependent slice mask over one inner axis of a rank-3 tensor.</p>
-<p>For an input tensor</p>
+<p>Position-dependent slice mask over one inner axis (cache side).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For target axis <code class="docutils literal notranslate"><span class="pre">dim</span></code> (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(D_0\)</span>, <code class="docutils literal notranslate"><span class="pre">2</span></code> → <span class="math notranslate nohighlight">\(D_1\)</span>) and
+index <span class="math notranslate nohighlight">\(i\)</span> along it (other axes broadcast unchanged):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times D_0 \times D_1}\]</div>
+\[\begin{split}Y_{\dots,i,\dots} = \begin{cases} \alpha, &amp; \text{start} \le i &lt; \text{end}, \\ \beta, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
 </div>
-<p>and a target axis <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code> (<code class="docutils literal notranslate"><span class="pre">1</span></code> for <span class="math notranslate nohighlight">\(D_0\)</span>, <code class="docutils literal notranslate"><span class="pre">2</span></code> for
-<span class="math notranslate nohighlight">\(D_1\)</span>), <code class="docutils literal notranslate"><span class="pre">MaskSlice</span></code> writes</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}Y[\ldots, i, \ldots] =
-\begin{cases}
-    \alpha, &amp; \text{if } \text{start} \le i &lt; \text{end}, \\
-    \beta,  &amp; \text{otherwise},
-\end{cases}\end{split}\]</div>
-</div>
-<p>where <span class="math notranslate nohighlight">\(i\)</span> is the index along the chosen axis. The other axes
-are broadcast unchanged. The output shape matches <code class="xref py py-attr docutils literal notranslate"><span class="pre">x.shape</span></code>.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">MaskSlice(start,</span> <span class="pre">end,</span> <span class="pre">dim,</span> <span class="pre">alpha=1.0,</span> <span class="pre">beta=0.0)</span></code> — write
+<span class="math notranslate nohighlight">\(\alpha\)</span> on <code class="docutils literal notranslate"><span class="pre">[start,</span> <span class="pre">end)</span></code> of axis <code class="docutils literal notranslate"><span class="pre">dim</span></code> (1 or 2) and
+<span class="math notranslate nohighlight">\(\beta\)</span> elsewhere.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">loc=loc,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code> → same
+shape. A pure <strong>position</strong> writer (<code class="docutils literal notranslate"><span class="pre">x</span></code> values are unused).</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>only <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">2}</span></code>.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>start</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Inclusive lower bound along <code class="docutils literal notranslate"><span class="pre">dim</span></code>.</p></li>
-<li><p><strong>end</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Exclusive upper bound along <code class="docutils literal notranslate"><span class="pre">dim</span></code>.</p></li>
-<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Axis to slice (1 = <span class="math notranslate nohighlight">\(D_0\)</span>, 2 = <span class="math notranslate nohighlight">\(D_1\)</span>).</p></li>
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Value written for positions inside <code class="docutils literal notranslate"><span class="pre">[start,</span> <span class="pre">end)</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>) – Value written for positions outside.</p></li>
+<li><p><strong>start</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>end</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
 </ul>
 </dd>
 </dl>

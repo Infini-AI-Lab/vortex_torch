@@ -271,42 +271,18 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Transpose</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Transpose op for rank-3 logical tensors.</span>
+<span class="sd">    Swap the two inner axes of each slice along the leading axis.</span>
 
-<span class="sd">    This operator transposes the last two dimensions of a rank-3 tensor</span>
-<span class="sd">    while keeping the leading axis unchanged. The input is treated as</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">            Y_{s,d_1,d_0} = X_{s,d_0,d_1},</span>
 
-<span class="sd">        X \in \mathbb{R}^{S \times D_0 \times D_1},</span>
-
-<span class="sd">    and the output has logical shape</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y \in \mathbb{R}^{S \times D_1 \times D_0},</span>
-
-<span class="sd">    with</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y[s, d_1, d_0] = X[s, d_0, d_1].</span>
-
-<span class="sd">    The leading dimension :math:`S` may represent a true sequence axis or</span>
-<span class="sd">    a packed axis (e.g. :math:`S_{\text{pack}} = \sum_b S_b`); the transpose</span>
-<span class="sd">    is applied independently for each slice along that axis.</span>
-
-<span class="sd">    Output format rule: ``BATCHED`` iff the input is ``BATCHED``,</span>
-<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer with logical shape</span>
-<span class="sd">        ``[S, D_1, D_0]``.</span>
+<span class="sd">        applied independently per leading index :math:`s`.</span>
+<span class="sd">    :__init__: ``Transpose()`` — no arguments.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` →</span>
+<span class="sd">        ``[S, D_1, D_0]``. ``BATCHED`` iff the input is ``BATCHED``, else</span>
+<span class="sd">        ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -319,41 +295,9 @@
 <div class="viewcode-block" id="Transpose.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.transpose.html#vortex_torch.indexer.transpose.Transpose.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input, allocate the output buffer, and return a</span>
-<span class="sd">        :class:`vTensor` view.</span>
-
-<span class="sd">        The input tensor is expected to have logical shape</span>
-<span class="sd">        ``[S_in, D_0, D_1]``. The output buffer is allocated with shape</span>
-
-<span class="sd">        .. math::</span>
-
-<span class="sd">            [S, D_1, D_0],</span>
-
-<span class="sd">        where :math:`S` is taken from ``ctx.max_num_pages`` to match the</span>
-<span class="sd">        runtime configuration for the leading dimension.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be transposed, with logical shape</span>
-<span class="sd">            ``[S_in, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing ``ctx.max_num_pages`` for the leading</span>
-<span class="sd">            dimension and tracking auxiliary memory usage.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the internally allocated output</span>
-<span class="sd">            buffer.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor` or its rank is not 3.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, D_0, D_1]``, resolve the output</span>
+<span class="sd">        format, and return a ``vTensor`` view of the ``[S, D_1, D_0]``</span>
+<span class="sd">        transpose.&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>

@@ -274,19 +274,19 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.L2NormInterleave" title="vortex_torch.cache.reduce_interleave.L2NormInterleave"><code class="xref py py-obj docutils literal notranslate"><span class="pre">L2NormInterleave</span></code></a>([dim, k])</p></td>
-<td><p>Interleaved L2-norm reduction (not RMS) over a single logical axis.</p></td>
+<td><p>Interleaved L2-norm over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MaxInterleave" title="vortex_torch.cache.reduce_interleave.MaxInterleave"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MaxInterleave</span></code></a>([dim, k])</p></td>
-<td><p>Interleaved max reduction over a single logical axis.</p></td>
+<td><p>Interleaved max over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MeanInterleave" title="vortex_torch.cache.reduce_interleave.MeanInterleave"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MeanInterleave</span></code></a>([dim, k])</p></td>
-<td><p>Interleaved mean reduction over a single logical axis.</p></td>
+<td><p>Interleaved mean over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MinInterleave" title="vortex_torch.cache.reduce_interleave.MinInterleave"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MinInterleave</span></code></a>([dim, k])</p></td>
-<td><p>Interleaved min reduction over a single logical axis.</p></td>
+<td><p>Interleaved min over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>([dim, k])</p></td>
-<td><p>Generic <em>interleaved</em> reduction dispatcher over the last two logical axes.</p></td>
+<td><p>Interleaved 1-D reduction — folds consecutive groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> elements.</p></td>
 </tr>
 </tbody>
 </table>
@@ -295,58 +295,36 @@
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce_interleave.</span></span><span class="sig-name descname"><span class="pre">ReduceInterleave</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#ReduceInterleave"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Generic <em>interleaved</em> reduction dispatcher over the last two logical
-axes.</p>
-<p>This dispatcher covers a family of reductions (mean/max/min/L2-norm/sum,
-etc.) on rank-3 tensors that fold consecutive groups of <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a>
-elements along the reduced axis into a single output element. The
-input is treated as</p>
+<p>Interleaved 1-D reduction — folds consecutive groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> elements.</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For input <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{B\times N\times D}\)</span> and a per-group
+reduction <span class="math notranslate nohighlight">\(\rho\)</span> (mean / max / min / L2-norm, fixed by the
+subclass), each group of <span class="math notranslate nohighlight">\(k\)</span> adjacent elements collapses to one:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D},\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1,\ N\%k=0):\quad &amp; Y_{b,m,d} = \rho_{\,0 \le j &lt; k}\, X_{b,\,mk+j,\,d}, \\
+(\text{dim}=2,\ D\%k=0):\quad &amp; Y_{b,n,e} = \rho_{\,0 \le j &lt; k}\, X_{b,n,\,ek+j}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>where:</p>
-<ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(B\)</span> is a leading batch-like axis (typically derived from the
-runtime, e.g. <code class="docutils literal notranslate"><span class="pre">max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">head_num</span></code>),</p></li>
-<li><p><span class="math notranslate nohighlight">\(N\)</span> is a sequence or position dimension, and</p></li>
-<li><p><span class="math notranslate nohighlight">\(D\)</span> is a feature/channel dimension.</p></li>
-</ul>
-<p>The reduction dimension is chosen by <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.dim" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a>. The size of the
-reduced axis must be divisible by <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a>, and consecutive groups of
-<a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a> adjacent elements collapse into one output element:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (interleaved row-wise reduction over <span class="math notranslate nohighlight">\(N\)</span>,
-requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out} \in \mathbb{R}^{B \times (N/k) \times D}, \qquad
-\text{out}[b, m, d]
-= \mathop{\mathrm{reduce}}_{0 \le j &lt; k}
-  X[b, m \cdot k + j, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (interleaved column-wise reduction over <span class="math notranslate nohighlight">\(D\)</span>,
-requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out} \in \mathbb{R}^{B \times N \times (D/k)}, \qquad
-\text{out}[b, n, e]
-= \mathop{\mathrm{reduce}}_{0 \le j &lt; k}
-  X[b, n, e \cdot k + j].\]</div>
-</div>
-</li>
-</ul>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">k</span> <span class="pre">==</span> <span class="pre">1</span></code> makes this op an identity (each group has a single
-element). Setting <code class="docutils literal notranslate"><span class="pre">k</span></code> equal to the full reduced-axis length recovers
-the plain <code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code> op.</p>
-<p>The exact reduction operation (mean, max, min, L2-norm, sum, etc.) is
-encoded in <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.reduce_type" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.reduce_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">reduce_type</span></code></a> and interpreted by the implementation.</p>
-<p>Output format rule: if a caller-provided <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied with
-<code class="docutils literal notranslate"><span class="pre">PAGED</span></code> format, the output is <code class="docutils literal notranslate"><span class="pre">PAGED</span></code>; in every other case the
-output is <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
-compiler’s per-block kernel.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">ReduceInterleave(dim=1,</span> <span class="pre">k=2)</span></code> — inner axis (<code class="docutils literal notranslate"><span class="pre">1</span></code> over
+<span class="math notranslate nohighlight">\(N\)</span>, <code class="docutils literal notranslate"><span class="pre">2</span></code> over <span class="math notranslate nohighlight">\(D\)</span>) and group size <code class="docutils literal notranslate"><span class="pre">k</span></code> (must divide the
+reduced axis; <code class="docutils literal notranslate"><span class="pre">k=1</span></code> is identity, <code class="docutils literal notranslate"><span class="pre">k</span></code> = full length recovers the
+plain reduction).</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">op(x,</span> <span class="pre">output,</span> <span class="pre">loc=loc,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>; the
+reduced axis shrinks by a factor of <code class="docutils literal notranslate"><span class="pre">k</span></code> (<code class="docutils literal notranslate"><span class="pre">N→N/k</span></code> or <code class="docutils literal notranslate"><span class="pre">D→D/k</span></code>).
+<code class="docutils literal notranslate"><span class="pre">PAGED</span></code> iff a <code class="docutils literal notranslate"><span class="pre">PAGED</span></code> <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied, else <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>use a concrete subclass — <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MeanInterleave" title="vortex_torch.cache.reduce_interleave.MeanInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">MeanInterleave</span></code></a>,
+<a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MaxInterleave" title="vortex_torch.cache.reduce_interleave.MaxInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">MaxInterleave</span></code></a>, <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.MinInterleave" title="vortex_torch.cache.reduce_interleave.MinInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">MinInterleave</span></code></a>,
+<a class="reference internal" href="#vortex_torch.cache.reduce_interleave.L2NormInterleave" title="vortex_torch.cache.reduce_interleave.L2NormInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">L2NormInterleave</span></code></a>.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
@@ -354,110 +332,24 @@ compiler’s per-block kernel.</p>
 </ul>
 </dd>
 </dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.dim">
-<span class="sig-name descname"><span class="pre">dim</span></span><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.dim" title="Link to this definition">¶</a></dt>
-<dd><p>Reduction dimension in the logical 3D tensor. Must be either:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code> for row-wise reduction over <span class="math notranslate nohighlight">\(N\)</span>, or</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">2</span></code> for column-wise reduction over <span class="math notranslate nohighlight">\(D\)</span>.</p></li>
-</ul>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.k">
-<span class="sig-name descname"><span class="pre">k</span></span><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="Link to this definition">¶</a></dt>
-<dd><p>Group size. Consecutive <code class="docutils literal notranslate"><span class="pre">k</span></code> elements along the reduced axis are
-folded into one output element. Must be a positive integer that
-divides the size of the reduced axis.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.reduce_type">
-<span class="sig-name descname"><span class="pre">reduce_type</span></span><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.reduce_type" title="Link to this definition">¶</a></dt>
-<dd><p>Enum describing which reduction to perform.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ReduceType" title="vortex_torch.utils.ReduceType"><em>ReduceType</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.profile" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Pure-metadata vTensor descriptor for the output (graph node).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.ReduceInterleave.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#ReduceInterleave.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, resolve the interleaved reduction implementation
-and output format, and optionally allocate an internal output
-buffer.</p>
-<p>The input tensor <code class="docutils literal notranslate"><span class="pre">x</span></code> is expected to have logical shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>. According to <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.dim" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a> and <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a>, the
-expected output logical shape is:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N</span> <span class="pre">//</span> <span class="pre">k,</span> <span class="pre">D]</span></code> (requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D</span> <span class="pre">//</span> <span class="pre">k]</span></code> (requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>)</p></li>
-</ul>
-<p>The auxiliary tensor <code class="docutils literal notranslate"><span class="pre">loc</span></code> carries per-position metadata used
-by the implementation; its shape and semantics are
-implementation-defined.</p>
+<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code> (reduced axis divisible by
+<code class="docutils literal notranslate"><span class="pre">k</span></code>, and <code class="docutils literal notranslate"><span class="pre">output</span></code> if given), register the op, and return a
+<code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view of the folded output (see the class docstring for
+shapes).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor with logical shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>.</p></li>
-<li><p><strong>output</strong> (<em>Optional</em><em>[</em><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em>]</em>) – Optional preallocated output tensor. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, an internal
-buffer with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">exp_N,</span> <span class="pre">exp_D]</span></code> is allocated using
-<code class="docutils literal notranslate"><span class="pre">ctx.max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">ctx.head_num</span></code> for <code class="docutils literal notranslate"><span class="pre">B</span></code> and a
-RAGGED-output implementation is selected. If not <code class="docutils literal notranslate"><span class="pre">None</span></code>,
-this tensor must have rank 3 and shape compatible with
-<a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.dim" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a> and <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a> as described above.</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>) – Auxiliary tensor carrying metadata required by the reduction
-implementation.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context that provides the runtime value of <code class="docutils literal notranslate"><span class="pre">B</span></code> and
-is used for auxiliary memory accounting.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>output</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view representing the resolved output:
-either the provided <code class="docutils literal notranslate"><span class="pre">output</span></code> or an internally allocated
-buffer.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types, ranks, shapes, or devices are incompatible, or if
-    the reduced axis is not divisible by <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k" title="vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code></a>.</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -468,41 +360,25 @@ buffer.</p>
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.MeanInterleave">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce_interleave.</span></span><span class="sig-name descname"><span class="pre">MeanInterleave</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#MeanInterleave"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.MeanInterleave" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a></p>
-<p>Interleaved mean reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Interleaved mean over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,m,d} = \frac{1}{k}\sum_{j=0}^{k-1} X_{b,\,mk+j,\,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,e} = \frac{1}{k}\sum_{j=0}^{k-1} X_{b,n,\,ek+j}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the arithmetic mean over consecutive groups of <code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code>
-elements along one of the inner dimensions, as configured by
-<code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped row-wise mean over
-<span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad
-Y[b, m, d]
-= \frac{1}{k} \sum_{j=0}^{k-1} X[b, m \cdot k + j, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped column-wise mean
-over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad
-Y[b, n, e]
-= \frac{1}{k} \sum_{j=0}^{k-1} X[b, n, e \cdot k + j].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">MeanInterleave(dim=1,</span> <span class="pre">k=2)</span></code> — inner axis (<code class="docutils literal notranslate"><span class="pre">1</span></code>/<code class="docutils literal notranslate"><span class="pre">2</span></code>) and
+group size <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Group size. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -512,40 +388,25 @@ Y[b, n, e]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.MaxInterleave">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce_interleave.</span></span><span class="sig-name descname"><span class="pre">MaxInterleave</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#MaxInterleave"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.MaxInterleave" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a></p>
-<p>Interleaved max reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Interleaved max over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,m,d} = \max_{0 \le j &lt; k} X_{b,\,mk+j,\,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,e} = \max_{0 \le j &lt; k} X_{b,n,\,ek+j}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the maximum over consecutive groups of <code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code> elements
-along one of the inner dimensions, as configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped row-wise max over
-<span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad
-Y[b, m, d]
-= \max_{0 \le j &lt; k} X[b, m \cdot k + j, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped column-wise max
-over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad
-Y[b, n, e]
-= \max_{0 \le j &lt; k} X[b, n, e \cdot k + j].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">MaxInterleave(dim=1,</span> <span class="pre">k=2)</span></code> — inner axis (<code class="docutils literal notranslate"><span class="pre">1</span></code>/<code class="docutils literal notranslate"><span class="pre">2</span></code>) and
+group size <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Group size. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -555,40 +416,25 @@ Y[b, n, e]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.MinInterleave">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce_interleave.</span></span><span class="sig-name descname"><span class="pre">MinInterleave</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#MinInterleave"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.MinInterleave" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a></p>
-<p>Interleaved min reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Interleaved min over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,m,d} = \min_{0 \le j &lt; k} X_{b,\,mk+j,\,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,e} = \min_{0 \le j &lt; k} X_{b,n,\,ek+j}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the minimum over consecutive groups of <code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code> elements
-along one of the inner dimensions, as configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped row-wise min over
-<span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad
-Y[b, m, d]
-= \min_{0 \le j &lt; k} X[b, m \cdot k + j, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped column-wise min
-over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad
-Y[b, n, e]
-= \min_{0 \le j &lt; k} X[b, n, e \cdot k + j].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">MinInterleave(dim=1,</span> <span class="pre">k=2)</span></code> — inner axis (<code class="docutils literal notranslate"><span class="pre">1</span></code>/<code class="docutils literal notranslate"><span class="pre">2</span></code>) and
+group size <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Group size. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -598,45 +444,28 @@ Y[b, n, e]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce_interleave.L2NormInterleave">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce_interleave.</span></span><span class="sig-name descname"><span class="pre">L2NormInterleave</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce_interleave.html#L2NormInterleave"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce_interleave.L2NormInterleave" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a></p>
-<p>Interleaved L2-norm reduction (not RMS) over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Interleaved L2-norm over groups of <code class="docutils literal notranslate"><span class="pre">k</span></code> (a <a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave" title="vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="xref py py-class docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,m,d} = \Big(\sum_{j=0}^{k-1} X_{b,\,mk+j,\,d}^2\Big)^{1/2}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,e} = \Big(\sum_{j=0}^{k-1} X_{b,n,\,ek+j}^2\Big)^{1/2}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by computing an L2 norm over consecutive groups of <code class="xref py py-attr docutils literal notranslate"><span class="pre">k</span></code> elements
-along one of the inner dimensions, as configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>. The
-reduction is <em>not</em> normalized by the number of elements (it is an L2
-norm, not an RMS):</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (requires <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped row-wise L2 norm
-over <span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad
-Y[b, m, d]
-= \sqrt{\sum_{j=0}^{k-1} X[b, m \cdot k + j, d]^2}.\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (requires <code class="docutils literal notranslate"><span class="pre">D</span> <span class="pre">%</span> <span class="pre">k</span> <span class="pre">==</span> <span class="pre">0</span></code>): grouped column-wise L2 norm
-over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad
-Y[b, n, e]
-= \sqrt{\sum_{j=0}^{k-1} X[b, n, e \cdot k + j]^2}.\]</div>
-</div>
-</li>
-</ul>
-<p class="rubric">Notes</p>
-<p>This is a pure L2 norm over each group, with no division by the
-group size. It should not be confused with an RMS over the group.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Group size. Default is <code class="docutils literal notranslate"><span class="pre">2</span></code>.</p></li>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">L2NormInterleave(dim=1,</span> <span class="pre">k=2)</span></code> — inner axis (<code class="docutils literal notranslate"><span class="pre">1</span></code>/<code class="docutils literal notranslate"><span class="pre">2</span></code>) and
+group size <code class="docutils literal notranslate"><span class="pre">k</span></code>.</p>
+</dd>
+<dt class="field-odd">Note<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a pure <span class="math notranslate nohighlight">\(L_2\)</span> norm per group (no division) — not RMS.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -701,11 +530,6 @@ group size. It should not be confused with an RMS over the group.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.reduce_interleave</a><ul>
 <li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.dim"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.dim</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.k"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.k</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.reduce_type"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.reduce_type</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.output_format"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.output_buffer"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.reduce_interleave.ReduceInterleave.profile"><code class="docutils literal notranslate"><span class="pre">ReduceInterleave.profile()</span></code></a></li>
 </ul>
 </li>

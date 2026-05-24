@@ -272,40 +272,21 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.mask.html#vortex_torch.cache.mask.MaskSlice">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MaskSlice</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Position-dependent slice mask over one inner axis of a rank-3 tensor.</span>
+<span class="sd">    Position-dependent slice mask over one inner axis (cache side).</span>
 
-<span class="sd">    For an input tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For target axis ``dim`` (``1`` → :math:`D_0`, ``2`` → :math:`D_1`) and</span>
+<span class="sd">        index :math:`i` along it (other axes broadcast unchanged):</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{B \times D_0 \times D_1}</span>
-
-<span class="sd">    and a target axis :attr:`dim` (``1`` for :math:`D_0`, ``2`` for</span>
-<span class="sd">    :math:`D_1`), ``MaskSlice`` writes</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y[\ldots, i, \ldots] =</span>
-<span class="sd">        \begin{cases}</span>
-<span class="sd">            \alpha, &amp; \text{if } \text{start} \le i &lt; \text{end}, \\</span>
-<span class="sd">            \beta,  &amp; \text{otherwise},</span>
-<span class="sd">        \end{cases}</span>
-
-<span class="sd">    where :math:`i` is the index along the chosen axis. The other axes</span>
-<span class="sd">    are broadcast unchanged. The output shape matches :attr:`x.shape`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    start : int</span>
-<span class="sd">        Inclusive lower bound along ``dim``.</span>
-<span class="sd">    end : int</span>
-<span class="sd">        Exclusive upper bound along ``dim``.</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Axis to slice (1 = :math:`D_0`, 2 = :math:`D_1`).</span>
-<span class="sd">    alpha : float</span>
-<span class="sd">        Value written for positions inside ``[start, end)``.</span>
-<span class="sd">    beta : float</span>
-<span class="sd">        Value written for positions outside.</span>
+<span class="sd">            Y_{\dots,i,\dots} = \begin{cases} \alpha, &amp; \text{start} \le i &lt; \text{end}, \\ \beta, &amp; \text{otherwise}. \end{cases}</span>
+<span class="sd">    :__init__: ``MaskSlice(start, end, dim, alpha=1.0, beta=0.0)`` — write</span>
+<span class="sd">        :math:`\alpha` on ``[start, end)`` of axis ``dim`` (1 or 2) and</span>
+<span class="sd">        :math:`\beta` elsewhere.</span>
+<span class="sd">    :__call__: ``y = op(x, loc=loc, ctx=ctx)`` — ``x`` ``[B, D_0, D_1]`` → same</span>
+<span class="sd">        shape. A pure **position** writer (``x`` values are unused).</span>
+<span class="sd">    :Note: only ``dim ∈ {1, 2}``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>

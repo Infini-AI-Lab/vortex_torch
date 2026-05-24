@@ -274,85 +274,27 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Kronecker product over a configurable subset of the inner axes.</span>
 
-<span class="sd">    Given two rank-3 inputs</span>
+<span class="sd">    The chosen inner axes (``dim``) are Kronecker-expanded; any other inner</span>
+<span class="sd">    axis is multiplied elementwise (with broadcasting), and the leading</span>
+<span class="sd">    :math:`S` axis is always elementwise.</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For :math:`X\in\mathbb{R}^{S\times x_1\times x_2}` and</span>
+<span class="sd">        :math:`Y\in\mathbb{R}^{S\times y_1\times y_2}`:</span>
 
-<span class="sd">        X \in \mathbb{R}^{S \times x_1 \times x_2}, \qquad</span>
-<span class="sd">        Y \in \mathbb{R}^{S \times y_1 \times y_2},</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    this operator takes a Kronecker product along the axes listed in</span>
-<span class="sd">    :attr:`dim` (a subset of ``{1, 2}``), and an elementwise (broadcast)</span>
-<span class="sd">    product along every other inner axis. The leading axis :math:`S` is</span>
-<span class="sd">    always elementwise.</span>
-
-<span class="sd">    For axis ``a`` in ``{1, 2}``:</span>
-
-<span class="sd">    - if ``a`` is in :attr:`dim`, the output size is ``x.shape[a] * y.shape[a]``;</span>
-<span class="sd">    - otherwise, ``x.shape[a]`` must equal ``y.shape[a]`` or one of them</span>
-<span class="sd">      must be ``1`` (broadcast), and the output size is</span>
-<span class="sd">      ``max(x.shape[a], y.shape[a])``.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    All three forms below select different output layouts from the same</span>
-<span class="sd">    pair of inputs::</span>
-
-<span class="sd">        Kron(dim=(1, 2))   # full Kron:    [B, x1*y1, x2*y2]</span>
-<span class="sd">        Kron(dim=1)        # row-Kron:     [B, x1*y1, D]      (x2==y2 or 1)</span>
-<span class="sd">        Kron(dim=2)        # col-Kron:     [B, C,     x2*y2]  (x1==y1 or 1)</span>
-
-<span class="sd">    With the explicit index formula</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \text{out}[s, \cdot, \cdot]</span>
-<span class="sd">        \;=\; \mathrm{kron\_along}_{\text{dim}}\!\bigl(X[s], Y[s]\bigr).</span>
-
-<span class="sd">    For ``dim == (1, 2)``:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \text{out}[s,\, i \cdot y_1 + j,\, k \cdot y_2 + l]</span>
-<span class="sd">        = X[s, i, k] \cdot Y[s, j, l].</span>
-
-<span class="sd">    For ``dim == (1,)`` (with ``x_2 = y_2 = D`` after broadcast):</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \text{out}[s,\, i \cdot y_1 + j,\, d]</span>
-<span class="sd">        = X[s, i, d] \cdot Y[s, j, d].</span>
-
-<span class="sd">    For ``dim == (2,)`` (with ``x_1 = y_1 = C`` after broadcast):</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \text{out}[s,\, c,\, k \cdot y_2 + l]</span>
-<span class="sd">        = X[s, c, k] \cdot Y[s, c, l].</span>
-
-<span class="sd">    Output format rule: ``BATCHED`` iff both inputs are ``BATCHED``</span>
-<span class="sd">    (each tile is one ``(batch, head)`` summary, stored once per</span>
-<span class="sd">    workload group via the kernel&#39;s first-workload gate); otherwise</span>
-<span class="sd">    ``RAGGED`` (per-workload tile). ``BATCHED`` inputs broadcast along</span>
-<span class="sd">    the workload axis (leading block dim == 1) so they can pair with</span>
-<span class="sd">    non-``BATCHED`` partners. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int or Iterable[int], optional</span>
-<span class="sd">        The inner axis (or axes) along which to take the Kronecker</span>
-<span class="sd">        product. Each entry must be ``1`` or ``2``; duplicates are</span>
-<span class="sd">        rejected. Default is ``(1, 2)`` (full Kronecker product).</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : Tuple[int, ...]</span>
-<span class="sd">        Sorted tuple of axes that get the Kronecker expansion.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        Resolved output format from :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[vTensor]</span>
-<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            \text{dim}=(1,2):\quad &amp; O_{s,\,i\,y_1+j,\,k\,y_2+l} = X_{s,i,k}\,Y_{s,j,l}, \\</span>
+<span class="sd">            \text{dim}=(1,):\quad  &amp; O_{s,\,i\,y_1+j,\,d} = X_{s,i,d}\,Y_{s,j,d}, \\</span>
+<span class="sd">            \text{dim}=(2,):\quad  &amp; O_{s,\,c,\,k\,y_2+l} = X_{s,c,k}\,Y_{s,c,l}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``Kron(dim=(1, 2))`` — inner axis/axes to expand, each ``1`` or</span>
+<span class="sd">        ``2`` (non-listed axes must be equal or broadcastable).</span>
+<span class="sd">    :__call__: ``o = op(x, y, ctx=ctx)`` — ``x`` ``[S, x_1, x_2]``, ``y``</span>
+<span class="sd">        ``[S, y_1, y_2]``; an expanded axis has output size</span>
+<span class="sd">        ``x.shape[a]*y.shape[a]``, a broadcast axis ``max(x.shape[a],</span>
+<span class="sd">        y.shape[a])``. Output is ``BATCHED`` iff both inputs are.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)):</span>

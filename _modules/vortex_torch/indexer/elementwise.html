@@ -270,29 +270,23 @@
 <div class="viewcode-block" id="Elementwise">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Elementwise</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Unary elementwise op for rank-3 logical tensors ``[S, C, D]``.</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Unary elementwise op — applies a scalar function pointwise.</span>
 
-<span class="sd">    Output format rule: ``BATCHED`` iff the input is ``BATCHED`` (its</span>
-<span class="sd">    ``S`` axis is already collapsed to 1), otherwise ``RAGGED``. Format</span>
-<span class="sd">    compatibility is enforced by the compiler&#39;s per-workload kernel.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float</span>
-<span class="sd">        Scalar parameter used by some ops. Default is ``1.0``.</span>
+<span class="sd">            Y_{s,c,d} = f(X_{s,c,d};\, \alpha, \beta),</span>
 
-<span class="sd">    beta : float</span>
-<span class="sd">        Scalar parameter used by some ops. Default is ``1.0``.</span>
-
-<span class="sd">    op_type : Optional[ElementwiseOpType]</span>
-<span class="sd">        The operator type used by the implementation.</span>
-
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer.</span>
+<span class="sd">        where :math:`f` is fixed by the subclass (ReLU / SiLU / Sigmoid /</span>
+<span class="sd">        affine / abs / log / exp).</span>
+<span class="sd">    :__init__: ``Elementwise(alpha=1.0, beta=1.0)`` — scalar parameters</span>
+<span class="sd">        :math:`\alpha`, :math:`\beta` consumed by :math:`f`.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` is ``[S, C, D]``; returns the same</span>
+<span class="sd">        shape. Output is ``BATCHED`` iff the input is, else ``RAGGED``.</span>
+<span class="sd">    :Note: use a concrete subclass — :class:`Relu`, :class:`Silu`,</span>
+<span class="sd">        :class:`Sigmoid`, :class:`Add_Mul`, :class:`Abs`, :class:`Log`,</span>
+<span class="sd">        :class:`Exp`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
@@ -307,30 +301,9 @@
 <div class="viewcode-block" id="Elementwise.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Elementwise.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate input, allocate the output buffer, and return a</span>
-<span class="sd">        ``vTensor`` view. The output is ``BATCHED`` iff the input is</span>
-<span class="sd">        ``BATCHED``, otherwise ``RAGGED``.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor. Must be rank-3 with shape ``[S, C, D]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing runtime ``S`` (``ctx.max_num_pages``)</span>
-<span class="sd">            and memory tracking.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the allocated output buffer.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If input tensor type or rank is invalid.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, C, D]``, register the op, and return</span>
+<span class="sd">        a same-shape ``vTensor`` view (``BATCHED`` iff ``x`` is, else</span>
+<span class="sd">        ``RAGGED``).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>
@@ -371,26 +344,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Relu">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Relu</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    ReLU-style elementwise operator.</span>
+<span class="sd">    ReLU-like activation with threshold/fallback (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies a thresholded linear function:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{out}(x) =</span>
-<span class="sd">        \begin{cases}</span>
-<span class="sd">            x, &amp; x \ge \alpha \\</span>
-<span class="sd">            \beta, &amp; x &lt; \alpha</span>
-<span class="sd">        \end{cases}</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Threshold value for activation. Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Value used when :math:`x &lt; \alpha`. Default is ``0.0``.</span>
-
+<span class="sd">            f(x;\alpha,\beta) = \begin{cases} x, &amp; x \ge \alpha, \\ \beta, &amp; x &lt; \alpha. \end{cases}</span>
+<span class="sd">    :__init__: ``Relu(alpha=0.0, beta=0.0)`` — threshold :math:`\alpha`,</span>
+<span class="sd">        fallback value :math:`\beta` (used when :math:`x&lt;\alpha`).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -403,28 +364,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Silu">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Silu</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    SiLU-style elementwise operator with affine pre-transform.</span>
+<span class="sd">    SiLU-like activation with affine pre-transform (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{SiLU}_{\alpha,\beta}(x)</span>
-<span class="sd">        = \frac{x}{1 + \exp(\beta x + \alpha)}</span>
-
-<span class="sd">    When :math:`\alpha = 0` and :math:`\beta = -1`, this reduces to the</span>
-<span class="sd">    common SiLU/Swish-like form :math:`x \, \sigma(x)` (up to the chosen</span>
-<span class="sd">    parameterization in the kernel).</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Bias term inside the exponent, used in :math:`\beta x + \alpha`.</span>
-<span class="sd">        Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Scale term inside the exponent, used in :math:`\beta x + \alpha`.</span>
-<span class="sd">        Default is ``0.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \frac{x}{1 + \exp(\beta x + \alpha)}.</span>
+<span class="sd">    :__init__: ``Silu(alpha=0.0, beta=0.0)`` — bias :math:`\alpha`, slope</span>
+<span class="sd">        :math:`\beta` inside the exponential.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -436,27 +383,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Sigmoid">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Sigmoid</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Sigmoid elementwise operator with affine argument.</span>
+<span class="sd">    Sigmoid activation with affine argument (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \sigma_{\alpha,\beta}(x)</span>
-<span class="sd">        = \frac{1}{1 + \exp(\beta x + \alpha)}</span>
-
-<span class="sd">    When :math:`\alpha = 0` and :math:`\beta = -1`, this is the standard</span>
-<span class="sd">    logistic sigmoid :math:`\sigma(x) = 1 / (1 + e^{-x})`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Bias term inside the exponent, used in :math:`\beta x + \alpha`.</span>
-<span class="sd">        Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Scale term inside the exponent, used in :math:`\beta x + \alpha`.</span>
-<span class="sd">        Default is ``0.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \frac{1}{1 + \exp(\beta x + \alpha)}.</span>
+<span class="sd">    :__init__: ``Sigmoid(alpha=0.0, beta=0.0)`` — bias :math:`\alpha`, slope</span>
+<span class="sd">        :math:`\beta` inside the exponential.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -468,24 +402,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Add_Mul">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Add_Mul</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Affine elementwise transform.</span>
+<span class="sd">    Affine transform :math:`\beta x + \alpha` (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies a simple affine mapping:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{out}(x) = \beta x + \alpha</span>
-
-<span class="sd">    With the defaults :math:`\alpha = 0` and :math:`\beta = 1`, this is</span>
-<span class="sd">    the identity transform :math:`\operatorname{out}(x) = x`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Additive bias term :math:`\alpha`. Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Multiplicative scale term :math:`\beta`. Default is ``1.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \beta x + \alpha.</span>
+<span class="sd">    :__init__: ``Add_Mul(alpha=0.0, beta=1.0)`` — additive :math:`\alpha`,</span>
+<span class="sd">        multiplicative :math:`\beta` (defaults give the identity).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -497,26 +421,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Abs">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Abs</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Absolute value of an affine transform.</span>
+<span class="sd">    Absolute value of an affine transform (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{out}(x) = \lvert \beta x + \alpha \rvert</span>
-
-<span class="sd">    With the defaults :math:`\alpha = 0` and :math:`\beta = 1`, this</span>
-<span class="sd">    reduces to the standard absolute value :math:`\lvert x \rvert`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Additive bias term inside the absolute value, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Multiplicative scale term inside the absolute value, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``1.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \lvert \beta x + \alpha \rvert.</span>
+<span class="sd">    :__init__: ``Abs(alpha=0.0, beta=1.0)`` — additive :math:`\alpha`,</span>
+<span class="sd">        multiplicative :math:`\beta` inside the absolute value.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -528,26 +440,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Log">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Log</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Natural logarithm of an affine transform.</span>
+<span class="sd">    Natural logarithm of an affine transform (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{out}(x) = \log(\beta x + \alpha)</span>
-
-<span class="sd">    With the defaults :math:`\alpha = 0` and :math:`\beta = 1`, this</span>
-<span class="sd">    reduces to the standard natural logarithm :math:`\log(x)`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Additive bias term inside the logarithm, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Multiplicative scale term inside the logarithm, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``1.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \log(\beta x + \alpha).</span>
+<span class="sd">    :__init__: ``Log(alpha=0.0, beta=1.0)`` — additive :math:`\alpha`,</span>
+<span class="sd">        multiplicative :math:`\beta` inside the logarithm.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>
@@ -559,26 +459,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.elementwise.html#vortex_torch.indexer.elementwise.Exp">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Exp</span><span class="p">(</span><span class="n">Elementwise</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Exponential of an affine transform.</span>
+<span class="sd">    Exponential of an affine transform (an :class:`Elementwise`).</span>
 
-<span class="sd">    This operator applies:</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \operatorname{out}(x) = \exp(\beta x + \alpha)</span>
-
-<span class="sd">    With the defaults :math:`\alpha = 0` and :math:`\beta = 1`, this</span>
-<span class="sd">    reduces to the standard exponential :math:`\exp(x)`.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    alpha : float, optional</span>
-<span class="sd">        Additive bias term inside the exponential, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``0.0``.</span>
-
-<span class="sd">    beta : float, optional</span>
-<span class="sd">        Multiplicative scale term inside the exponential, used in</span>
-<span class="sd">        :math:`\beta x + \alpha`. Default is ``1.0``.</span>
+<span class="sd">            f(x;\alpha,\beta) = \exp(\beta x + \alpha).</span>
+<span class="sd">    :__init__: ``Exp(alpha=0.0, beta=1.0)`` — additive :math:`\alpha`,</span>
+<span class="sd">        multiplicative :math:`\beta` inside the exponential.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">alpha</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">beta</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span>

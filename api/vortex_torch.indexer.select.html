@@ -281,7 +281,7 @@ they don’t write into the framework-provided <code class="docutils literal not
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.select.TopK" title="vortex_torch.indexer.select.TopK"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TopK</span></code></a>(k)</p></td>
-<td><p>Block-table top-k for the trtllm backend (k explicit, multi-output).</p></td>
+<td><p>Explicit-<code class="docutils literal notranslate"><span class="pre">k</span></code> block-table top-k (trtllm backend, two outputs).</p></td>
 </tr>
 </tbody>
 </table>
@@ -290,63 +290,42 @@ they don’t write into the framework-provided <code class="docutils literal not
 <dt class="sig sig-object py" id="vortex_torch.indexer.select.TopK">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.select.</span></span><span class="sig-name descname"><span class="pre">TopK</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">k</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/select.html#TopK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.select.TopK" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Block-table top-k for the trtllm backend (k explicit, multi-output).</p>
-<p>Distinct from <code class="xref py py-class docutils literal notranslate"><span class="pre">vortex_torch.indexer.topK</span></code> (lowercase <code class="docutils literal notranslate"><span class="pre">t</span></code>,
-a.k.a. <em>TopKOut</em>): <code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code> writes selected block ids into a
-caller-supplied <code class="docutils literal notranslate"><span class="pre">o</span></code> and has a <em>predetermined</em> k (sourced from
-<code class="docutils literal notranslate"><span class="pre">ctx.topk_val</span></code> / <code class="docutils literal notranslate"><span class="pre">ctx.sparse_kv_indptr</span></code> diff at runtime). This
-<a class="reference internal" href="#vortex_torch.indexer.select.TopK" title="vortex_torch.indexer.select.TopK"><code class="xref py py-class docutils literal notranslate"><span class="pre">TopK</span></code></a> is <strong>trtllm-only</strong>, takes the top-k budget <code class="docutils literal notranslate"><span class="pre">k</span></code> as an
-<em>explicit</em> constructor argument, and <strong>returns its own
-``(block_tables, seqlens)`` tuple</strong> — both auto-allocated as
-intermediate buffers by the compiler’s <code class="docutils literal notranslate"><span class="pre">memory_initiazation_str</span></code>.
-A separate op (developed elsewhere) is responsible for copying these
-intermediates into the final output buffers consumed by
-<code class="docutils literal notranslate"><span class="pre">trtllm_batch_decode_with_kv_cache</span></code>.</p>
-<p>Per-row behavior, with <code class="docutils literal notranslate"><span class="pre">bos</span> <span class="pre">=</span> <span class="pre">ctx.block_reserved_bos</span></code>,
-<code class="docutils literal notranslate"><span class="pre">eos</span> <span class="pre">=</span> <span class="pre">ctx.block_reserved_eos</span></code>, <code class="docutils literal notranslate"><span class="pre">block_len</span> <span class="pre">=</span> <span class="pre">ceil(dense_seqlens[i]</span> <span class="pre">/</span> <span class="pre">block_size)</span></code>:</p>
-<blockquote>
-<div><ul>
-<li><p>If <code class="docutils literal notranslate"><span class="pre">block_len</span> <span class="pre">&lt;=</span> <span class="pre">bos</span> <span class="pre">+</span> <span class="pre">k</span> <span class="pre">+</span> <span class="pre">eos</span></code> → copy the entire dense row
-into <code class="docutils literal notranslate"><span class="pre">block_tables[i,</span> <span class="pre">:block_len]</span></code> and set <code class="docutils literal notranslate"><span class="pre">seqlens[i]</span> <span class="pre">=</span>
-<span class="pre">dense_seqlens[i]</span></code>. No selection — the row is already small
-enough to fit the budget.</p></li>
-<li><p>Otherwise → write a sparse row of <code class="docutils literal notranslate"><span class="pre">bos</span> <span class="pre">+</span> <span class="pre">k</span> <span class="pre">+</span> <span class="pre">eos</span></code> blocks:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">[0:bos)</span></code> ← first <code class="docutils literal notranslate"><span class="pre">bos</span></code> dense blocks</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">[bos:bos+k)</span></code> ← top-<code class="docutils literal notranslate"><span class="pre">k</span></code> blocks by score over
-<code class="docutils literal notranslate"><span class="pre">[bos,</span> <span class="pre">block_len-eos)</span></code> of the dense row</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">[bos+k:bos+k+eos)</span></code> ← last <code class="docutils literal notranslate"><span class="pre">eos</span></code> dense blocks</p></li>
-</ul>
-<p>and set <code class="docutils literal notranslate"><span class="pre">seqlens[i]</span> <span class="pre">=</span> <span class="pre">(bos+k+eos-1)</span> <span class="pre">*</span> <span class="pre">block_size</span> <span class="pre">+</span> <span class="pre">last_block_len</span></code>,
-where <code class="docutils literal notranslate"><span class="pre">last_block_len</span></code> is the per-row trailing block’s token count
-(so the last block contributes the exact token count trtllm decode
-expects).</p>
-</li>
-</ul>
-</div></blockquote>
-<section id="constructor">
-<h2>Constructor<a class="headerlink" href="#constructor" title="Link to this heading">¶</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">k</span></code> : int — number of <em>selected</em> blocks (excludes the reserved
-BOS+EOS slots). The total per-row sparse block count is
-<code class="docutils literal notranslate"><span class="pre">bos</span> <span class="pre">+</span> <span class="pre">k</span> <span class="pre">+</span> <span class="pre">eos</span></code>.</p>
-</section>
-<section id="invocation">
-<h2>Invocation<a class="headerlink" href="#invocation" title="Link to this heading">¶</a></h2>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">block_tables</span><span class="p">,</span> <span class="n">seqlens</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
-</pre></div>
+<p>Explicit-<code class="docutils literal notranslate"><span class="pre">k</span></code> block-table top-k (trtllm backend, two outputs).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For request row <span class="math notranslate nohighlight">\(i\)</span> with score <span class="math notranslate nohighlight">\(s\)</span> over its dense blocks,
+<code class="docutils literal notranslate"><span class="pre">bos</span></code> / <code class="docutils literal notranslate"><span class="pre">eos</span></code> reserved blocks and
+<span class="math notranslate nohighlight">\(L_i = \lceil \text{seqlen}_i / \text{block\_size}\rceil\)</span>:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}\mathcal{B}_i = \begin{cases}
+    \{0,\dots,L_i-1\}, &amp; L_i \le \text{bos}+k+\text{eos}, \\[2pt]
+    [0,\text{bos}) \;\cup\; \operatorname*{top\text{-}k}_{\,\text{bos}\le j&lt;L_i-\text{eos}} s_j
+    \;\cup\; [L_i-\text{eos}, L_i), &amp; \text{otherwise}.
+\end{cases}\end{split}\]</div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">score</span></code> is the per-block RAGGED scores <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>. The op
-returns two new intermediate vTensors:</p>
-<blockquote>
-<div><ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">block_tables</span></code> — RAGGED int32, leading dim <code class="docutils literal notranslate"><span class="pre">ctx.max_num_blocks</span></code>
-(= <code class="docutils literal notranslate"><span class="pre">eff_bs</span> <span class="pre">*</span> <span class="pre">max_blocks_per_seq</span></code>). The CUDA kernel addresses it
-as the contiguous 2D <code class="docutils literal notranslate"><span class="pre">[eff_bs,</span> <span class="pre">max_blocks_per_seq]</span></code> memory it is.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">seqlens</span></code> — BATCHED int32, leading dim <code class="docutils literal notranslate"><span class="pre">ctx.max_bs</span> <span class="pre">*</span> <span class="pre">num_kv_heads</span></code>.</p></li>
-</ul>
-</div></blockquote>
-<p>Both are allocated by <code class="docutils literal notranslate"><span class="pre">interface.generate_entry_point</span></code>’s
-<code class="docutils literal notranslate"><span class="pre">memory_initiazation_str</span></code> (no aliasing with <code class="docutils literal notranslate"><span class="pre">ctx.metadata</span></code>).</p>
+<p>Rows that already fit the budget are copied dense; larger rows keep
+the leading <code class="docutils literal notranslate"><span class="pre">bos</span></code> and trailing <code class="docutils literal notranslate"><span class="pre">eos</span></code> blocks and fill the middle
+with the top-<code class="docutils literal notranslate"><span class="pre">k</span></code> by score.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">TopK(k)</span></code> — number of <em>selected</em> blocks (excludes the
+reserved BOS/EOS); per-row sparse block count is <code class="docutils literal notranslate"><span class="pre">bos</span> <span class="pre">+</span> <span class="pre">k</span> <span class="pre">+</span> <span class="pre">eos</span></code>.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">block_tables,</span> <span class="pre">seqlens</span> <span class="pre">=</span> <span class="pre">op(score,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">score</span></code> RAGGED
+<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">1]</span></code> → <code class="docutils literal notranslate"><span class="pre">block_tables</span></code> (RAGGED int32) and <code class="docutils literal notranslate"><span class="pre">seqlens</span></code>
+(BATCHED int32), both auto-allocated. Feed the pair to
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Union</span></code> before <code class="docutils literal notranslate"><span class="pre">trtllm_batch_decode_with_kv_cache</span></code>.</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>trtllm only</strong> — asserts under flashinfer; use <code class="xref py py-func docutils literal notranslate"><span class="pre">topK()</span></code> for
+flashinfer / CSR layouts.</p>
+</dd>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
+</dd>
+</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.select.TopK.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/select.html#TopK.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.select.TopK.profile" title="Link to this definition">¶</a></dt>
@@ -382,12 +361,6 @@ as the contiguous 2D <code class="docutils literal notranslate"><span class="pre
 </dl>
 </dd></dl>
 
-</section>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>k</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
-</dd>
-</dl>
 </dd></dl>
 
 </section>
@@ -469,5 +442,6 @@ as the contiguous 2D <code class="docutils literal notranslate"><span class="pre
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

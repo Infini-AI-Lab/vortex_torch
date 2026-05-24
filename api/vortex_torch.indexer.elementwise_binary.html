@@ -274,19 +274,19 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Add" title="vortex_torch.indexer.elementwise_binary.Add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Add</span></code></a>([alpha, beta])</p></td>
-<td><p>Affine combination of two tensors.</p></td>
+<td><p>Affine combination <span class="math notranslate nohighlight">\(\alpha x + \beta y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>([alpha, beta])</p></td>
-<td><p>Binary elementwise op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></td>
+<td><p>Binary elementwise op — combines two tensors pointwise (with broadcasting).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Maximum" title="vortex_torch.indexer.elementwise_binary.Maximum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Maximum</span></code></a>([alpha, beta])</p></td>
-<td><p>Elementwise maximum between two tensors.</p></td>
+<td><p>Elementwise maximum (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Minimum" title="vortex_torch.indexer.elementwise_binary.Minimum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Minimum</span></code></a>([alpha, beta])</p></td>
-<td><p>Elementwise minimum between two tensors.</p></td>
+<td><p>Elementwise minimum (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Multiply" title="vortex_torch.indexer.elementwise_binary.Multiply"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Multiply</span></code></a>([alpha, beta])</p></td>
-<td><p>Elementwise product of two tensors.</p></td>
+<td><p>Elementwise product (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p></td>
 </tr>
 </tbody>
 </table>
@@ -295,19 +295,30 @@
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">Elementwise_Binary</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Elementwise_Binary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Binary elementwise op for rank-3 logical tensors <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p>
-<p>The logical output shape:</p>
-<ul class="simple">
-<li><p>keeps the <code class="docutils literal notranslate"><span class="pre">S</span></code> axis from the runtime context (<code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>), and</p></li>
-<li><p>follows broadcasting over the <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes.</p></li>
-</ul>
-<p>Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> if both inputs are <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>,
-otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
-compiler’s per-workload kernel; no explicit format dispatch is
-needed here.</p>
-<p>Scalar parameters <code class="docutils literal notranslate"><span class="pre">alpha</span></code> and <code class="docutils literal notranslate"><span class="pre">beta</span></code> can be used by certain
-binary operations (e.g. an <code class="docutils literal notranslate"><span class="pre">axpby</span></code>-style op).</p>
-<dl class="field-list simple">
+<p>Binary elementwise op — combines two tensors pointwise (with broadcasting).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Z_{s,c,d} = g(X_{s,c,d},\, Y_{s,c,d};\, \alpha, \beta),\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(g\)</span> is fixed by the subclass (max / min / affine-sum /
+product / comparison) and the inner <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes broadcast.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary(alpha=1.0,</span> <span class="pre">beta=1.0)</span></code> — scalar parameters
+used by some ops (e.g. the affine sum <span class="math notranslate nohighlight">\(\alpha x + \beta y\)</span>).</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">z</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code> / <code class="docutils literal notranslate"><span class="pre">y</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code> (broadcast
+on <code class="docutils literal notranslate"><span class="pre">C,</span> <span class="pre">D</span></code>); output <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">max(C_x,C_y),</span> <span class="pre">max(D_x,D_y)]</span></code>. <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>
+iff both inputs are, else <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>use a concrete subclass — <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Maximum" title="vortex_torch.indexer.elementwise_binary.Maximum"><code class="xref py py-class docutils literal notranslate"><span class="pre">Maximum</span></code></a>, <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Minimum" title="vortex_torch.indexer.elementwise_binary.Minimum"><code class="xref py py-class docutils literal notranslate"><span class="pre">Minimum</span></code></a>,
+<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Add" title="vortex_torch.indexer.elementwise_binary.Add"><code class="xref py py-class docutils literal notranslate"><span class="pre">Add</span></code></a>, <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Multiply" title="vortex_torch.indexer.elementwise_binary.Multiply"><code class="xref py py-class docutils literal notranslate"><span class="pre">Multiply</span></code></a>, or a comparison mask
+(<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.WhereGreater" title="vortex_torch.indexer.elementwise_binary.WhereGreater"><code class="xref py py-class docutils literal notranslate"><span class="pre">WhereGreater</span></code></a>, <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.WhereEqual" title="vortex_torch.indexer.elementwise_binary.WhereEqual"><code class="xref py py-class docutils literal notranslate"><span class="pre">WhereEqual</span></code></a>, …).</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
@@ -315,93 +326,22 @@ binary operations (e.g. an <code class="docutils literal notranslate"><span clas
 </ul>
 </dd>
 </dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.alpha">
-<span class="sig-name descname"><span class="pre">alpha</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.alpha" title="Link to this definition">¶</a></dt>
-<dd><p>Scalar parameter used by some ops. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.beta">
-<span class="sig-name descname"><span class="pre">beta</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.beta" title="Link to this definition">¶</a></dt>
-<dd><p>Scalar parameter used by some ops. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.op_type">
-<span class="sig-name descname"><span class="pre">op_type</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.op_type" title="Link to this definition">¶</a></dt>
-<dd><p>The operator type used by the implementation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ElementwiseBinaryOpType" title="vortex_torch.utils.ElementwiseBinaryOpType"><em>ElementwiseBinaryOpType</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Preallocated output tensor buffer that stores the binary result.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Elementwise_Binary.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, select implementation, allocate the output buffer,
-and return a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view with the resolved output format.</p>
-<p>Validates rank-3 shapes and broadcastability on <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code>.
-Allocates an output buffer with shape <code class="docutils literal notranslate"><span class="pre">[S_ctx,</span> <span class="pre">C_out,</span> <span class="pre">D_out]</span></code> where</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[C_{\text{out}} = \max(C_x, C_y), \quad
-D_{\text{out}} = \max(D_x, D_y),\]</div>
-</div>
-<p>and <code class="docutils literal notranslate"><span class="pre">S_ctx</span> <span class="pre">=</span> <span class="pre">ctx.max_num_pages</span></code>. Output format is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>
-only when both inputs are <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>, otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
+<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> / <code class="docutils literal notranslate"><span class="pre">y</span></code> (rank-3, broadcastable on <code class="docutils literal notranslate"><span class="pre">C</span></code> /
+<code class="docutils literal notranslate"><span class="pre">D</span></code>), register the op, and return a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view of the broadcast
+output (see the class docstring for shapes).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Left-hand input tensor, rank-3, with logical shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></li>
-<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Right-hand input tensor, rank-3, with logical shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">C,</span> <span class="pre">D]</span></code>.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing the runtime <code class="docutils literal notranslate"><span class="pre">S</span></code> (<code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code>)
-and auxiliary-memory accounting.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the allocated output buffer.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types are not <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>, if ranks are not 3, if <code class="docutils literal notranslate"><span class="pre">C</span></code>/<code class="docutils literal notranslate"><span class="pre">D</span></code>
-    are not broadcastable, or if devices of <code class="docutils literal notranslate"><span class="pre">x</span></code> and <code class="docutils literal notranslate"><span class="pre">y</span></code> do not match.</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -412,21 +352,21 @@ and auxiliary-memory accounting.</p></li>
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Maximum">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">Maximum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Maximum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Maximum" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Elementwise maximum between two tensors.</p>
-<p>This operator computes the pointwise maximum:</p>
-<div class="math-wrapper docutils container">
+<p>Elementwise maximum (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\operatorname{out}(x, y) = \max(x, y)\]</div>
+\[Z_{s,c,d} = \max(X_{s,c,d},\, Y_{s,c,d}).\]</div>
 </div>
-<p>Broadcasting over the <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes is supported as described in
-<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Maximum(alpha=1.0,</span> <span class="pre">beta=1.0)</span></code> — <code class="docutils literal notranslate"><span class="pre">alpha</span></code> / <code class="docutils literal notranslate"><span class="pre">beta</span></code> unused.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the maximum operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the maximum operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -436,21 +376,21 @@ by the maximum operation itself. Default is <code class="docutils literal notran
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Minimum">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">Minimum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Minimum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Minimum" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Elementwise minimum between two tensors.</p>
-<p>This operator computes the pointwise minimum:</p>
-<div class="math-wrapper docutils container">
+<p>Elementwise minimum (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\operatorname{out}(x, y) = \min(x, y)\]</div>
+\[Z_{s,c,d} = \min(X_{s,c,d},\, Y_{s,c,d}).\]</div>
 </div>
-<p>Broadcasting over the <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes is supported as described in
-<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Minimum(alpha=1.0,</span> <span class="pre">beta=1.0)</span></code> — <code class="docutils literal notranslate"><span class="pre">alpha</span></code> / <code class="docutils literal notranslate"><span class="pre">beta</span></code> unused.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the minimum operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the minimum operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -460,25 +400,22 @@ by the minimum operation itself. Default is <code class="docutils literal notran
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Add">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">Add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Add" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Affine combination of two tensors.</p>
-<p>This operator computes a weighted sum of the two inputs:</p>
-<div class="math-wrapper docutils container">
+<p>Affine combination <span class="math notranslate nohighlight">\(\alpha x + \beta y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\operatorname{out}(x, y) = \alpha x + \beta y\]</div>
+\[Z_{s,c,d} = \alpha\,X_{s,c,d} + \beta\,Y_{s,c,d}.\]</div>
 </div>
-<p>With the defaults <span class="math notranslate nohighlight">\(\alpha = 1\)</span> and <span class="math notranslate nohighlight">\(\beta = 1\)</span>, this
-reduces to standard elementwise addition:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\operatorname{out}(x, y) = x + y\]</div>
-</div>
-<p>Broadcasting over the <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes is supported as described in
-<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Add(alpha=1.0,</span> <span class="pre">beta=1.0)</span></code> — multipliers for <span class="math notranslate nohighlight">\(x\)</span> and
+<span class="math notranslate nohighlight">\(y\)</span> (defaults give <span class="math notranslate nohighlight">\(x+y\)</span>).</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar multiplier for <span class="math notranslate nohighlight">\(x\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar multiplier for <span class="math notranslate nohighlight">\(y\)</span>. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -488,21 +425,21 @@ reduces to standard elementwise addition:</p>
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.Multiply">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">Multiply</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#Multiply"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.Multiply" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Elementwise product of two tensors.</p>
-<p>This operator computes the pointwise product:</p>
-<div class="math-wrapper docutils container">
+<p>Elementwise product (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\operatorname{out}(x, y) = x \cdot y\]</div>
+\[Z_{s,c,d} = X_{s,c,d}\cdot Y_{s,c,d}.\]</div>
 </div>
-<p>Broadcasting over the <code class="docutils literal notranslate"><span class="pre">(C,</span> <span class="pre">D)</span></code> axes is supported as described in
-<a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Multiply(alpha=1.0,</span> <span class="pre">beta=1.0)</span></code> — <code class="docutils literal notranslate"><span class="pre">alpha</span></code> / <code class="docutils literal notranslate"><span class="pre">beta</span></code> unused.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the pure multiplication operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
-<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>optional</em>) – Scalar parameter forwarded to the binary kernel. It is not used
-by the pure multiplication operation itself. Default is <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p></li>
+<li><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
+<li><p><strong>beta</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -512,53 +449,112 @@ by the pure multiplication operation itself. Default is <code class="docutils li
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereEqual">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereEqual</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereEqual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereEqual" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Comparison mask encoded as <code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">-inf</span></code>.</p>
-<p>This operator compares the two inputs elementwise and emits:</p>
-<div class="math-wrapper docutils container">
+<p>Comparison mask <span class="math notranslate nohighlight">\(x = y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\begin{split}\operatorname{out}(x, y) =
-\begin{cases}
-    0, &amp; x = y \\
-    -\infty, &amp; x \ne y
-\end{cases}\end{split}\]</div>
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} = Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
 </div>
-<p>The output is intended for masking score tensors before downstream
-operators such as softmax.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereEqual()</span></code> — no arguments.</p>
+</dd>
+<dt class="field-odd">Note<span class="colon">:</span></dt>
+<dd class="field-odd"><p>additive mask, intended to gate a score tensor before
+<code class="xref py py-class docutils literal notranslate"><span class="pre">vortex_torch.indexer.Softmax</span></code> / <code class="xref py py-func docutils literal notranslate"><span class="pre">vortex_torch.indexer.topK()</span></code>.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereNotEqual">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereNotEqual</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereNotEqual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereNotEqual" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Emit <code class="docutils literal notranslate"><span class="pre">0</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">!=</span> <span class="pre">y</span></code> and <code class="docutils literal notranslate"><span class="pre">-inf</span></code> otherwise.</p>
+<p>Comparison mask <span class="math notranslate nohighlight">\(x \ne y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} \ne Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereNotEqual()</span></code> — no arguments.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereGreater">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereGreater</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereGreater"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereGreater" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Emit <code class="docutils literal notranslate"><span class="pre">0</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">&gt;</span> <span class="pre">y</span></code> and <code class="docutils literal notranslate"><span class="pre">-inf</span></code> otherwise.</p>
+<p>Comparison mask <span class="math notranslate nohighlight">\(x &gt; y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} &gt; Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereGreater()</span></code> — no arguments.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereGreaterEqual">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereGreaterEqual</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereGreaterEqual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereGreaterEqual" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Emit <code class="docutils literal notranslate"><span class="pre">0</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">&gt;=</span> <span class="pre">y</span></code> and <code class="docutils literal notranslate"><span class="pre">-inf</span></code> otherwise.</p>
+<p>Comparison mask <span class="math notranslate nohighlight">\(x \ge y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} \ge Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereGreaterEqual()</span></code> — no arguments.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereLess">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereLess</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereLess"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereLess" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Emit <code class="docutils literal notranslate"><span class="pre">0</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">y</span></code> and <code class="docutils literal notranslate"><span class="pre">-inf</span></code> otherwise.</p>
+<p>Comparison mask <span class="math notranslate nohighlight">\(x &lt; y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} &lt; Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereLess()</span></code> — no arguments.</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.elementwise_binary.WhereLessEqual">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.elementwise_binary.</span></span><span class="sig-name descname"><span class="pre">WhereLessEqual</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/elementwise_binary.html#WhereLessEqual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.elementwise_binary.WhereLessEqual" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a></p>
-<p>Emit <code class="docutils literal notranslate"><span class="pre">0</span></code> where <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">y</span></code> and <code class="docutils literal notranslate"><span class="pre">-inf</span></code> otherwise.</p>
+<p>Comparison mask <span class="math notranslate nohighlight">\(x \le y\)</span> (an <a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary" title="vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="xref py py-class docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\begin{split}Z_{s,c,d} = \begin{cases} 0, &amp; X_{s,c,d} \le Y_{s,c,d}, \\ -\infty, &amp; \text{otherwise}. \end{cases}\end{split}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">WhereLessEqual()</span></code> — no arguments.</p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -620,11 +616,6 @@ operators such as softmax.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.elementwise_binary</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.alpha"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.alpha</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.beta"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.beta</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.op_type"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.op_type</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_format"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.output_buffer"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.elementwise_binary.Elementwise_Binary.profile"><code class="docutils literal notranslate"><span class="pre">Elementwise_Binary.profile()</span></code></a></li>
 </ul>
 </li>

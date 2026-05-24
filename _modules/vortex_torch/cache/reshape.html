@@ -272,53 +272,23 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reshape.html#vortex_torch.cache.reshape.Reshape">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Reshape</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Same-numel reshape of the inner two axes of a rank-3 cache block.</span>
+<span class="sd">    Same-numel reshape of a cache block&#39;s inner two axes.</span>
 
-<span class="sd">    Given a per-block tile</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">            X\in\mathbb{R}^{1\times x_1\times y_1} \;\longrightarrow\;</span>
+<span class="sd">            Y\in\mathbb{R}^{1\times x_2\times y_2},\qquad x_2\,y_2 = x_1\,y_1,</span>
 
-<span class="sd">        X \in \mathbb{R}^{1 \times x_1 \times y_1},</span>
-
-<span class="sd">    this op produces</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y \in \mathbb{R}^{1 \times x_2 \times y_2},</span>
-<span class="sd">        \qquad \text{with} \qquad x_2 \cdot y_2 \;=\; x_1 \cdot y_1,</span>
-
-<span class="sd">    by interpreting the flat ``x_1 * y_1`` elements row-major into the</span>
-<span class="sd">    new ``(x_2, y_2)`` layout. The leading (per-block batch) axis is</span>
-<span class="sd">    fixed at size 1 on the cache side and must be passed as ``-1`` to</span>
-<span class="sd">    the constructor as a placeholder, mirroring ``torch.reshape``&#39;s</span>
-<span class="sd">    &quot;infer this dim&quot; convention.</span>
-
-<span class="sd">    No data movement happens beyond the existing cache load/store —</span>
-<span class="sd">    the loaded ``(D0, D1)`` block is reshaped at the Triton-tile level</span>
-<span class="sd">    via :func:`tl.reshape`. The kernel reads with the input&#39;s</span>
-<span class="sd">    ``(x_1, y_1)`` shape and stores with the output&#39;s ``(x_2, y_2)``</span>
-<span class="sd">    shape.</span>
-
-<span class="sd">    Output format rule: if a caller-provided ``output`` is supplied with</span>
-<span class="sd">    ``PAGED`` format, the output is ``PAGED``; in every other case the</span>
-<span class="sd">    output is ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-block kernel.</span>
-
-<span class="sd">    Constructor</span>
-<span class="sd">    -----------</span>
-<span class="sd">    ``Reshape(-1, x2, y2)`` — three integers; the leading must be</span>
-<span class="sd">    ``-1`` (the per-block batch dim is auto-inferred and always ``1``).</span>
-<span class="sd">    The product ``x2 * y2`` is checked against the input&#39;s</span>
-<span class="sd">    ``x1 * y1`` at :meth:`profile` time.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    x2, y2 : int</span>
-<span class="sd">        Target inner-axis sizes.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        Resolved output format from :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[vTensor]</span>
-<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
+<span class="sd">        reading the flat :math:`x_1 y_1` elements row-major into the new</span>
+<span class="sd">        :math:`(x_2, y_2)` layout (a Triton-tile :func:`tl.reshape`; no data</span>
+<span class="sd">        movement beyond the existing load/store).</span>
+<span class="sd">    :__init__: ``Reshape(-1, x2, y2)`` — the leading dim must be ``-1`` (the</span>
+<span class="sd">        per-block batch axis, always 1); ``x2*y2`` must equal the input&#39;s</span>
+<span class="sd">        ``x1*y1`` (checked at trace time).</span>
+<span class="sd">    :__call__: ``y = op(x, output, loc=loc, ctx=ctx)`` — ``x``</span>
+<span class="sd">        ``[1, x_1, y_1]`` → ``[1, x_2, y_2]``. ``PAGED`` iff a ``PAGED``</span>
+<span class="sd">        ``output`` is supplied, else ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x2</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">y2</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>

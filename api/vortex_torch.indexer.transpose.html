@@ -274,7 +274,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose" title="vortex_torch.indexer.transpose.Transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Transpose</span></code></a>()</p></td>
-<td><p>Transpose op for rank-3 logical tensors.</p></td>
+<td><p>Swap the two inner axes of each slice along the leading axis.</p></td>
 </tr>
 </tbody>
 </table>
@@ -283,83 +283,39 @@
 <dt class="sig sig-object py" id="vortex_torch.indexer.transpose.Transpose">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.transpose.</span></span><span class="sig-name descname"><span class="pre">Transpose</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/transpose.html#Transpose"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.transpose.Transpose" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Transpose op for rank-3 logical tensors.</p>
-<p>This operator transposes the last two dimensions of a rank-3 tensor
-while keeping the leading axis unchanged. The input is treated as</p>
-<div class="math-wrapper docutils container">
+<p>Swap the two inner axes of each slice along the leading axis.</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{S \times D_0 \times D_1},\]</div>
+\[Y_{s,d_1,d_0} = X_{s,d_0,d_1},\]</div>
 </div>
-<p>and the output has logical shape</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{S \times D_1 \times D_0},\]</div>
-</div>
-<p>with</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y[s, d_1, d_0] = X[s, d_0, d_1].\]</div>
-</div>
-<p>The leading dimension <span class="math notranslate nohighlight">\(S\)</span> may represent a true sequence axis or
-a packed axis (e.g. <span class="math notranslate nohighlight">\(S_{\text{pack}} = \sum_b S_b\)</span>); the transpose
-is applied independently for each slice along that axis.</p>
-<p>Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff the input is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>,
-otherwise <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
-compiler’s per-workload kernel.</p>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.transpose.Transpose.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.indexer.transpose.Transpose.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose.profile" title="vortex_torch.indexer.transpose.Transpose.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
+<p>applied independently per leading index <span class="math notranslate nohighlight">\(s\)</span>.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Transpose()</span></code> — no arguments.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code> →
+<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_1,</span> <span class="pre">D_0]</span></code>. <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff the input is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>, else
+<code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
 </dd>
 </dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.transpose.Transpose.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.indexer.transpose.Transpose.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Preallocated output tensor buffer with logical shape
-<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_1,</span> <span class="pre">D_0]</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[torch.Tensor]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.transpose.Transpose.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/transpose.html#Transpose.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.transpose.Transpose.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate the input, allocate the output buffer, and return a
-<code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
-<p>The input tensor is expected to have logical shape
-<code class="docutils literal notranslate"><span class="pre">[S_in,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>. The output buffer is allocated with shape</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[[S, D_1, D_0],\]</div>
-</div>
-<p>where <span class="math notranslate nohighlight">\(S\)</span> is taken from <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> to match the
-runtime configuration for the leading dimension.</p>
+<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, resolve the output
+format, and return a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view of the <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_1,</span> <span class="pre">D_0]</span></code>
+transpose.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor to be transposed, with logical shape
-<code class="docutils literal notranslate"><span class="pre">[S_in,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context providing <code class="docutils literal notranslate"><span class="pre">ctx.max_num_pages</span></code> for the leading
-dimension and tracking auxiliary memory usage.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the internally allocated output
-buffer.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">x</span></code> is not a <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> or its rank is not 3.</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -425,8 +381,6 @@ buffer.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.transpose</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose"><code class="docutils literal notranslate"><span class="pre">Transpose</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose.output_format"><code class="docutils literal notranslate"><span class="pre">Transpose.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose.output_buffer"><code class="docutils literal notranslate"><span class="pre">Transpose.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.transpose.Transpose.profile"><code class="docutils literal notranslate"><span class="pre">Transpose.profile()</span></code></a></li>
 </ul>
 </li>

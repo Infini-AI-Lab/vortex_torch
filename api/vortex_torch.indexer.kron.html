@@ -284,102 +284,36 @@
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.kron.</span></span><span class="sig-name descname"><span class="pre">Kron</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(1,</span> <span class="pre">2)</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/kron.html#Kron"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.kron.Kron" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
 <p>Kronecker product over a configurable subset of the inner axes.</p>
-<p>Given two rank-3 inputs</p>
+<p>The chosen inner axes (<code class="docutils literal notranslate"><span class="pre">dim</span></code>) are Kronecker-expanded; any other inner
+axis is multiplied elementwise (with broadcasting), and the leading
+<span class="math notranslate nohighlight">\(S\)</span> axis is always elementwise.</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{S\times x_1\times x_2}\)</span> and
+<span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{S\times y_1\times y_2}\)</span>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{S \times x_1 \times x_2}, \qquad
-Y \in \mathbb{R}^{S \times y_1 \times y_2},\]</div>
+\[\begin{split}\begin{aligned}
+\text{dim}=(1,2):\quad &amp; O_{s,\,i\,y_1+j,\,k\,y_2+l} = X_{s,i,k}\,Y_{s,j,l}, \\
+\text{dim}=(1,):\quad  &amp; O_{s,\,i\,y_1+j,\,d} = X_{s,i,d}\,Y_{s,j,d}, \\
+\text{dim}=(2,):\quad  &amp; O_{s,\,c,\,k\,y_2+l} = X_{s,c,k}\,Y_{s,c,l}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>this operator takes a Kronecker product along the axes listed in
-<a class="reference internal" href="#vortex_torch.indexer.kron.Kron.dim" title="vortex_torch.indexer.kron.Kron.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a> (a subset of <code class="docutils literal notranslate"><span class="pre">{1,</span> <span class="pre">2}</span></code>), and an elementwise (broadcast)
-product along every other inner axis. The leading axis <span class="math notranslate nohighlight">\(S\)</span> is
-always elementwise.</p>
-<p>For axis <code class="docutils literal notranslate"><span class="pre">a</span></code> in <code class="docutils literal notranslate"><span class="pre">{1,</span> <span class="pre">2}</span></code>:</p>
-<ul class="simple">
-<li><p>if <code class="docutils literal notranslate"><span class="pre">a</span></code> is in <a class="reference internal" href="#vortex_torch.indexer.kron.Kron.dim" title="vortex_torch.indexer.kron.Kron.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a>, the output size is <code class="docutils literal notranslate"><span class="pre">x.shape[a]</span> <span class="pre">*</span> <span class="pre">y.shape[a]</span></code>;</p></li>
-<li><p>otherwise, <code class="docutils literal notranslate"><span class="pre">x.shape[a]</span></code> must equal <code class="docutils literal notranslate"><span class="pre">y.shape[a]</span></code> or one of them
-must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (broadcast), and the output size is
-<code class="docutils literal notranslate"><span class="pre">max(x.shape[a],</span> <span class="pre">y.shape[a])</span></code>.</p></li>
-</ul>
-<p class="rubric">Examples</p>
-<p>All three forms below select different output layouts from the same
-pair of inputs:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Kron</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>   <span class="c1"># full Kron:    [B, x1*y1, x2*y2]</span>
-<span class="n">Kron</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>        <span class="c1"># row-Kron:     [B, x1*y1, D]      (x2==y2 or 1)</span>
-<span class="n">Kron</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>        <span class="c1"># col-Kron:     [B, C,     x2*y2]  (x1==y1 or 1)</span>
-</pre></div>
-</div>
-<p>With the explicit index formula</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out}[s, \cdot, \cdot]
-\;=\; \mathrm{kron\_along}_{\text{dim}}\!\bigl(X[s], Y[s]\bigr).\]</div>
-</div>
-<p>For <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">(1,</span> <span class="pre">2)</span></code>:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out}[s,\, i \cdot y_1 + j,\, k \cdot y_2 + l]
-= X[s, i, k] \cdot Y[s, j, l].\]</div>
-</div>
-<p>For <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">(1,)</span></code> (with <code class="docutils literal notranslate"><span class="pre">x_2</span> <span class="pre">=</span> <span class="pre">y_2</span> <span class="pre">=</span> <span class="pre">D</span></code> after broadcast):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out}[s,\, i \cdot y_1 + j,\, d]
-= X[s, i, d] \cdot Y[s, j, d].\]</div>
-</div>
-<p>For <code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">(2,)</span></code> (with <code class="docutils literal notranslate"><span class="pre">x_1</span> <span class="pre">=</span> <span class="pre">y_1</span> <span class="pre">=</span> <span class="pre">C</span></code> after broadcast):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out}[s,\, c,\, k \cdot y_2 + l]
-= X[s, c, k] \cdot Y[s, c, l].\]</div>
-</div>
-<p>Output format rule: <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff both inputs are <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code>
-(each tile is one <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">head)</span></code> summary, stored once per
-workload group via the kernel’s first-workload gate); otherwise
-<code class="docutils literal notranslate"><span class="pre">RAGGED</span></code> (per-workload tile). <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> inputs broadcast along
-the workload axis (leading block dim == 1) so they can pair with
-non-<code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> partners. Format compatibility is enforced by the
-compiler’s per-workload kernel.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> or </em><em>Iterable</em><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em><em>, </em><em>optional</em>) – The inner axis (or axes) along which to take the Kronecker
-product. Each entry must be <code class="docutils literal notranslate"><span class="pre">1</span></code> or <code class="docutils literal notranslate"><span class="pre">2</span></code>; duplicates are
-rejected. Default is <code class="docutils literal notranslate"><span class="pre">(1,</span> <span class="pre">2)</span></code> (full Kronecker product).</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Kron(dim=(1,</span> <span class="pre">2))</span></code> — inner axis/axes to expand, each <code class="docutils literal notranslate"><span class="pre">1</span></code> or
+<code class="docutils literal notranslate"><span class="pre">2</span></code> (non-listed axes must be equal or broadcastable).</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">o</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">x_1,</span> <span class="pre">x_2]</span></code>, <code class="docutils literal notranslate"><span class="pre">y</span></code>
+<code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">y_1,</span> <span class="pre">y_2]</span></code>; an expanded axis has output size
+<code class="docutils literal notranslate"><span class="pre">x.shape[a]*y.shape[a]</span></code>, a broadcast axis <code class="docutils literal notranslate"><span class="pre">max(x.shape[a],</span>
+<span class="pre">y.shape[a])</span></code>. Output is <code class="docutils literal notranslate"><span class="pre">BATCHED</span></code> iff both inputs are.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.14)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>)</p>
 </dd>
 </dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.kron.Kron.dim">
-<span class="sig-name descname"><span class="pre">dim</span></span><a class="headerlink" href="#vortex_torch.indexer.kron.Kron.dim" title="Link to this definition">¶</a></dt>
-<dd><p>Sorted tuple of axes that get the Kronecker expansion.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Tuple</em>[<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>, …]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.kron.Kron.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.indexer.kron.Kron.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>Resolved output format from <a class="reference internal" href="#vortex_torch.indexer.kron.Kron.profile" title="vortex_torch.indexer.kron.Kron.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.kron.Kron.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.indexer.kron.Kron.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Pure-metadata vTensor descriptor for the output (graph node).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.kron.Kron.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/kron.html#Kron.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.kron.Kron.profile" title="Link to this definition">¶</a></dt>
@@ -387,7 +321,7 @@ rejected. Default is <code class="docutils literal notranslate"><span class="pre
 <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
 <p>For each inner axis <code class="docutils literal notranslate"><span class="pre">a</span></code> in <code class="docutils literal notranslate"><span class="pre">{1,</span> <span class="pre">2}</span></code>:</p>
 <ul class="simple">
-<li><p>if <code class="docutils literal notranslate"><span class="pre">a</span></code> is in <a class="reference internal" href="#vortex_torch.indexer.kron.Kron.dim" title="vortex_torch.indexer.kron.Kron.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a>, the output size is the product
+<li><p>if <code class="docutils literal notranslate"><span class="pre">a</span></code> is in <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>, the output size is the product
 <code class="docutils literal notranslate"><span class="pre">x.shape[a]</span> <span class="pre">*</span> <span class="pre">y.shape[a]</span></code> (Kronecker expansion);</p></li>
 <li><p>otherwise, <code class="docutils literal notranslate"><span class="pre">x.shape[a]</span></code> and <code class="docutils literal notranslate"><span class="pre">y.shape[a]</span></code> must be equal or
 one must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (broadcast), and the output size is
@@ -477,9 +411,6 @@ output buffer.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.kron</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron"><code class="docutils literal notranslate"><span class="pre">Kron</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron.dim"><code class="docutils literal notranslate"><span class="pre">Kron.dim</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron.output_format"><code class="docutils literal notranslate"><span class="pre">Kron.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron.output_buffer"><code class="docutils literal notranslate"><span class="pre">Kron.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron.profile"><code class="docutils literal notranslate"><span class="pre">Kron.profile()</span></code></a></li>
 </ul>
 </li>

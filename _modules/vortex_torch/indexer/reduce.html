@@ -280,9 +280,10 @@
 
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \rho_{\,0 \le i &lt; D_0}\, X_{n,i,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \rho_{\,0 \le j &lt; D_1}\, X_{n,d,j}.</span>
+<span class="sd">            \end{aligned}</span>
 
 <span class="sd">        ``dim=0`` collapses the packed leading axis to one row per</span>
 <span class="sd">        ``(batch, kv\_head)``.</span>
@@ -379,9 +380,10 @@
 <span class="sd">    :Math:</span>
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \max_{0 \le i &lt; D_0} X_{n,i,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \max_{0 \le j &lt; D_1} X_{n,d,j}.</span>
+<span class="sd">            \end{aligned}</span>
 <span class="sd">    :__init__: ``Max(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -402,9 +404,10 @@
 <span class="sd">    :Math:</span>
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \min_{0 \le i &lt; D_0} X_{n,i,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \min_{0 \le j &lt; D_1} X_{n,d,j}.</span>
+<span class="sd">            \end{aligned}</span>
 <span class="sd">    :__init__: ``Min(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -425,9 +428,10 @@
 <span class="sd">    :Math:</span>
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \frac{1}{D_0}\sum_{i=0}^{D_0-1} X_{n,i,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \frac{1}{D_1}\sum_{j=0}^{D_1-1} X_{n,d,j}.</span>
+<span class="sd">            \end{aligned}</span>
 <span class="sd">    :__init__: ``Mean(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -448,9 +452,10 @@
 <span class="sd">    :Math:</span>
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \Big(\sum_{i=0}^{D_0-1} X_{n,i,d}^2\Big)^{1/2}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \Big(\sum_{j=0}^{D_1-1} X_{n,d,j}^2\Big)^{1/2}.</span>
+<span class="sd">            \end{aligned}</span>
 <span class="sd">    :__init__: ``L2Norm(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
@@ -471,9 +476,10 @@
 <span class="sd">    :Math:</span>
 <span class="sd">        .. math::</span>
 
-<span class="sd">            Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}\ \ (\text{dim}=1),</span>
-<span class="sd">            \qquad</span>
-<span class="sd">            Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}\ \ (\text{dim}=2).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{n,0,d} = \sum_{i=0}^{D_0-1} X_{n,i,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{n,d,0} = \sum_{j=0}^{D_1-1} X_{n,d,j}.</span>
+<span class="sd">            \end{aligned}</span>
 <span class="sd">    :__init__: ``Sum(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
 <span class="sd">        ``2`` → :math:`D_1`).</span>
 <span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>

@@ -274,7 +274,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.fill.Fill" title="vortex_torch.cache.fill.Fill"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Fill</span></code></a>([alpha])</p></td>
-<td><p>In-place page-wise fill dispatcher (codegen path only).</p></td>
+<td><p>In-place page-wise fill with a scalar.</p></td>
 </tr>
 </tbody>
 </table>
@@ -283,38 +283,30 @@
 <dt class="sig sig-object py" id="vortex_torch.cache.fill.Fill">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.fill.</span></span><span class="sig-name descname"><span class="pre">Fill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/fill.html#Fill"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.fill.Fill" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>In-place page-wise fill dispatcher (codegen path only).</p>
-<p>Overwrites selected page tiles of a rank-3 tensor with a scalar
-<code class="docutils literal notranslate"><span class="pre">alpha</span></code>. Structurally a <strong>pure producer</strong> of its input tensor:
-<code class="docutils literal notranslate"><span class="pre">Fill</span></code> takes no graph-level inputs, and its output tensor id is
-the same as the input tensor id (cache field being initialized).</p>
-<dl class="field-list simple">
+<p>In-place page-wise fill with a scalar.</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y_{b,n,d} = \alpha \quad\text{(over the selected page tiles).}\]</div>
+</div>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Fill(alpha=0.0)</span></code> — scalar fill value <span class="math notranslate nohighlight">\(\alpha\)</span>.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">op(x,</span> <span class="pre">loc=loc,</span> <span class="pre">ctx=ctx)</span></code> — overwrites the page tiles of <code class="docutils literal notranslate"><span class="pre">x</span></code>
+(<code class="docutils literal notranslate"><span class="pre">PAGED</span></code>) at <code class="docutils literal notranslate"><span class="pre">loc</span></code> with <span class="math notranslate nohighlight">\(\alpha\)</span>. A <strong>pure producer</strong>: its
+output <em>is</em> <code class="docutils literal notranslate"><span class="pre">x</span></code> (used e.g. to zero a cache field before
+<code class="xref py py-class docutils literal notranslate"><span class="pre">vortex_torch.indexer.Save</span></code> / <code class="xref py py-class docutils literal notranslate"><span class="pre">vortex_torch.indexer.Load</span></code>).</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">PAGED</span></code> input only.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p>
 </dd>
 </dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.fill.Fill._supported_formats">
-<span class="sig-name descname"><span class="pre">_supported_formats</span></span><a class="headerlink" href="#vortex_torch.cache.fill.Fill._supported_formats" title="Link to this definition">¶</a></dt>
-<dd><p>Input formats for which a codegen implementation exists.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>FrozenSet</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.fill.Fill.alpha">
-<span class="sig-name descname"><span class="pre">alpha</span></span><a class="headerlink" href="#vortex_torch.cache.fill.Fill.alpha" title="Link to this definition">¶</a></dt>
-<dd><p>Scalar fill value written into selected positions.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.cache.fill.Fill.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/fill.html#Fill.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.fill.Fill.profile" title="Link to this definition">¶</a></dt>
@@ -398,8 +390,6 @@ returned so downstream ops can continue to reference <code class="docutils liter
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.fill</a><ul>
 <li><a class="reference internal" href="#vortex_torch.cache.fill.Fill"><code class="docutils literal notranslate"><span class="pre">Fill</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.fill.Fill._supported_formats"><code class="docutils literal notranslate"><span class="pre">Fill._supported_formats</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.fill.Fill.alpha"><code class="docutils literal notranslate"><span class="pre">Fill.alpha</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.fill.Fill.profile"><code class="docutils literal notranslate"><span class="pre">Fill.profile()</span></code></a></li>
 </ul>
 </li>
@@ -420,5 +410,6 @@ returned so downstream ops can continue to reference <code class="docutils liter
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>

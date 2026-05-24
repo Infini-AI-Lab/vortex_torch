@@ -271,75 +271,23 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Softmax</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    In-place softmax dispatcher over a packed leading axis.</span>
+<span class="sd">    Segmented scaled softmax over the packed sequence axis.</span>
 
-<span class="sd">    The input is treated as a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        The leading axis is a packed concatenation of :math:`B` per-request</span>
+<span class="sd">        segments :math:`\mathcal{I}_b` (total length</span>
+<span class="sd">        :math:`S = \sum_b S_b`). For each segment and each channel</span>
+<span class="sd">        :math:`(d_0,d_1)`, softmax runs **within** the segment:</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{S_{\text{pack}} \times D_0 \times D_1},</span>
-
-<span class="sd">    where the leading dimension :math:`S_{\text{pack}}` is a packed</span>
-<span class="sd">    concatenation of :math:`B` segments:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        S_{\text{pack}}</span>
-<span class="sd">        = \sum_{b=0}^{B-1} S_b, \qquad</span>
-<span class="sd">        X =</span>
-<span class="sd">        \begin{bmatrix}</span>
-<span class="sd">            X_0 \\</span>
-<span class="sd">            X_1 \\</span>
-<span class="sd">            \vdots \\</span>
-<span class="sd">            X_{B-1}</span>
-<span class="sd">        \end{bmatrix},</span>
-
-<span class="sd">    with</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X_b \in \mathbb{R}^{S_b \times D_0 \times D_1}.</span>
-<span class="sd">    </span>
-<span class="sd">    For each segment :math:`b` and each fixed pair</span>
-<span class="sd">    :math:`(d_0, d_1)`, this operator applies a scaled softmax along the</span>
-<span class="sd">    packed axis within that segment:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \text{out}[s, d_0, d_1]</span>
-<span class="sd">        =</span>
-<span class="sd">        \frac{\exp\bigl(\text{scale} \cdot X[s, d_0, d_1]\bigr)}</span>
-<span class="sd">             {\sum_{s&#39; \in \mathcal{I}_b}</span>
-<span class="sd">                \exp\bigl(\text{scale} \cdot X[s&#39;, d_0, d_1]\bigr)},</span>
-<span class="sd">        \quad s \in \mathcal{I}_b,</span>
-
-<span class="sd">    where :math:`\mathcal{I}_b` denotes the index range in</span>
-<span class="sd">    :math:`[0, S_{\text{pack}})` corresponding to the :math:`b`-th</span>
-<span class="sd">    segment of length :math:`S_b`.</span>
-
-<span class="sd">    In other words, ``dim == 0`` is a **packed S axis**, and softmax is</span>
-<span class="sd">    applied independently within each segment of that axis.</span>
-
-<span class="sd">    Key properties</span>
-<span class="sd">    --------------</span>
-<span class="sd">    - Only ``dim == 0`` is supported.</span>
-<span class="sd">    - Dispatch is keyed by the input tensor format ``x._format``.</span>
-<span class="sd">    - No output buffer is allocated; the operation is performed in-place</span>
-<span class="sd">      on ``x`` and the same tensor is returned.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, FORMAT]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to the</span>
-<span class="sd">        resolved output format.</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Softmax axis. Must be ``0`` and corresponds to the packed</span>
-<span class="sd">        :math:`S_{\text{pack}}` dimension.</span>
-<span class="sd">    scale : float</span>
-<span class="sd">        Multiplicative factor applied to ``x`` before the softmax</span>
-<span class="sd">        (i.e. computes softmax of ``x * scale``).</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
+<span class="sd">            Y_{s,d_0,d_1} = \frac{\exp(\text{scale}\cdot X_{s,d_0,d_1})}</span>
+<span class="sd">                 {\sum_{s&#39;\in\mathcal{I}_b}\exp(\text{scale}\cdot X_{s&#39;,d_0,d_1})},</span>
+<span class="sd">            \qquad s\in\mathcal{I}_b.</span>
+<span class="sd">    :__init__: ``Softmax(dim=0, scale=1.0)`` — ``dim`` must be ``0`` (the packed</span>
+<span class="sd">        S axis); ``scale`` multiplies the logits before the exponential.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` → same shape.</span>
+<span class="sd">    :Note: ``RAGGED`` only.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Dispatch table keyed by x_format -&gt; resolved output format.</span>
@@ -363,38 +311,9 @@
 <div class="viewcode-block" id="Softmax.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Softmax.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input and select an implementation.</span>
-
-<span class="sd">        Since the operation is in-place, no output buffer is allocated and</span>
-<span class="sd">        this method simply returns the input :class:`vTensor` unmodified.</span>
-
-<span class="sd">        The input is expected to have logical shape</span>
-<span class="sd">        ``[S_pack, D_0, D_1]``, where ``S_pack`` is understood as a packed</span>
-<span class="sd">        concatenation of :math:`B` segments of lengths :math:`S_b`. The</span>
-<span class="sd">        softmax is applied along ``dim == 0`` **within** each such segment.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be modified in-place, with logical shape</span>
-<span class="sd">            ``[S_pack, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context (included for API symmetry; not used for</span>
-<span class="sd">            buffer allocation here).</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            The same object as ``x``, returned as the output view.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor`, if its rank is not 3, or if</span>
-<span class="sd">            no implementation is registered for ``x._format``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, D_0, D_1]``, dispatch on</span>
+<span class="sd">        ``x._format``, register the op, and return the output ``vTensor``</span>
+<span class="sd">        view (segmented softmax over ``dim=0``).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>
@@ -435,72 +354,22 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Normalize</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    In-place normalization dispatcher over a packed leading axis.</span>
+<span class="sd">    Segmented :math:`L_2` normalization over the packed sequence axis.</span>
 
-<span class="sd">    The input is treated as a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        The leading axis is a packed concatenation of :math:`B` per-request</span>
+<span class="sd">        segments :math:`\mathcal{I}_b`. For each segment and each channel</span>
+<span class="sd">        :math:`(d_0,d_1)`, the values are divided by their segment-local</span>
+<span class="sd">        :math:`L_2` norm:</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{S_{\text{pack}} \times D_0 \times D_1},</span>
-
-<span class="sd">    where the leading dimension :math:`S_{\text{pack}}` is a packed</span>
-<span class="sd">    concatenation of :math:`B` segments:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        S_{\text{pack}}</span>
-<span class="sd">        = \sum_{b=0}^{B-1} S_b, \qquad</span>
-<span class="sd">        X =</span>
-<span class="sd">        \begin{bmatrix}</span>
-<span class="sd">            X_0 \\</span>
-<span class="sd">            X_1 \\</span>
-<span class="sd">            \vdots \\</span>
-<span class="sd">            X_{B-1}</span>
-<span class="sd">        \end{bmatrix},</span>
-
-<span class="sd">    with</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X_b \in \mathbb{R}^{S_b \times D_0 \times D_1}.</span>
-<span class="sd">    </span>
-<span class="sd">    For each segment :math:`b` and each fixed pair :math:`(d_0, d_1)`,</span>
-<span class="sd">    this operator normalizes the values along the packed axis within that</span>
-<span class="sd">    segment. A common interpretation is L2 normalization:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \hat{X}[s, d_0, d_1]</span>
-<span class="sd">        =</span>
-<span class="sd">        \frac{X[s, d_0, d_1]}</span>
-<span class="sd">             {\sqrt{\sum_{s&#39; \in \mathcal{I}_b}</span>
-<span class="sd">                     X[s&#39;, d_0, d_1]^2}},</span>
-<span class="sd">        \quad s \in \mathcal{I}_b,</span>
-
-<span class="sd">    where :math:`\mathcal{I}_b` denotes the index range in</span>
-<span class="sd">    :math:`[0, S_{\text{pack}})` corresponding to the :math:`b`-th</span>
-<span class="sd">    segment of length :math:`S_b`.</span>
-
-<span class="sd">    In other words, ``dim == 0`` is a **packed S axis**, and normalization</span>
-<span class="sd">    is applied independently within each segment of that axis.</span>
-
-<span class="sd">    Key properties</span>
-<span class="sd">    --------------</span>
-<span class="sd">    - Only ``dim == 0`` is supported.</span>
-<span class="sd">    - Dispatch is keyed by the input tensor format ``x._format``.</span>
-<span class="sd">    - No output buffer is allocated; the operation is performed in-place</span>
-<span class="sd">      on ``x`` and the same tensor is returned.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, FORMAT]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to the</span>
-<span class="sd">        resolved output format.</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Normalization axis. Must be ``0`` and corresponds to the packed</span>
-<span class="sd">        :math:`S_{\text{pack}}` dimension.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
+<span class="sd">            Y_{s,d_0,d_1} = \frac{X_{s,d_0,d_1}}</span>
+<span class="sd">                 {\sqrt{\sum_{s&#39;\in\mathcal{I}_b} X_{s&#39;,d_0,d_1}^2}},</span>
+<span class="sd">            \qquad s\in\mathcal{I}_b.</span>
+<span class="sd">    :__init__: ``Normalize(dim=0)`` — ``dim`` must be ``0`` (the packed S axis).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` → same shape.</span>
+<span class="sd">    :Note: ``RAGGED`` only.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Dispatch table keyed by x_format -&gt; resolved output format.</span>
@@ -524,39 +393,9 @@
 <div class="viewcode-block" id="Normalize.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Normalize.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input and select an implementation.</span>
-
-<span class="sd">        Since the operation is in-place, no output buffer is allocated and</span>
-<span class="sd">        this method simply returns the input :class:`vTensor` unmodified.</span>
-
-<span class="sd">        The input is expected to have logical shape</span>
-<span class="sd">        ``[S_pack, D_0, D_1]``, where ``S_pack`` is understood as a packed</span>
-<span class="sd">        concatenation of :math:`B` segments of lengths :math:`S_b`. The</span>
-<span class="sd">        normalization is applied along ``dim == 0`` **within** each such</span>
-<span class="sd">        segment.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor to be normalized in-place, with logical shape</span>
-<span class="sd">            ``[S_pack, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context (included for API symmetry; not used for</span>
-<span class="sd">            buffer allocation here).</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            The same object as ``x``, returned as the output view.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor`, if its rank is not 3, or if</span>
-<span class="sd">            no implementation is registered for ``x._format``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, D_0, D_1]``, dispatch on</span>
+<span class="sd">        ``x._format``, register the op, and return the output ``vTensor``</span>
+<span class="sd">        view (segmented :math:`L_2` normalization over ``dim=0``).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>
@@ -597,61 +436,28 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Conv1d">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Conv1d</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Causal 1D convolution dispatcher over a packed leading axis.</span>
+<span class="sd">    Segmented depth-wise causal 1-D convolution over the packed sequence axis.</span>
 
-<span class="sd">    The input is treated as a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        The leading axis is a packed concatenation of :math:`B` per-request</span>
+<span class="sd">        segments. Within each segment, every channel :math:`(d_0,d_1)` is</span>
+<span class="sd">        convolved by its own :math:`K`-tap causal filter</span>
+<span class="sd">        :math:`W\in\mathbb{R}^{K\times D_0\times D_1}`:</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{S_{\text{pack}} \times D_0 \times D_1},</span>
+<span class="sd">            Y_{s,d_0,d_1} = \sum_{k=0}^{K-1} W_{k,d_0,d_1}\, X_{s-k,\,d_0,d_1},</span>
 
-<span class="sd">    where the leading dimension :math:`S_{\text{pack}}` is a packed</span>
-<span class="sd">    concatenation of :math:`B` segments of lengths :math:`S_b`. For each</span>
-<span class="sd">    segment :math:`b` and each fixed :math:`(d_0, d_1)`, this operator</span>
-<span class="sd">    applies a depth-wise causal 1D convolution of kernel size :math:`K`</span>
-<span class="sd">    along the packed axis **within** the segment, restricted to the range</span>
-<span class="sd">    that excludes the reserved BOS and EOS pages:</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        \mathcal{I}_b^{\text{mid}}</span>
-<span class="sd">        = [\,b_{\text{bos}},\; S_b - b_{\text{eos}}\,),</span>
-
-<span class="sd">    where :math:`b_{\text{bos}}` and :math:`b_{\text{eos}}` are</span>
-<span class="sd">    ``ctx.block_reserved_bos`` and ``ctx.block_reserved_eos``.</span>
-
-<span class="sd">    For :math:`s \in \mathcal{I}_b^{\text{mid}}` (local index within the</span>
-<span class="sd">    mid-range),</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y[s, d_0, d_1]</span>
-<span class="sd">        = \sum_{k=0}^{K-1} W[k, d_0, d_1] \cdot X[s - k, d_0, d_1],</span>
-
-<span class="sd">    where positions :math:`s - k &lt; 0` (within the mid-range) are treated</span>
-<span class="sd">    as zero. The BOS/EOS reserved regions are neither read nor written.</span>
-
-<span class="sd">    Key properties</span>
-<span class="sd">    --------------</span>
-<span class="sd">    - Only ``dim == 0`` is supported.</span>
-<span class="sd">    - Dispatch is keyed by the input tensor format ``x._format``.</span>
-<span class="sd">    - The convolution is depth-wise: each :math:`(d_0, d_1)` channel has</span>
-<span class="sd">      its own :math:`K`-tap filter.</span>
-<span class="sd">    - Out-of-place: a fresh output buffer is allocated.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    _impl_map : Dict[FORMAT, FORMAT]</span>
-<span class="sd">        Dispatch table keyed by ``x_format``. Each entry maps to the</span>
-<span class="sd">        resolved output format.</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Convolution axis. Must be ``0`` and corresponds to the packed</span>
-<span class="sd">        :math:`S_{\text{pack}}` dimension.</span>
-<span class="sd">    weight : torch.Tensor</span>
-<span class="sd">        Convolution weight with shape ``[K, D_0, D_1]``, materialized</span>
-<span class="sd">        from the nested Python list passed at construction.</span>
-<span class="sd">    kernel_size : int</span>
-<span class="sd">        Kernel length :math:`K`, derived from ``weight.shape[0]``.</span>
+<span class="sd">        with :math:`X_{s-k}=0` for :math:`s-k` before the segment. The op</span>
+<span class="sd">        runs only on the mid-range :math:`[b_{\text{bos}},\,S_b-b_{\text{eos}})`</span>
+<span class="sd">        (``ctx.block_reserved_bos`` / ``block_reserved_eos``); reserved</span>
+<span class="sd">        BOS/EOS rows are neither read nor written.</span>
+<span class="sd">    :__init__: ``Conv1d(weight, dim=0, dtype=torch.bfloat16, device=None)`` —</span>
+<span class="sd">        ``weight`` is a nested Python list of shape ``[K, D_0, D_1]`` (kernel</span>
+<span class="sd">        size :math:`K` = ``len(weight)``); ``dim`` must be ``0``.</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``x`` ``[S, D_0, D_1]`` → same shape;</span>
+<span class="sd">        ``weight``&#39;s inner dims must match ``(D_0, D_1)``.</span>
+<span class="sd">    :Note: ``RAGGED`` only.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">_impl_map</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="n">FORMAT</span><span class="p">,</span> <span class="n">FORMAT</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
@@ -687,29 +493,9 @@
 <div class="viewcode-block" id="Conv1d.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.scan.html#vortex_torch.indexer.scan.Conv1d.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input, select an implementation, allocate the output</span>
-<span class="sd">        buffer, and return a :class:`vTensor` view with the resolved format.</span>
-
-<span class="sd">        The input is expected to have logical shape ``[S_pack, D_0, D_1]``,</span>
-<span class="sd">        and the weight stored on ``self`` must have shape</span>
-<span class="sd">        ``[K, D_0, D_1]`` with matching inner dimensions.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor with logical shape ``[S_pack, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing ``ctx.max_num_pages`` for the</span>
-<span class="sd">            output buffer leading dimension.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the internally allocated output</span>
-<span class="sd">            buffer with the resolved output format.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[S, D_0, D_1]`` (weight inner dims</span>
+<span class="sd">        must match), migrate ``weight`` to ``x``&#39;s device, register the op,</span>
+<span class="sd">        and return the output ``vTensor`` view.&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">vTensor</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2">profile expects x to be vTensor, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>

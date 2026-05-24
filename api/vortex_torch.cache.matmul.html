@@ -274,7 +274,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM" title="vortex_torch.cache.matmul.GeMM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GeMM</span></code></a>()</p></td>
-<td><p>General matrix-matrix multiplication for page/token-tiled layouts.</p></td>
+<td><p>Per-block matrix–matrix product, <span class="math notranslate nohighlight">\(O_b = Y_b X_b^{\top}\)</span> (cache side).</p></td>
 </tr>
 </tbody>
 </table>
@@ -283,59 +283,27 @@
 <dt class="sig sig-object py" id="vortex_torch.cache.matmul.GeMM">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.matmul.</span></span><span class="sig-name descname"><span class="pre">GeMM</span></span><a class="reference internal" href="../_modules/vortex_torch/cache/matmul.html#GeMM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.matmul.GeMM" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>General matrix-matrix multiplication for page/token-tiled layouts.</p>
-<p>This operator computes a batched GEMM of the form</p>
+<p>Per-block matrix–matrix product, <span class="math notranslate nohighlight">\(O_b = Y_b X_b^{\top}\)</span> (cache side).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{B\times N_x\times K}\)</span>,
+<span class="math notranslate nohighlight">\(Y\in\mathbb{R}^{B\times N_y\times K}\)</span>:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[O_b = Y_b X_b^\top, \qquad b = 0, \dots, B-1,\]</div>
+\[O_{b,a,c} = \sum_{k=0}^{K-1} Y_{b,a,k}\,X_{b,c,k},
+\qquad O\in\mathbb{R}^{B\times N_y\times N_x}.\]</div>
 </div>
-<p>where, for each batch index <span class="math notranslate nohighlight">\(b\)</span>,</p>
-<ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(X_b \in \mathbb{R}^{N_x \times K}\)</span>,</p></li>
-<li><p><span class="math notranslate nohighlight">\(Y_b \in \mathbb{R}^{N_y \times K}\)</span>, and</p></li>
-<li><p><span class="math notranslate nohighlight">\(O_b \in \mathbb{R}^{N_y \times N_x}\)</span>.</p></li>
-</ul>
-<p>In the logical 3D layout, the tensors have shapes</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}X &amp;\in \mathbb{R}^{B \times N_x \times K}, \\
-Y &amp;\in \mathbb{R}^{B \times N_y \times K}, \\
-O &amp;\in \mathbb{R}^{B \times N_y \times N_x},\end{split}\]</div>
-</div>
-<p>where the leading dimension <span class="math notranslate nohighlight">\(B\)</span> is a batch-like axis typically
-derived from the runtime (for example,
-<code class="docutils literal notranslate"><span class="pre">max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">head_num</span></code> in an attention-style kernel).</p>
-<p>Output format rule: if a caller-provided <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied with
-<code class="docutils literal notranslate"><span class="pre">PAGED</span></code> format, the output is <code class="docutils literal notranslate"><span class="pre">PAGED</span></code>; in every other case the
-output is <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
-compiler’s per-block kernel.</p>
-<p>The shared inner dimension <span class="math notranslate nohighlight">\(K\)</span> must match:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[K_x = x.\text{shape}[2], \quad K_y = y.\text{shape}[2], \quad K_x = K_y.\]</div>
-</div>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.matmul.GeMM.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.cache.matmul.GeMM.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.cache.matmul.GeMM.profile" title="vortex_torch.cache.matmul.GeMM.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">GeMM()</span></code> — no arguments.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">o</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y,</span> <span class="pre">output,</span> <span class="pre">loc=loc,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">x</span></code>
+<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code>, <code class="docutils literal notranslate"><span class="pre">y</span></code> <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code> (matching <code class="docutils literal notranslate"><span class="pre">K</span></code>); <code class="docutils literal notranslate"><span class="pre">o</span></code>
+<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code>. <code class="docutils literal notranslate"><span class="pre">PAGED</span></code> iff a <code class="docutils literal notranslate"><span class="pre">PAGED</span></code> <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied,
+else <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
 </dd>
 </dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.matmul.GeMM.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.cache.matmul.GeMM.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Pure-metadata vTensor descriptor for the output (graph node).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.cache.matmul.GeMM.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/matmul.html#GeMM.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.matmul.GeMM.profile" title="Link to this definition">¶</a></dt>
@@ -444,8 +412,6 @@ and is used for auxiliary memory accounting.</p></li>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.matmul</a><ul>
 <li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM"><code class="docutils literal notranslate"><span class="pre">GeMM</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM.output_format"><code class="docutils literal notranslate"><span class="pre">GeMM.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM.output_buffer"><code class="docutils literal notranslate"><span class="pre">GeMM.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM.profile"><code class="docutils literal notranslate"><span class="pre">GeMM.profile()</span></code></a></li>
 </ul>
 </li>

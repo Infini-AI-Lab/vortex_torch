@@ -272,78 +272,29 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reduce_interleave.html#vortex_torch.cache.reduce_interleave.ReduceInterleave">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">ReduceInterleave</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Generic *interleaved* reduction dispatcher over the last two logical</span>
-<span class="sd">    axes.</span>
+<span class="sd">    Interleaved 1-D reduction — folds consecutive groups of ``k`` elements.</span>
 
-<span class="sd">    This dispatcher covers a family of reductions (mean/max/min/L2-norm/sum,</span>
-<span class="sd">    etc.) on rank-3 tensors that fold consecutive groups of :attr:`k`</span>
-<span class="sd">    elements along the reduced axis into a single output element. The</span>
-<span class="sd">    input is treated as</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For input :math:`X\in\mathbb{R}^{B\times N\times D}` and a per-group</span>
+<span class="sd">        reduction :math:`\rho` (mean / max / min / L2-norm, fixed by the</span>
+<span class="sd">        subclass), each group of :math:`k` adjacent elements collapses to one:</span>
 
-<span class="sd">    .. math::</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">        X \in \mathbb{R}^{B \times N \times D},</span>
-
-<span class="sd">    where:</span>
-
-<span class="sd">    - :math:`B` is a leading batch-like axis (typically derived from the</span>
-<span class="sd">      runtime, e.g. ``max_new_tokens_per_batch * head_num``),</span>
-<span class="sd">    - :math:`N` is a sequence or position dimension, and</span>
-<span class="sd">    - :math:`D` is a feature/channel dimension.</span>
-
-<span class="sd">    The reduction dimension is chosen by :attr:`dim`. The size of the</span>
-<span class="sd">    reduced axis must be divisible by :attr:`k`, and consecutive groups of</span>
-<span class="sd">    :attr:`k` adjacent elements collapse into one output element:</span>
-
-<span class="sd">    - ``dim == 1`` (interleaved row-wise reduction over :math:`N`,</span>
-<span class="sd">      requires ``N % k == 0``):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out} \in \mathbb{R}^{B \times (N/k) \times D}, \qquad</span>
-<span class="sd">         \text{out}[b, m, d]</span>
-<span class="sd">         = \mathop{\mathrm{reduce}}_{0 \le j &lt; k}</span>
-<span class="sd">           X[b, m \cdot k + j, d].</span>
-
-<span class="sd">    - ``dim == 2`` (interleaved column-wise reduction over :math:`D`,</span>
-<span class="sd">      requires ``D % k == 0``):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out} \in \mathbb{R}^{B \times N \times (D/k)}, \qquad</span>
-<span class="sd">         \text{out}[b, n, e]</span>
-<span class="sd">         = \mathop{\mathrm{reduce}}_{0 \le j &lt; k}</span>
-<span class="sd">           X[b, n, e \cdot k + j].</span>
-
-<span class="sd">    Setting ``k == 1`` makes this op an identity (each group has a single</span>
-<span class="sd">    element). Setting ``k`` equal to the full reduced-axis length recovers</span>
-<span class="sd">    the plain :class:`Reduce` op.</span>
-
-<span class="sd">    The exact reduction operation (mean, max, min, L2-norm, sum, etc.) is</span>
-<span class="sd">    encoded in :attr:`reduce_type` and interpreted by the implementation.</span>
-
-<span class="sd">    Output format rule: if a caller-provided ``output`` is supplied with</span>
-<span class="sd">    ``PAGED`` format, the output is ``PAGED``; in every other case the</span>
-<span class="sd">    output is ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-block kernel.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor. Must be either:</span>
-
-<span class="sd">        - ``1`` for row-wise reduction over :math:`N`, or</span>
-<span class="sd">        - ``2`` for column-wise reduction over :math:`D`.</span>
-<span class="sd">    k : int</span>
-<span class="sd">        Group size. Consecutive ``k`` elements along the reduced axis are</span>
-<span class="sd">        folded into one output element. Must be a positive integer that</span>
-<span class="sd">        divides the size of the reduced axis.</span>
-<span class="sd">    reduce_type : Optional[ReduceType]</span>
-<span class="sd">        Enum describing which reduction to perform.</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-<span class="sd">    output_buffer : Optional[vTensor]</span>
-<span class="sd">        Pure-metadata vTensor descriptor for the output (graph node).</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1,\ N\%k=0):\quad &amp; Y_{b,m,d} = \rho_{\,0 \le j &lt; k}\, X_{b,\,mk+j,\,d}, \\</span>
+<span class="sd">            (\text{dim}=2,\ D\%k=0):\quad &amp; Y_{b,n,e} = \rho_{\,0 \le j &lt; k}\, X_{b,n,\,ek+j}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``ReduceInterleave(dim=1, k=2)`` — inner axis (``1`` over</span>
+<span class="sd">        :math:`N`, ``2`` over :math:`D`) and group size ``k`` (must divide the</span>
+<span class="sd">        reduced axis; ``k=1`` is identity, ``k`` = full length recovers the</span>
+<span class="sd">        plain reduction).</span>
+<span class="sd">    :__call__: ``op(x, output, loc=loc, ctx=ctx)`` — ``x`` ``[B, N, D]``; the</span>
+<span class="sd">        reduced axis shrinks by a factor of ``k`` (``N→N/k`` or ``D→D/k``).</span>
+<span class="sd">        ``PAGED`` iff a ``PAGED`` ``output`` is supplied, else ``RAGGED``.</span>
+<span class="sd">    :Note: use a concrete subclass — :class:`MeanInterleave`,</span>
+<span class="sd">        :class:`MaxInterleave`, :class:`MinInterleave`,</span>
+<span class="sd">        :class:`L2NormInterleave`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
@@ -394,56 +345,10 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">vTensor</span><span class="p">],</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs, resolve the interleaved reduction implementation</span>
-<span class="sd">        and output format, and optionally allocate an internal output</span>
-<span class="sd">        buffer.</span>
-
-<span class="sd">        The input tensor ``x`` is expected to have logical shape</span>
-<span class="sd">        ``[B, N, D]``. According to :attr:`dim` and :attr:`k`, the</span>
-<span class="sd">        expected output logical shape is:</span>
-
-<span class="sd">        - ``dim == 1``: ``[B, N // k, D]`` (requires ``N % k == 0``)</span>
-<span class="sd">        - ``dim == 2``: ``[B, N, D // k]`` (requires ``D % k == 0``)</span>
-
-<span class="sd">        The auxiliary tensor ``loc`` carries per-position metadata used</span>
-<span class="sd">        by the implementation; its shape and semantics are</span>
-<span class="sd">        implementation-defined.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor with logical shape ``[B, N, D]``.</span>
-
-<span class="sd">        output : Optional[vTensor]</span>
-<span class="sd">            Optional preallocated output tensor. If ``None``, an internal</span>
-<span class="sd">            buffer with shape ``[B, exp_N, exp_D]`` is allocated using</span>
-<span class="sd">            ``ctx.max_new_tokens_per_batch * ctx.head_num`` for ``B`` and a</span>
-<span class="sd">            RAGGED-output implementation is selected. If not ``None``,</span>
-<span class="sd">            this tensor must have rank 3 and shape compatible with</span>
-<span class="sd">            :attr:`dim` and :attr:`k` as described above.</span>
-
-<span class="sd">        loc : torch.Tensor</span>
-<span class="sd">            Auxiliary tensor carrying metadata required by the reduction</span>
-<span class="sd">            implementation.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context that provides the runtime value of ``B`` and</span>
-<span class="sd">            is used for auxiliary memory accounting.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A :class:`vTensor` view representing the resolved output:</span>
-<span class="sd">            either the provided ``output`` or an internally allocated</span>
-<span class="sd">            buffer.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If types, ranks, shapes, or devices are incompatible, or if</span>
-<span class="sd">            the reduced axis is not divisible by :attr:`k`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[B, N, D]`` (reduced axis divisible by</span>
+<span class="sd">        ``k``, and ``output`` if given), register the op, and return a</span>
+<span class="sd">        ``vTensor`` view of the folded output (see the class docstring for</span>
+<span class="sd">        shapes).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># --- type &amp; rank checks ---</span>
@@ -532,43 +437,17 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reduce_interleave.html#vortex_torch.cache.reduce_interleave.MeanInterleave">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MeanInterleave</span><span class="p">(</span><span class="n">ReduceInterleave</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Interleaved mean reduction over a single logical axis.</span>
+<span class="sd">    Interleaved mean over groups of ``k`` (a :class:`ReduceInterleave`).</span>
 
-<span class="sd">    This operator reduces a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times N \times D}</span>
-
-<span class="sd">    by taking the arithmetic mean over consecutive groups of :attr:`k`</span>
-<span class="sd">    elements along one of the inner dimensions, as configured by</span>
-<span class="sd">    :attr:`dim`:</span>
-
-<span class="sd">    - ``dim == 1`` (requires ``N % k == 0``): grouped row-wise mean over</span>
-<span class="sd">      :math:`N`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad</span>
-<span class="sd">          Y[b, m, d]</span>
-<span class="sd">          = \frac{1}{k} \sum_{j=0}^{k-1} X[b, m \cdot k + j, d].</span>
-
-<span class="sd">    - ``dim == 2`` (requires ``D % k == 0``): grouped column-wise mean</span>
-<span class="sd">      over :math:`D`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad</span>
-<span class="sd">          Y[b, n, e]</span>
-<span class="sd">          = \frac{1}{k} \sum_{j=0}^{k-1} X[b, n, e \cdot k + j].</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Logical reduction dimension. Must be ``1`` (reduce over</span>
-<span class="sd">        :math:`N`) or ``2`` (reduce over :math:`D`). Default is ``1``.</span>
-<span class="sd">    k : int, optional</span>
-<span class="sd">        Group size. Default is ``2``.</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{b,m,d} = \frac{1}{k}\sum_{j=0}^{k-1} X_{b,\,mk+j,\,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{b,n,e} = \frac{1}{k}\sum_{j=0}^{k-1} X_{b,n,\,ek+j}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``MeanInterleave(dim=1, k=2)`` — inner axis (``1``/``2``) and</span>
+<span class="sd">        group size ``k``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
@@ -580,42 +459,17 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reduce_interleave.html#vortex_torch.cache.reduce_interleave.MaxInterleave">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MaxInterleave</span><span class="p">(</span><span class="n">ReduceInterleave</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Interleaved max reduction over a single logical axis.</span>
+<span class="sd">    Interleaved max over groups of ``k`` (a :class:`ReduceInterleave`).</span>
 
-<span class="sd">    This operator reduces a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times N \times D}</span>
-
-<span class="sd">    by taking the maximum over consecutive groups of :attr:`k` elements</span>
-<span class="sd">    along one of the inner dimensions, as configured by :attr:`dim`:</span>
-
-<span class="sd">    - ``dim == 1`` (requires ``N % k == 0``): grouped row-wise max over</span>
-<span class="sd">      :math:`N`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad</span>
-<span class="sd">          Y[b, m, d]</span>
-<span class="sd">          = \max_{0 \le j &lt; k} X[b, m \cdot k + j, d].</span>
-
-<span class="sd">    - ``dim == 2`` (requires ``D % k == 0``): grouped column-wise max</span>
-<span class="sd">      over :math:`D`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad</span>
-<span class="sd">          Y[b, n, e]</span>
-<span class="sd">          = \max_{0 \le j &lt; k} X[b, n, e \cdot k + j].</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Logical reduction dimension. Must be ``1`` (reduce over</span>
-<span class="sd">        :math:`N`) or ``2`` (reduce over :math:`D`). Default is ``1``.</span>
-<span class="sd">    k : int, optional</span>
-<span class="sd">        Group size. Default is ``2``.</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{b,m,d} = \max_{0 \le j &lt; k} X_{b,\,mk+j,\,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{b,n,e} = \max_{0 \le j &lt; k} X_{b,n,\,ek+j}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``MaxInterleave(dim=1, k=2)`` — inner axis (``1``/``2``) and</span>
+<span class="sd">        group size ``k``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
@@ -627,42 +481,17 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reduce_interleave.html#vortex_torch.cache.reduce_interleave.MinInterleave">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MinInterleave</span><span class="p">(</span><span class="n">ReduceInterleave</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Interleaved min reduction over a single logical axis.</span>
+<span class="sd">    Interleaved min over groups of ``k`` (a :class:`ReduceInterleave`).</span>
 
-<span class="sd">    This operator reduces a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times N \times D}</span>
-
-<span class="sd">    by taking the minimum over consecutive groups of :attr:`k` elements</span>
-<span class="sd">    along one of the inner dimensions, as configured by :attr:`dim`:</span>
-
-<span class="sd">    - ``dim == 1`` (requires ``N % k == 0``): grouped row-wise min over</span>
-<span class="sd">      :math:`N`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad</span>
-<span class="sd">          Y[b, m, d]</span>
-<span class="sd">          = \min_{0 \le j &lt; k} X[b, m \cdot k + j, d].</span>
-
-<span class="sd">    - ``dim == 2`` (requires ``D % k == 0``): grouped column-wise min</span>
-<span class="sd">      over :math:`D`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad</span>
-<span class="sd">          Y[b, n, e]</span>
-<span class="sd">          = \min_{0 \le j &lt; k} X[b, n, e \cdot k + j].</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Logical reduction dimension. Must be ``1`` (reduce over</span>
-<span class="sd">        :math:`N`) or ``2`` (reduce over :math:`D`). Default is ``1``.</span>
-<span class="sd">    k : int, optional</span>
-<span class="sd">        Group size. Default is ``2``.</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{b,m,d} = \min_{0 \le j &lt; k} X_{b,\,mk+j,\,d}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{b,n,e} = \min_{0 \le j &lt; k} X_{b,n,\,ek+j}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``MinInterleave(dim=1, k=2)`` — inner axis (``1``/``2``) and</span>
+<span class="sd">        group size ``k``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>
@@ -674,49 +503,18 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.cache.reduce_interleave.html#vortex_torch.cache.reduce_interleave.L2NormInterleave">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">L2NormInterleave</span><span class="p">(</span><span class="n">ReduceInterleave</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Interleaved L2-norm reduction (not RMS) over a single logical axis.</span>
+<span class="sd">    Interleaved L2-norm over groups of ``k`` (a :class:`ReduceInterleave`).</span>
 
-<span class="sd">    This operator reduces a rank-3 tensor</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        .. math::</span>
 
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times N \times D}</span>
-
-<span class="sd">    by computing an L2 norm over consecutive groups of :attr:`k` elements</span>
-<span class="sd">    along one of the inner dimensions, as configured by :attr:`dim`. The</span>
-<span class="sd">    reduction is *not* normalized by the number of elements (it is an L2</span>
-<span class="sd">    norm, not an RMS):</span>
-
-<span class="sd">    - ``dim == 1`` (requires ``N % k == 0``): grouped row-wise L2 norm</span>
-<span class="sd">      over :math:`N`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times (N/k) \times D}, \qquad</span>
-<span class="sd">          Y[b, m, d]</span>
-<span class="sd">          = \sqrt{\sum_{j=0}^{k-1} X[b, m \cdot k + j, d]^2}.</span>
-
-<span class="sd">    - ``dim == 2`` (requires ``D % k == 0``): grouped column-wise L2 norm</span>
-<span class="sd">      over :math:`D`, producing</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">          Y \in \mathbb{R}^{B \times N \times (D/k)}, \qquad</span>
-<span class="sd">          Y[b, n, e]</span>
-<span class="sd">          = \sqrt{\sum_{j=0}^{k-1} X[b, n, e \cdot k + j]^2}.</span>
-
-<span class="sd">    Notes</span>
-<span class="sd">    -----</span>
-<span class="sd">    This is a pure L2 norm over each group, with no division by the</span>
-<span class="sd">    group size. It should not be confused with an RMS over the group.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Logical reduction dimension. Must be ``1`` (reduce over</span>
-<span class="sd">        :math:`N`) or ``2`` (reduce over :math:`D`). Default is ``1``.</span>
-<span class="sd">    k : int, optional</span>
-<span class="sd">        Group size. Default is ``2``.</span>
+<span class="sd">            \begin{aligned}</span>
+<span class="sd">            (\text{dim}=1):\quad &amp; Y_{b,m,d} = \Big(\sum_{j=0}^{k-1} X_{b,\,mk+j,\,d}^2\Big)^{1/2}, \\</span>
+<span class="sd">            (\text{dim}=2):\quad &amp; Y_{b,n,e} = \Big(\sum_{j=0}^{k-1} X_{b,n,\,ek+j}^2\Big)^{1/2}.</span>
+<span class="sd">            \end{aligned}</span>
+<span class="sd">    :__init__: ``L2NormInterleave(dim=1, k=2)`` — inner axis (``1``/``2``) and</span>
+<span class="sd">        group size ``k``.</span>
+<span class="sd">    :Note: a pure :math:`L_2` norm per group (no division) — not RMS.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">k</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">k</span><span class="p">)</span>

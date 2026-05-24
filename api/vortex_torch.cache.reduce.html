@@ -274,19 +274,19 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce.L2Norm" title="vortex_torch.cache.reduce.L2Norm"><code class="xref py py-obj docutils literal notranslate"><span class="pre">L2Norm</span></code></a>([dim])</p></td>
-<td><p>L2-norm reduction (not RMS) over a single logical axis.</p></td>
+<td><p>L2-norm reduction (not RMS) over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce.Max" title="vortex_torch.cache.reduce.Max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Max</span></code></a>([dim])</p></td>
-<td><p>Max reduction over a single logical axis.</p></td>
+<td><p>Max reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce.Mean" title="vortex_torch.cache.reduce.Mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mean</span></code></a>([dim])</p></td>
-<td><p>Mean reduction over a single logical axis.</p></td>
+<td><p>Mean reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce.Min" title="vortex_torch.cache.reduce.Min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Min</span></code></a>([dim])</p></td>
-<td><p>Min reduction over a single logical axis.</p></td>
+<td><p>Min reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Reduce</span></code></a>([dim])</p></td>
-<td><p>Generic reduction op over the last two logical axes.</p></td>
+<td><p>Generic 1-D reduction over one inner axis of a rank-3 cache tensor.</p></td>
 </tr>
 </tbody>
 </table>
@@ -295,135 +295,57 @@
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce.</span></span><span class="sig-name descname"><span class="pre">Reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#Reduce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Generic reduction op over the last two logical axes.</p>
-<p>Covers a family of reductions (mean/max/min/L2-norm/sum, etc.) on
-rank-3 tensors</p>
+<p>Generic 1-D reduction over one inner axis of a rank-3 cache tensor.</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>For input <span class="math notranslate nohighlight">\(X\in\mathbb{R}^{B\times N\times D}\)</span> and a per-axis
+reduction <span class="math notranslate nohighlight">\(\rho\)</span> (mean / max / min / L2-norm, fixed by the
+subclass):</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D},\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,0,d} = \rho_{\,0 \le i &lt; N}\, X_{b,i,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,0} = \rho_{\,0 \le j &lt; D}\, X_{b,n,j}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>where:</p>
-<ul class="simple">
-<li><p><span class="math notranslate nohighlight">\(B\)</span> is a leading batch-like axis (typically derived from the
-runtime, e.g. <code class="docutils literal notranslate"><span class="pre">max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">head_num</span></code>),</p></li>
-<li><p><span class="math notranslate nohighlight">\(N\)</span> is a sequence or position dimension, and</p></li>
-<li><p><span class="math notranslate nohighlight">\(D\)</span> is a feature/channel dimension.</p></li>
-</ul>
-<p>The reduction dimension is chosen by <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.dim" title="vortex_torch.cache.reduce.Reduce.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code> (row-wise reduction over <span class="math notranslate nohighlight">\(N\)</span>):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out} \in \mathbb{R}^{B \times 1 \times D},\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code> (column-wise reduction over <span class="math notranslate nohighlight">\(D\)</span>):</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{out} \in \mathbb{R}^{B \times N \times 1}.\]</div>
-</div>
-</li>
-</ul>
-<p>The exact reduction operation (mean, max, min, L2-norm, sum, etc.) is
-encoded in <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.reduce_type" title="vortex_torch.cache.reduce.Reduce.reduce_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">reduce_type</span></code></a> and interpreted by the implementation.</p>
-<p>Output format rule: if a caller-provided <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied with
-<code class="docutils literal notranslate"><span class="pre">PAGED</span></code> format, the output is <code class="docutils literal notranslate"><span class="pre">PAGED</span></code>; in every other case the
-output is <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
-compiler’s per-block kernel.</p>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Reduce(dim=1)</span></code> — inner axis to reduce, <code class="docutils literal notranslate"><span class="pre">1</span></code> (over <span class="math notranslate nohighlight">\(N\)</span>)
+or <code class="docutils literal notranslate"><span class="pre">2</span></code> (over <span class="math notranslate nohighlight">\(D\)</span>).</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">op(x,</span> <span class="pre">output,</span> <span class="pre">loc=loc,</span> <span class="pre">ctx=ctx)</span></code> — runs once per page in
+<code class="docutils literal notranslate"><span class="pre">forward_cache</span></code>; <code class="docutils literal notranslate"><span class="pre">x</span></code> is <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code> and the reduced axis becomes
+size 1. <code class="docutils literal notranslate"><span class="pre">PAGED</span></code> iff a <code class="docutils literal notranslate"><span class="pre">PAGED</span></code> <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied, else
+<code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>use a concrete subclass — <a class="reference internal" href="#vortex_torch.cache.reduce.Mean" title="vortex_torch.cache.reduce.Mean"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mean</span></code></a>, <a class="reference internal" href="#vortex_torch.cache.reduce.Max" title="vortex_torch.cache.reduce.Max"><code class="xref py py-class docutils literal notranslate"><span class="pre">Max</span></code></a>,
+<a class="reference internal" href="#vortex_torch.cache.reduce.Min" title="vortex_torch.cache.reduce.Min"><code class="xref py py-class docutils literal notranslate"><span class="pre">Min</span></code></a>, <a class="reference internal" href="#vortex_torch.cache.reduce.L2Norm" title="vortex_torch.cache.reduce.L2Norm"><code class="xref py py-class docutils literal notranslate"><span class="pre">L2Norm</span></code></a>. Cache-side reductions support
+<code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">∈</span> <span class="pre">{1,</span> <span class="pre">2}</span></code> only.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce.dim">
-<span class="sig-name descname"><span class="pre">dim</span></span><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce.dim" title="Link to this definition">¶</a></dt>
-<dd><p>Reduction dimension in the logical 3D tensor. Must be either:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">1</span></code> for row-wise reduction over <span class="math notranslate nohighlight">\(N\)</span>, or</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">2</span></code> for column-wise reduction over <span class="math notranslate nohighlight">\(D\)</span>.</p></li>
-</ul>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce.reduce_type">
-<span class="sig-name descname"><span class="pre">reduce_type</span></span><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce.reduce_type" title="Link to this definition">¶</a></dt>
-<dd><p>Enum describing which reduction to perform.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.utils.html#vortex_torch.utils.ReduceType" title="vortex_torch.utils.ReduceType"><em>ReduceType</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce.output_format">
-<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce.output_format" title="Link to this definition">¶</a></dt>
-<dd><p>The output tensor format as determined in <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.profile" title="vortex_torch.cache.reduce.Reduce.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce.output_buffer">
-<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce.output_buffer" title="Link to this definition">¶</a></dt>
-<dd><p>Pure-metadata vTensor descriptor for the output (graph node).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>]</p>
-</dd>
-</dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.Reduce.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#Reduce.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.Reduce.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, resolve the reduction implementation and output
-format, and optionally allocate an internal output buffer.</p>
-<p>The input tensor <code class="docutils literal notranslate"><span class="pre">x</span></code> is expected to have logical shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>. According to <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.dim" title="vortex_torch.cache.reduce.Reduce.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a>, the expected output
-logical shape is:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">1,</span> <span class="pre">D]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">1]</span></code></p></li>
-</ul>
-<p>The auxiliary tensor <code class="docutils literal notranslate"><span class="pre">loc</span></code> carries per-position metadata used
-by the implementation; its shape and semantics are
-implementation-defined.</p>
+<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code> (and <code class="docutils literal notranslate"><span class="pre">output</span></code> if given),
+register the op, and return a <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view of the reduced output
+(fresh <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code> buffer when <code class="docutils literal notranslate"><span class="pre">output</span> <span class="pre">is</span> <span class="pre">None</span></code>; see the class
+docstring for shapes).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor with logical shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N,</span> <span class="pre">D]</span></code>.</p></li>
-<li><p><strong>output</strong> (<em>Optional</em><em>[</em><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em>]</em>) – Optional preallocated output tensor. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, an internal
-buffer with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">exp_N,</span> <span class="pre">exp_D]</span></code> is allocated using
-<code class="docutils literal notranslate"><span class="pre">ctx.max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">ctx.head_num</span></code> for <code class="docutils literal notranslate"><span class="pre">B</span></code> and a
-RAGGED-output implementation is selected. If not <code class="docutils literal notranslate"><span class="pre">None</span></code>,
-this tensor must have rank 3 and shape compatible with
-<a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.dim" title="vortex_torch.cache.reduce.Reduce.dim"><code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code></a> as described above.</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>) – Auxiliary tensor carrying metadata required by the reduction
-implementation.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context that provides the runtime value of <code class="docutils literal notranslate"><span class="pre">B</span></code> and
-is used for auxiliary memory accounting.</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>output</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view representing the resolved output:
-either the provided <code class="docutils literal notranslate"><span class="pre">output</span></code> or an internally allocated
-buffer.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types, ranks, shapes, or devices are incompatible.</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -434,36 +356,23 @@ buffer.</p>
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.Mean">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce.</span></span><span class="sig-name descname"><span class="pre">Mean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#Mean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.Mean" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
-<p>Mean reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Mean reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,0,d} = \frac{1}{N}\sum_{n=0}^{N-1} X_{b,n,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,0} = \frac{1}{D}\sum_{d=0}^{D-1} X_{b,n,d}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the arithmetic mean along one of the inner dimensions, as
-configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: row-wise mean over <span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times 1 \times D}, \qquad
-Y[b, 0, d]
-= \frac{1}{N} \sum_{n=0}^{N-1} X[b, n, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: column-wise mean over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times 1}, \qquad
-Y[b, n, 0]
-= \frac{1}{D} \sum_{d=0}^{D-1} X[b, n, d].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Mean(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(N\)</span>,
+<code class="docutils literal notranslate"><span class="pre">2</span></code> → <span class="math notranslate nohighlight">\(D\)</span>).</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -472,36 +381,23 @@ Y[b, n, 0]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.Max">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce.</span></span><span class="sig-name descname"><span class="pre">Max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#Max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.Max" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
-<p>Max reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Max reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,0,d} = \max_{0 \le n &lt; N} X_{b,n,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,0} = \max_{0 \le d &lt; D} X_{b,n,d}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the maximum along one of the inner dimensions, as
-configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: row-wise maximum over <span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times 1 \times D}, \qquad
-Y[b, 0, d]
-= \max_{0 \le n &lt; N} X[b, n, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: column-wise maximum over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times 1}, \qquad
-Y[b, n, 0]
-= \max_{0 \le d &lt; D} X[b, n, d].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Max(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(N\)</span>,
+<code class="docutils literal notranslate"><span class="pre">2</span></code> → <span class="math notranslate nohighlight">\(D\)</span>).</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -510,36 +406,23 @@ Y[b, n, 0]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.Min">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce.</span></span><span class="sig-name descname"><span class="pre">Min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#Min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.Min" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
-<p>Min reduction over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>Min reduction over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,0,d} = \min_{0 \le n &lt; N} X_{b,n,d}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,0} = \min_{0 \le d &lt; D} X_{b,n,d}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by taking the minimum along one of the inner dimensions, as
-configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: row-wise minimum over <span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times 1 \times D}, \qquad
-Y[b, 0, d]
-= \min_{0 \le n &lt; N} X[b, n, d].\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: column-wise minimum over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times 1}, \qquad
-Y[b, n, 0]
-= \min_{0 \le d &lt; D} X[b, n, d].\]</div>
-</div>
-</li>
-</ul>
-<dl class="field-list simple">
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Min(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(N\)</span>,
+<code class="docutils literal notranslate"><span class="pre">2</span></code> → <span class="math notranslate nohighlight">\(D\)</span>).</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -548,45 +431,26 @@ Y[b, n, 0]
 <dt class="sig sig-object py" id="vortex_torch.cache.reduce.L2Norm">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reduce.</span></span><span class="sig-name descname"><span class="pre">L2Norm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reduce.html#L2Norm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reduce.L2Norm" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a></p>
-<p>L2-norm reduction (not RMS) over a single logical axis.</p>
-<p>This operator reduces a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
+<p>L2-norm reduction (not RMS) over one inner axis (a <a class="reference internal" href="#vortex_torch.cache.reduce.Reduce" title="vortex_torch.cache.reduce.Reduce"><code class="xref py py-class docutils literal notranslate"><span class="pre">Reduce</span></code></a>).</p>
+<dl class="field-list">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{B \times N \times D}\]</div>
+\[\begin{split}\begin{aligned}
+(\text{dim}=1):\quad &amp; Y_{b,0,d} = \Big(\sum_{n=0}^{N-1} X_{b,n,d}^2\Big)^{1/2}, \\
+(\text{dim}=2):\quad &amp; Y_{b,n,0} = \Big(\sum_{d=0}^{D-1} X_{b,n,d}^2\Big)^{1/2}.
+\end{aligned}\end{split}\]</div>
 </div>
-<p>by computing an L2 norm along one of the inner dimensions, as
-configured by <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>. The reduction is <em>not</em> normalized by the
-number of elements (it is an L2 norm, not an RMS):</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">1</span></code>: row-wise L2 norm over <span class="math notranslate nohighlight">\(N\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times 1 \times D}, \qquad
-Y[b, 0, d]
-= \sqrt{\sum_{n=0}^{N-1} X[b, n, d]^2}.\]</div>
-</div>
-</li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dim</span> <span class="pre">==</span> <span class="pre">2</span></code>: column-wise L2 norm over <span class="math notranslate nohighlight">\(D\)</span>, producing</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[Y \in \mathbb{R}^{B \times N \times 1}, \qquad
-Y[b, n, 0]
-= \sqrt{\sum_{d=0}^{D-1} X[b, n, d]^2}.\]</div>
-</div>
-</li>
-</ul>
-<p class="rubric">Notes</p>
-<p>This is a pure L2 norm over the reduced axis:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\|v\|_2 = \sqrt{\sum_i v_i^2},\]</div>
-</div>
-<p>with no division by the number of elements. It should not be
-confused with RMS (root mean square).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>, </em><em>optional</em>) – Logical reduction dimension. Must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (reduce over
-<span class="math notranslate nohighlight">\(N\)</span>) or <code class="docutils literal notranslate"><span class="pre">2</span></code> (reduce over <span class="math notranslate nohighlight">\(D\)</span>). Default is <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">L2Norm(dim=1)</span></code> — axis to reduce (<code class="docutils literal notranslate"><span class="pre">1</span></code> → <span class="math notranslate nohighlight">\(N\)</span>,
+<code class="docutils literal notranslate"><span class="pre">2</span></code> → <span class="math notranslate nohighlight">\(D\)</span>).</p>
+</dd>
+<dt class="field-odd">Note<span class="colon">:</span></dt>
+<dd class="field-odd"><p>a pure <span class="math notranslate nohighlight">\(L_2\)</span> norm (no division by element count) — not RMS.</p>
+</dd>
+<dt class="field-even">Parameters<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
 </dd></dl>
@@ -650,10 +514,6 @@ confused with RMS (root mean square).</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.reduce</a><ul>
 <li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce"><code class="docutils literal notranslate"><span class="pre">Reduce</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.dim"><code class="docutils literal notranslate"><span class="pre">Reduce.dim</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.reduce_type"><code class="docutils literal notranslate"><span class="pre">Reduce.reduce_type</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.output_format"><code class="docutils literal notranslate"><span class="pre">Reduce.output_format</span></code></a></li>
-<li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.output_buffer"><code class="docutils literal notranslate"><span class="pre">Reduce.output_buffer</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.cache.reduce.Reduce.profile"><code class="docutils literal notranslate"><span class="pre">Reduce.profile()</span></code></a></li>
 </ul>
 </li>
