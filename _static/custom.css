@@ -147,14 +147,18 @@ article.content,
 /* ---- 7. Class / method signature cards ---------------------------------- */
 dl.py.class > dt.sig {
     font-size: 0.9em;
-    padding: 0.45rem 0.7rem;
+    /* Hanging indent for wrapped lines, kept *inside* the card: the first
+       line's negative text-indent (the ``class`` keyword) is fully absorbed
+       by the matching left padding, so nothing spills past the left border.
+       This overrides furo's ``padding-left:3em; text-indent:-2.5em`` whose
+       geometry assumed furo's own padding, not our card padding. */
+    padding: 0.45rem 0.7rem 0.45rem 2.6rem;
+    text-indent: -1.9rem;
     border-radius: 0.55rem;
     background: linear-gradient(135deg, #ffffff 0%, #fff2f8 100%);
     border: 1px solid var(--vtx-pink-soft);
     border-left: 4px solid var(--vtx-pink);
     box-shadow: var(--vtx-shadow);
-    /* Long dotted paths + arg lists must wrap inside the card, never spill
-       out of it. ``box-sizing`` keeps the padding/border within the width. */
     box-sizing: border-box;
     max-width: 100%;
     white-space: normal;
