@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -304,53 +304,6 @@
 else <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>.</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.cache.matmul.GeMM.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/matmul.html#GeMM.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.matmul.GeMM.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs and optionally allocate an internal output buffer.</p>
-<p>The logical shapes are:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">x</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">y</span></code>: <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">output</span></code> (if provided): <code class="docutils literal notranslate"><span class="pre">[B_out,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code></p></li>
-</ul>
-<p>with the constraint that the inner dimension <span class="math notranslate nohighlight">\(K\)</span> matches:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[x.\text{shape}[2] = y.\text{shape}[2].\]</div>
-</div>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Right-hand operand in <code class="docutils literal notranslate"><span class="pre">Y</span> <span class="pre">&#64;</span> <span class="pre">X^T</span></code>, with logical shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_x,</span> <span class="pre">K]</span></code>.</p></li>
-<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Left-hand operand in <code class="docutils literal notranslate"><span class="pre">Y</span> <span class="pre">&#64;</span> <span class="pre">X^T</span></code>, with logical shape
-<code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_y,</span> <span class="pre">K]</span></code>.</p></li>
-<li><p><strong>output</strong> (<em>Optional</em><em>[</em><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em>]</em>) – Optional preallocated output tensor. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, an internal
-RAGGED buffer with shape <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">N_y,</span> <span class="pre">N_x]</span></code> is allocated using
-<code class="docutils literal notranslate"><span class="pre">ctx.max_new_tokens_per_batch</span> <span class="pre">*</span> <span class="pre">ctx.head_num</span></code> for the
-leading dimension. If not <code class="docutils literal notranslate"><span class="pre">None</span></code>, this tensor must have
-rank 3, last two dimensions <code class="docutils literal notranslate"><span class="pre">(N_y,</span> <span class="pre">N_x)</span></code>, and format in
-<code class="docutils literal notranslate"><span class="pre">{PAGED,</span> <span class="pre">RAGGED}</span></code>.</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>) – Auxiliary tensor carrying metadata required by the GEMM
-implementation.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context that provides the runtime value of <code class="docutils literal notranslate"><span class="pre">B</span></code>
-and is used for auxiliary memory accounting.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view representing the resolved output.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types, ranks, inner-dimension match, shapes, or devices
-    are incompatible.</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -411,10 +364,7 @@ and is used for auxiliary memory accounting.</p></li>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.matmul</a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM"><code class="docutils literal notranslate"><span class="pre">GeMM</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM.profile"><code class="docutils literal notranslate"><span class="pre">GeMM.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.cache.matmul.GeMM"><code class="docutils literal notranslate"><span class="pre">GeMM</span></code></a></li>
 </ul>
 </li>
 </ul>

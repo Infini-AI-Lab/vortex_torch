@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -314,42 +314,6 @@ axis is multiplied elementwise (with broadcasting), and the leading
 <dd class="field-even"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em> | </em><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Iterable" title="(in Python v3.14)"><em>Iterable</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a><em>]</em>)</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.kron.Kron.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/kron.html#Kron.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.kron.Kron.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs, allocate the output buffer, and return a
-<code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
-<p>For each inner axis <code class="docutils literal notranslate"><span class="pre">a</span></code> in <code class="docutils literal notranslate"><span class="pre">{1,</span> <span class="pre">2}</span></code>:</p>
-<ul class="simple">
-<li><p>if <code class="docutils literal notranslate"><span class="pre">a</span></code> is in <code class="xref py py-attr docutils literal notranslate"><span class="pre">dim</span></code>, the output size is the product
-<code class="docutils literal notranslate"><span class="pre">x.shape[a]</span> <span class="pre">*</span> <span class="pre">y.shape[a]</span></code> (Kronecker expansion);</p></li>
-<li><p>otherwise, <code class="docutils literal notranslate"><span class="pre">x.shape[a]</span></code> and <code class="docutils literal notranslate"><span class="pre">y.shape[a]</span></code> must be equal or
-one must be <code class="docutils literal notranslate"><span class="pre">1</span></code> (broadcast), and the output size is
-<code class="docutils literal notranslate"><span class="pre">max(x.shape[a],</span> <span class="pre">y.shape[a])</span></code>.</p></li>
-</ul>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Left-hand input with logical shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">x1,</span> <span class="pre">x2]</span></code>.</p></li>
-<li><p><strong>y</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Right-hand input with logical shape <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">y1,</span> <span class="pre">y2]</span></code>.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – Execution context tracking graph structure / aux memory.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>A <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> view wrapping the internally allocated
-output buffer.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types are not <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code>, if ranks are not 3, if a
-    non-Kron axis is not equal/broadcastable, or if <code class="docutils literal notranslate"><span class="pre">x</span></code> and
-    <code class="docutils literal notranslate"><span class="pre">y</span></code> live on different devices.</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -410,10 +374,7 @@ output buffer.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.kron</a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron"><code class="docutils literal notranslate"><span class="pre">Kron</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron.profile"><code class="docutils literal notranslate"><span class="pre">Kron.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.indexer.kron.Kron"><code class="docutils literal notranslate"><span class="pre">Kron</span></code></a></li>
 </ul>
 </li>
 </ul>

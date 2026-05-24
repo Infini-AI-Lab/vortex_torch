@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -316,41 +316,6 @@ pure <strong>position</strong> writer (<code class="docutils literal notranslate
 </ul>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.mask.MaskSlice.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/mask.html#MaskSlice.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.mask.MaskSlice.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Abstract method: profile.</p>
-<p>Called during the profiling or preparation phase.</p>
-<dl class="simple">
-<dt>Typical use cases:</dt><dd><ul class="simple">
-<li><p>Allocate persistent output buffers.</p></li>
-<li><p>Compute static shapes.</p></li>
-<li><p>Collect performance statistics.</p></li>
-</ul>
-</dd>
-</dl>
-<p>Subclasses must implement this method.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>*args</strong> – Positional arguments.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.abs.context_base.html#vortex_torch.abs.context_base.ContextBase" title="vortex_torch.abs.context_base.ContextBase"><em>ContextBase</em></a><em>, </em><em>optional</em>) – The execution context.</p></li>
-<li><p><strong>**kwargs</strong> – Additional keyword arguments.</p></li>
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>The result of the profiling operation.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>Any</em></p>
-</dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><strong>NotImplementedError</strong></a> – If the subclass does not implement this method.</p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -411,10 +376,7 @@ pure <strong>position</strong> writer (<code class="docutils literal notranslate
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.mask</a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.mask.MaskSlice"><code class="docutils literal notranslate"><span class="pre">MaskSlice</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.mask.MaskSlice.profile"><code class="docutils literal notranslate"><span class="pre">MaskSlice.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.indexer.mask.MaskSlice"><code class="docutils literal notranslate"><span class="pre">MaskSlice</span></code></a></li>
 </ul>
 </li>
 </ul>

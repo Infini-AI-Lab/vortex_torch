@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -305,8 +305,6 @@
     <span class="c1"># --------------------------------------------------------------------- #</span>
     <span class="c1"># profile: validate and optionally allocate output</span>
     <span class="c1"># --------------------------------------------------------------------- #</span>
-<div class="viewcode-block" id="Elementwise.profile">
-<a class="viewcode-back" href="../../../api/vortex_torch.cache.elementwise.html#vortex_torch.cache.elementwise.Elementwise.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">vTensor</span><span class="p">],</span> <span class="n">loc</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
@@ -374,7 +372,6 @@
         <span class="n">ctx</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">output</span><span class="o">.</span><span class="n">tensor_id</span><span class="p">])</span>
 
         <span class="k">return</span> <span class="n">output</span></div>
-</div>
 
 
 

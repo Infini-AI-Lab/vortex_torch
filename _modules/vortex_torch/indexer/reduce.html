@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -314,8 +314,6 @@
         <span class="p">)</span>
 
     <span class="c1"># ---------------- profile ----------------</span>
-<div class="viewcode-block" id="Reduce.profile">
-<a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` (``[N, D_0, D_1]``), resolve the output</span>
 <span class="sd">        format, register the op, and return a ``vTensor`` view of the reduced</span>
@@ -367,7 +365,6 @@
         
         <span class="c1"># Return vTensor view carrying the dispatched output format</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_buffer</span></div>
-</div>
 
 
 

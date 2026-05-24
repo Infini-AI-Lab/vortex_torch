@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -317,25 +317,6 @@ S axis); <code class="docutils literal notranslate"><span class="pre">scale</spa
 </ul>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Softmax.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Softmax.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Softmax.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, dispatch on
-<code class="docutils literal notranslate"><span class="pre">x._format</span></code>, register the op, and return the output <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>
-view (segmented softmax over <code class="docutils literal notranslate"><span class="pre">dim=0</span></code>).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
@@ -369,25 +350,6 @@ segments <span class="math notranslate nohighlight">\(\mathcal{I}_b\)</span>. Fo
 <dd class="field-odd"><p><strong>dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Normalize.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Normalize.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Normalize.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, dispatch on
-<code class="docutils literal notranslate"><span class="pre">x._format</span></code>, register the op, and return the output <code class="docutils literal notranslate"><span class="pre">vTensor</span></code>
-view (segmented <span class="math notranslate nohighlight">\(L_2\)</span> normalization over <code class="docutils literal notranslate"><span class="pre">dim=0</span></code>).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
@@ -431,25 +393,6 @@ size <span class="math notranslate nohighlight">\(K\)</span> = <code class="docu
 </ul>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.scan.Conv1d.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/scan.html#Conv1d.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.scan.Conv1d.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code> (weight inner dims
-must match), migrate <code class="docutils literal notranslate"><span class="pre">weight</span></code> to <code class="docutils literal notranslate"><span class="pre">x</span></code>’s device, register the op,
-and return the output <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -510,18 +453,9 @@ and return the output <code class="docutils literal notranslate"><span class="pr
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.scan</a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax"><code class="docutils literal notranslate"><span class="pre">Softmax</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax.profile"><code class="docutils literal notranslate"><span class="pre">Softmax.profile()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize"><code class="docutils literal notranslate"><span class="pre">Normalize</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize.profile"><code class="docutils literal notranslate"><span class="pre">Normalize.profile()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d"><code class="docutils literal notranslate"><span class="pre">Conv1d</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d.profile"><code class="docutils literal notranslate"><span class="pre">Conv1d.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Softmax"><code class="docutils literal notranslate"><span class="pre">Softmax</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Normalize"><code class="docutils literal notranslate"><span class="pre">Normalize</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.scan.Conv1d"><code class="docutils literal notranslate"><span class="pre">Conv1d</span></code></a></li>
 </ul>
 </li>
 </ul>

@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -309,26 +309,6 @@ written <strong>in place</strong> into the preallocated <code class="docutils li
 <code class="docutils literal notranslate"><span class="pre">Save</span></code> requires the engine to set <code class="docutils literal notranslate"><span class="pre">disable_radix_cache=True</span></code>.</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Save.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Save.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Save.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> / <code class="docutils literal notranslate"><span class="pre">o</span></code> (rank-3, matching <code class="docutils literal notranslate"><span class="pre">D_0</span></code> /
-<code class="docutils literal notranslate"><span class="pre">D_1</span></code>, compatible formats), register the op, and return <code class="docutils literal notranslate"><span class="pre">o</span></code> as the
-output view (no buffer is allocated).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>o</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 <dl class="py class">
@@ -356,25 +336,6 @@ returns a freshly-allocated <code class="docutils literal notranslate"><span cla
 <dd class="field-even"><p>read side of the persistent-state pattern (see <a class="reference internal" href="#vortex_torch.indexer.save_load.Save" title="vortex_torch.indexer.save_load.Save"><code class="xref py py-class docutils literal notranslate"><span class="pre">Save</span></code></a>).</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.indexer.save_load.Load.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/save_load.html#Load.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.save_load.Load.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">D_0,</span> <span class="pre">D_1]</span></code>, register the op, and
-return a freshly-allocated <code class="docutils literal notranslate"><span class="pre">vTensor</span></code> view of the loaded value (same
-inner shape, <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>).</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -435,14 +396,8 @@ inner shape, <code class="docutils literal notranslate"><span class="pre">RAGGED
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.save_load</a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save"><code class="docutils literal notranslate"><span class="pre">Save</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save.profile"><code class="docutils literal notranslate"><span class="pre">Save.profile()</span></code></a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load"><code class="docutils literal notranslate"><span class="pre">Load</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load.profile"><code class="docutils literal notranslate"><span class="pre">Load.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Save"><code class="docutils literal notranslate"><span class="pre">Save</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.indexer.save_load.Load"><code class="docutils literal notranslate"><span class="pre">Load</span></code></a></li>
 </ul>
 </li>
 </ul>

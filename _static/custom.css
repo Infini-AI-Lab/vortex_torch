@@ -1,27 +1,56 @@
 /* ===========================================================================
-   Vortex docs theme — light pink + white background + structured op blocks.
+   Vortex docs theme — light pink + white, polished.
+
+   Layers:
+     1. Fonts                       6. Sidebar / navigation
+     2. Brand + surface variables   7. Class / method signature cards
+     3. Page chrome                 8. Op field-list blocks (Math/__init__/…)
+     4. Headings                    9. Code, admonitions, tables
+     5. Links                      10. Display math
    =========================================================================== */
 
-/* ---- 1. Light pink + white page background (furo CSS variables) ---------
-   Set on both ``body`` and the more-specific light selector furo uses so the
-   override reliably wins in light / auto modes. */
-body,
-body:not([data-theme="dark"]) {
-    --color-background-primary:   #fff7fb;   /* main content surface (near-white pink) */
-    --color-background-secondary: #ffeef5;   /* sidebars / secondary surface (light pink) */
-    --color-sidebar-background:   #ffe9f1;
-    --color-code-background:      #fdeef4;    /* inline / block code */
-    --color-api-background:       #ffeef5;
+/* ---- 1. Fonts -----------------------------------------------------------
+   Webfonts with a full system fallback, so the page still looks clean
+   offline / before the fonts load. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ---- 2. Brand + surface variables --------------------------------------- */
+:root {
+    --vtx-pink:        #db2777;   /* primary pink            */
+    --vtx-pink-bright: #ec4899;   /* secondary / alt accent  */
+    --vtx-pink-deep:   #be185d;   /* deep accent (hover)     */
+    --vtx-pink-soft:   #f6c9dd;   /* hairline borders        */
+    --vtx-grad: linear-gradient(135deg, #ec4899 0%, #db2777 55%, #be185d 100%);
+    --vtx-shadow:    0 1px 2px rgba(190, 24, 93, 0.06), 0 4px 16px rgba(219, 39, 119, 0.08);
+    --vtx-shadow-lg: 0 2px 6px rgba(190, 24, 93, 0.10), 0 12px 32px rgba(219, 39, 119, 0.14);
 }
 
-/* Dark mode: a muted rose-tinted dark so text stays legible. */
+body,
+body:not([data-theme="dark"]) {
+    --color-background-primary:   #fffafd;   /* main content surface  */
+    --color-background-secondary: #ffeef5;   /* secondary surface     */
+    --color-sidebar-background:   #ffe9f1;
+    --color-code-background:      #fdeef4;
+    --color-api-background:       #fff5fa;
+
+    --color-brand-primary: var(--vtx-pink-deep);
+    --color-brand-content: var(--vtx-pink);
+    --color-brand-visited: var(--vtx-pink-deep);
+
+    --font-stack:            "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-stack--monospace: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark mode: muted rose-tinted dark. */
 @media (prefers-color-scheme: dark) {
     body:not([data-theme="light"]) {
         --color-background-primary:   #1c151a;
         --color-background-secondary: #261b22;
         --color-sidebar-background:   #261b22;
         --color-code-background:      #2a1d25;
-        --color-api-background:       #261b22;
+        --color-api-background:       #241921;
+        --color-brand-primary: var(--vtx-pink-bright);
+        --color-brand-content: var(--vtx-pink-bright);
     }
 }
 body[data-theme="dark"] {
@@ -29,54 +58,204 @@ body[data-theme="dark"] {
     --color-background-secondary: #261b22;
     --color-sidebar-background:   #261b22;
     --color-code-background:      #2a1d25;
-    --color-api-background:       #261b22;
+    --color-api-background:       #241921;
+    --color-brand-primary: var(--vtx-pink-bright);
+    --color-brand-content: var(--vtx-pink-bright);
 }
 
-/* ---- 2. Class / method signatures: compact (not oversized) -------------- */
+/* ---- 3. Page chrome ----------------------------------------------------- */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Faint pink wash that fades to white down the page. */
+    background-attachment: fixed;
+    background-image:
+        radial-gradient(1200px 600px at 100% -5%, rgba(236, 72, 153, 0.08), transparent 60%),
+        radial-gradient(900px 500px at -10% 0%, rgba(219, 39, 119, 0.06), transparent 55%);
+}
+article.content,
+.content {
+    line-height: 1.62;
+}
+
+/* ---- 4. Headings -------------------------------------------------------- */
+.content h1 {
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: var(--vtx-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding-bottom: 0.3rem;
+}
+.content h2,
+.content h3 {
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.content h2 {
+    margin-top: 2.2rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 2px solid transparent;
+    border-image: var(--vtx-grad) 1;
+}
+/* Hide furo's default heading anchor "#" until hover, for a cleaner look. */
+.content h1 .headerlink,
+.content h2 .headerlink,
+.content h3 .headerlink { opacity: 0; transition: opacity 0.15s ease; }
+.content h1:hover .headerlink,
+.content h2:hover .headerlink,
+.content h3:hover .headerlink { opacity: 0.5; }
+
+/* ---- 5. Links ----------------------------------------------------------- */
+.content a:not(.headerlink) {
+    text-decoration: none;
+    border-bottom: 1px solid var(--vtx-pink-soft);
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.content a:not(.headerlink):hover {
+    color: var(--vtx-pink-deep);
+    border-bottom-color: var(--vtx-pink);
+}
+
+/* ---- 6. Sidebar / navigation -------------------------------------------- */
+.sidebar-brand-text {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    background: var(--vtx-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.sidebar-tree .current-page > .reference {
+    color: var(--vtx-pink-deep);
+    font-weight: 600;
+}
+.sidebar-tree .reference {
+    border-radius: 0.35rem;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+.sidebar-tree .reference:hover {
+    background: rgba(236, 72, 153, 0.10);
+}
+.toc-tree li.scroll-current > .reference {
+    color: var(--vtx-pink-deep);
+    font-weight: 600;
+    border-left: 2px solid var(--vtx-pink);
+}
+
+/* ---- 7. Class / method signature cards ---------------------------------- */
 dl.py.class > dt.sig {
     font-size: 0.9em;
-    padding: 0.3rem 0.6rem;
-    border-radius: 0.4rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.55rem;
+    background: linear-gradient(135deg, #ffffff 0%, #fff2f8 100%);
+    border: 1px solid var(--vtx-pink-soft);
+    border-left: 4px solid transparent;
+    border-image: var(--vtx-grad) 1;
+    border-image-slice: 1;
+    box-shadow: var(--vtx-shadow);
 }
-dl.py.class .sig-name { font-weight: 700; font-size: 1em; }
-dl.py.method > dt.sig { font-size: 0.85em; }
+dl.py.class > dt.sig .sig-name { font-weight: 700; font-size: 1em; color: var(--vtx-pink-deep); }
+dl.py.class > dt.sig .sig-prename { opacity: 0.7; }
+
+dl.py.method > dt.sig,
+dl.py.attribute > dt.sig,
+dl.py.property > dt.sig {
+    font-size: 0.85em;
+    border-radius: 0.4rem;
+    border-left: 3px solid var(--vtx-pink-soft);
+    background: #fff7fb;
+}
 dl.py.method > dt.sig .sig-name { font-weight: 600; }
 
-/* ---- 3. Structured pink-on-white blocks for the op field lists ----------
-   Each op docstring is a field list (:Math: / :__init__: / :__call__: / :Note:).
-   Render every field as a stacked block: a pink label "pill" above a white
-   card with a pink accent border. */
+/* The class body gets a subtle gutter so members feel grouped under it. */
+dl.py.class > dd {
+    border-left: 2px solid var(--vtx-pink-soft);
+    padding-left: 1rem;
+    margin-left: 0.15rem;
+}
+
+/* ---- 8. Op field-list blocks (Math / __init__ / __call__ / Note) -------- */
 dl.field-list {
     display: block;
-    margin: 0.6rem 0 0.4rem 0;
+    margin: 0.7rem 0 0.5rem 0;
 }
-dl.field-list > dt {            /* the region label (Math / __init__ / …) */
+dl.field-list > dt {                       /* region label "pill" */
     display: inline-block;
-    font-family: var(--font-stack--monospace, monospace);
-    font-weight: 700;
-    font-size: 0.82em;
+    font-family: var(--font-stack--monospace);
+    font-weight: 600;
+    font-size: 0.8em;
     letter-spacing: 0.02em;
     color: #ffffff;
-    background: #db2777;          /* pink */
-    padding: 0.08rem 0.55rem;
-    border-radius: 0.4rem;
-    margin: 0.55rem 0 0 0;
+    background: var(--vtx-grad);
+    padding: 0.12rem 0.62rem;
+    border-radius: 0.5rem;
+    margin: 0.7rem 0 0 0;
+    box-shadow: 0 2px 6px rgba(219, 39, 119, 0.22);
 }
-dl.field-list > dt .colon { display: none; }   /* drop the trailing colon */
-dl.field-list > dd {            /* the region body card */
+dl.field-list > dt .colon { display: none; }
+dl.field-list > dd {                       /* region body card */
     display: block;
-    margin: 0.2rem 0 0.1rem 0;
-    padding: 0.4rem 0.75rem;
-    border: 1px solid #f6c9dd;
-    border-left: 3px solid #db2777;
-    background: #ffffff;          /* white card */
-    border-radius: 0 0.45rem 0.45rem 0;
+    margin: 0.3rem 0 0.15rem 0;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--vtx-pink-soft);
+    border-left: 3px solid var(--vtx-pink);
+    background: #ffffff;
+    border-radius: 0 0.55rem 0.55rem 0;
+    box-shadow: var(--vtx-shadow);
+    transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+dl.field-list > dd:hover {
+    box-shadow: var(--vtx-shadow-lg);
+    transform: translateX(2px);
 }
 dl.field-list > dd > p { margin: 0; }
 
-/* Subtle alternation in pink shades so adjacent blocks read as separate. */
-dl.field-list > dt:nth-of-type(even) { background: #ec4899; }
-dl.field-list > dd:nth-of-type(even) { border-left-color: #ec4899; background: #fff6fa; }
+/* Two-tone rhythm so adjacent blocks read as separate regions. */
+dl.field-list > dt:nth-of-type(even) {
+    background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+}
+dl.field-list > dd:nth-of-type(even) {
+    border-left-color: var(--vtx-pink-bright);
+    background: #fff8fb;
+}
 
-/* Display equations inside a Math block sit flush-left, not centered. */
-dl.field-list > dd div.math { text-align: left; margin: 0.1rem 0; }
+/* ---- 9. Code, admonitions, tables --------------------------------------- */
+.highlight {
+    border-radius: 0.6rem;
+    border: 1px solid var(--vtx-pink-soft);
+    box-shadow: var(--vtx-shadow);
+    overflow: hidden;
+}
+code.literal {
+    border-radius: 0.3rem;
+    padding: 0.05rem 0.32rem;
+    border: 1px solid rgba(219, 39, 119, 0.12);
+}
+.admonition,
+div.admonition {
+    border-radius: 0.6rem;
+    border-left-width: 4px;
+    box-shadow: var(--vtx-shadow);
+    overflow: hidden;
+}
+table.docutils {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: var(--vtx-shadow);
+    border: 1px solid var(--vtx-pink-soft);
+}
+table.docutils thead th {
+    background: var(--vtx-grad);
+    color: #ffffff;
+    font-weight: 600;
+}
+table.docutils tbody tr:nth-child(even) { background: #fff6fa; }
+
+/* ---- 10. Display math --------------------------------------------------- */
+dl.field-list > dd div.math {
+    text-align: left;
+    margin: 0.15rem 0;
+    overflow-x: auto;          /* let long equations scroll, never clip */
+}

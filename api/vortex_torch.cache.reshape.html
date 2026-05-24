@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -313,30 +313,6 @@ per-block batch axis, always 1); <code class="docutils literal notranslate"><spa
 </ul>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.cache.reshape.Reshape.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reshape.html#Reshape.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reshape.Reshape.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate, resolve formats, and register the reshape in the cache
-graph.</p>
-<p>Checks <code class="docutils literal notranslate"><span class="pre">x.dim()</span> <span class="pre">==</span> <span class="pre">3</span></code> and the same-numel constraint
-<code class="docutils literal notranslate"><span class="pre">x.shape[1]</span> <span class="pre">*</span> <span class="pre">x.shape[2]</span> <span class="pre">==</span> <span class="pre">self.x2</span> <span class="pre">*</span> <span class="pre">self.y2</span></code>. If <code class="docutils literal notranslate"><span class="pre">output</span></code>
-is supplied, also validates its shape matches
-<code class="docutils literal notranslate"><span class="pre">[*,</span> <span class="pre">self.x2,</span> <span class="pre">self.y2]</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>output</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em> | </em><em>None</em>)</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -397,10 +373,7 @@ is supplied, also validates its shape matches
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.reshape</a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape"><code class="docutils literal notranslate"><span class="pre">Reshape</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.profile"><code class="docutils literal notranslate"><span class="pre">Reshape.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape"><code class="docutils literal notranslate"><span class="pre">Reshape</span></code></a></li>
 </ul>
 </li>
 </ul>

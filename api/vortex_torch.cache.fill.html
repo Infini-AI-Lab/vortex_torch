@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=aea3b4e7" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=ced7aeb9" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -307,28 +307,6 @@ output <em>is</em> <code class="docutils literal notranslate"><span class="pre">
 <dd class="field-odd"><p><strong>alpha</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p>
 </dd>
 </dl>
-<dl class="py method">
-<dt class="sig sig-object py" id="vortex_torch.cache.fill.Fill.profile">
-<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/fill.html#Fill.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.fill.Fill.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate inputs and register this op in the cache graph.</p>
-<p><code class="docutils literal notranslate"><span class="pre">Fill</span></code> is a pure producer of <code class="docutils literal notranslate"><span class="pre">x</span></code>: it overwrites <code class="docutils literal notranslate"><span class="pre">x</span></code> with a
-constant and claims <code class="docutils literal notranslate"><span class="pre">x</span></code>’s producer slot (mirroring
-<code class="xref py py-class docutils literal notranslate"><span class="pre">indexer.save_load.Save</span></code>). The same <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> is
-returned so downstream ops can continue to reference <code class="docutils literal notranslate"><span class="pre">x</span></code>.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
-<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
-</dd>
-</dl>
-</dd></dl>
-
 </dd></dl>
 
 </section>
@@ -389,10 +367,7 @@ returned so downstream ops can continue to reference <code class="docutils liter
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.cache.fill</a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.fill.Fill"><code class="docutils literal notranslate"><span class="pre">Fill</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.cache.fill.Fill.profile"><code class="docutils literal notranslate"><span class="pre">Fill.profile()</span></code></a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#vortex_torch.cache.fill.Fill"><code class="docutils literal notranslate"><span class="pre">Fill</span></code></a></li>
 </ul>
 </li>
 </ul>
