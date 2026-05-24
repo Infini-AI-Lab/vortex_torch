@@ -2,6 +2,8 @@
 ======================================
 
 .. automodule:: vortex_torch.cache.reduce_interleave
+   :members:
+   :show-inheritance:
 
    
    .. rubric:: Classes

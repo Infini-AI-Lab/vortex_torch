@@ -2,6 +2,8 @@
 ============================
 
 .. automodule:: vortex_torch.indexer.select
+   :members:
+   :show-inheritance:
 
    
    .. rubric:: Classes

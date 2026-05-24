@@ -1,6 +1,8 @@
 vortex\_torch.flow.algorithms
 =============================
 
+.. automodule:: vortex_torch.flow.algorithms
+
 .. currentmodule:: vortex_torch.flow.algorithms
 
 Ready-made sparse-attention flows. Each entry shows the routing **math**

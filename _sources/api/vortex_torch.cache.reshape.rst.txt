@@ -2,6 +2,8 @@
 ===========================
 
 .. automodule:: vortex_torch.cache.reshape
+   :members:
+   :show-inheritance:
 
    
    .. rubric:: Classes

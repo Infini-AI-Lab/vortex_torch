@@ -174,7 +174,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
@@ -262,7 +262,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
@@ -273,12 +273,117 @@
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">Reshape</span></code>(batch_dim, x2, y2)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape" title="vortex_torch.cache.reshape.Reshape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Reshape</span></code></a>(batch_dim, x2, y2)</p></td>
 <td><p>Same-numel reshape of the inner two axes of a rank-3 cache block.</p></td>
 </tr>
 </tbody>
 </table>
 </div>
+<dl class="py class">
+<dt class="sig sig-object py" id="vortex_torch.cache.reshape.Reshape">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.cache.reshape.</span></span><span class="sig-name descname"><span class="pre">Reshape</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_dim</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reshape.html#Reshape"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reshape.Reshape" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
+<p>Same-numel reshape of the inner two axes of a rank-3 cache block.</p>
+<p>Given a per-block tile</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[X \in \mathbb{R}^{1 \times x_1 \times y_1},\]</div>
+</div>
+<p>this op produces</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[Y \in \mathbb{R}^{1 \times x_2 \times y_2},
+\qquad \text{with} \qquad x_2 \cdot y_2 \;=\; x_1 \cdot y_1,\]</div>
+</div>
+<p>by interpreting the flat <code class="docutils literal notranslate"><span class="pre">x_1</span> <span class="pre">*</span> <span class="pre">y_1</span></code> elements row-major into the
+new <code class="docutils literal notranslate"><span class="pre">(x_2,</span> <span class="pre">y_2)</span></code> layout. The leading (per-block batch) axis is
+fixed at size 1 on the cache side and must be passed as <code class="docutils literal notranslate"><span class="pre">-1</span></code> to
+the constructor as a placeholder, mirroring <code class="docutils literal notranslate"><span class="pre">torch.reshape</span></code>’s
+“infer this dim” convention.</p>
+<p>No data movement happens beyond the existing cache load/store —
+the loaded <code class="docutils literal notranslate"><span class="pre">(D0,</span> <span class="pre">D1)</span></code> block is reshaped at the Triton-tile level
+via <code class="xref py py-func docutils literal notranslate"><span class="pre">tl.reshape()</span></code>. The kernel reads with the input’s
+<code class="docutils literal notranslate"><span class="pre">(x_1,</span> <span class="pre">y_1)</span></code> shape and stores with the output’s <code class="docutils literal notranslate"><span class="pre">(x_2,</span> <span class="pre">y_2)</span></code>
+shape.</p>
+<p>Output format rule: if a caller-provided <code class="docutils literal notranslate"><span class="pre">output</span></code> is supplied with
+<code class="docutils literal notranslate"><span class="pre">PAGED</span></code> format, the output is <code class="docutils literal notranslate"><span class="pre">PAGED</span></code>; in every other case the
+output is <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>. Format compatibility is enforced by the
+compiler’s per-block kernel.</p>
+<section id="constructor">
+<h2>Constructor<a class="headerlink" href="#constructor" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">Reshape(-1,</span> <span class="pre">x2,</span> <span class="pre">y2)</span></code> — three integers; the leading must be
+<code class="docutils literal notranslate"><span class="pre">-1</span></code> (the per-block batch dim is auto-inferred and always <code class="docutils literal notranslate"><span class="pre">1</span></code>).
+The product <code class="docutils literal notranslate"><span class="pre">x2</span> <span class="pre">*</span> <span class="pre">y2</span></code> is checked against the input’s
+<code class="docutils literal notranslate"><span class="pre">x1</span> <span class="pre">*</span> <span class="pre">y1</span></code> at <a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.profile" title="vortex_torch.cache.reshape.Reshape.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> time.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">x2,</span> <span class="pre">y2</span></span></dt>
+<dd><p>Target inner-axis sizes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.reshape.Reshape.output_format">
+<span class="sig-name descname"><span class="pre">output_format</span></span><a class="headerlink" href="#vortex_torch.cache.reshape.Reshape.output_format" title="Link to this definition">¶</a></dt>
+<dd><p>Resolved output format from <a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.profile" title="vortex_torch.cache.reshape.Reshape.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="vortex_torch.cache.reshape.Reshape.output_buffer">
+<span class="sig-name descname"><span class="pre">output_buffer</span></span><a class="headerlink" href="#vortex_torch.cache.reshape.Reshape.output_buffer" title="Link to this definition">¶</a></dt>
+<dd><p>Pure-metadata vTensor descriptor for the output (graph node).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>Optional</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="vortex_torch.cache.reshape.Reshape.profile">
+<span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">loc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/cache/reshape.html#Reshape.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.cache.reshape.Reshape.profile" title="Link to this definition">¶</a></dt>
+<dd><p>Validate, resolve formats, and register the reshape in the cache
+graph.</p>
+<p>Checks <code class="docutils literal notranslate"><span class="pre">x.dim()</span> <span class="pre">==</span> <span class="pre">3</span></code> and the same-numel constraint
+<code class="docutils literal notranslate"><span class="pre">x.shape[1]</span> <span class="pre">*</span> <span class="pre">x.shape[2]</span> <span class="pre">==</span> <span class="pre">self.x2</span> <span class="pre">*</span> <span class="pre">self.y2</span></code>. If <code class="docutils literal notranslate"><span class="pre">output</span></code>
+is supplied, also validates its shape matches
+<code class="docutils literal notranslate"><span class="pre">[*,</span> <span class="pre">self.x2,</span> <span class="pre">self.y2]</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>output</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>loc</strong> (<em>torch.Tensor</em>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>x2</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+<li><p><strong>y2</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 </section>
 
         </article>
@@ -324,8 +429,32 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">vortex_torch.cache.reshape</a><ul>
+<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape"><code class="docutils literal notranslate"><span class="pre">Reshape</span></code></a><ul>
+<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.output_format"><code class="docutils literal notranslate"><span class="pre">Reshape.output_format</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.output_buffer"><code class="docutils literal notranslate"><span class="pre">Reshape.output_buffer</span></code></a></li>
+<li><a class="reference internal" href="#vortex_torch.cache.reshape.Reshape.profile"><code class="docutils literal notranslate"><span class="pre">Reshape.profile()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
@@ -336,5 +465,6 @@
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     </body>
 </html>
