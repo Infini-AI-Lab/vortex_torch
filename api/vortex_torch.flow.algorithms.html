@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=bdb03c8d" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -405,11 +405,11 @@ Emma Strubell, Beidi Chen.
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">GQABlockSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#GQABlockSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.GQABlockSparseAttention" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>Grouped-query block-sparse routing with a <strong>softmax over pages</strong>.</p>
-<p>Like <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a> it scores pages by query–centroid
-similarity, but keeps every grouped-query head separate: each head turns
-its per-page scores into a softmax distribution over pages, and a page’s
-final score is the <strong>max</strong> of that probability across heads. (Design akin
-to the GQA sparse-attention formulation in arXiv:2502.11089.)</p>
+<p>Each page keeps a centroid (the mean of its keys). Every grouped-query
+head is scored against the centroids separately; each head’s per-page
+scores are turned into a softmax distribution over pages, and a page’s
+final score is the <strong>max</strong> of that probability across heads
+(cf. the GQA sparse-attention formulation in arXiv:2502.11089).</p>
 <p><strong>Cache.</strong> Per-page centroid <span class="math notranslate nohighlight">\(c_p = \frac{1}{|p|}\sum_{k\in p} k\)</span>
 via <code class="xref py py-class docutils literal notranslate"><span class="pre">CMean</span></code>.</p>
 <p><strong>Routing.</strong> For grouped-query head <span class="math notranslate nohighlight">\(q_h\)</span> and page <span class="math notranslate nohighlight">\(p\)</span>, with
@@ -430,11 +430,11 @@ temperature <span class="math notranslate nohighlight">\(\tau = 0.09 \approx 1/\
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Grouped-query block-sparse routing with a **softmax over pages**.</span>
 
-<span class="sd">    Like :class:`BlockSparseAttention` it scores pages by query–centroid</span>
-<span class="sd">    similarity, but keeps every grouped-query head separate: each head turns</span>
-<span class="sd">    its per-page scores into a softmax distribution over pages, and a page&#39;s</span>
-<span class="sd">    final score is the **max** of that probability across heads. (Design akin</span>
-<span class="sd">    to the GQA sparse-attention formulation in arXiv:2502.11089.)</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys). Every grouped-query</span>
+<span class="sd">    head is scored against the centroids separately; each head&#39;s per-page</span>
+<span class="sd">    scores are turned into a softmax distribution over pages, and a page&#39;s</span>
+<span class="sd">    final score is the **max** of that probability across heads</span>
+<span class="sd">    (cf. the GQA sparse-attention formulation in arXiv:2502.11089).</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p = \frac{1}{|p|}\sum_{k\in p} k`</span>
 <span class="sd">    via :class:`CMean`.</span>
@@ -627,11 +627,12 @@ cache (batch-major).</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">LServeSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#LServeSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.LServeSparseAttention" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>LSERVE: QUEST envelopes at <strong>sub-block</strong> granularity.</p>
-<p>Sharpens <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">GQAQuestSparseAttention</span></code></a> by splitting each page into
-consecutive sub-blocks of <code class="xref py py-attr docutils literal notranslate"><span class="pre">LSERVE_BLOCK_SIZE</span></code> tokens and keeping a
-separate max/min envelope <strong>per sub-block</strong>. A page is ranked by its
-single best-matching (head, sub-block) pair, so one relevant sub-region is
-enough to select the page — a tighter bound than one envelope per page.</p>
+<p>Each page is split into consecutive sub-blocks of <code class="xref py py-attr docutils literal notranslate"><span class="pre">LSERVE_BLOCK_SIZE</span></code>
+tokens, and a coordinate-wise max/min key envelope is kept <strong>per
+sub-block</strong>. The envelopes give a cheap upper bound on the query–key dot
+product within a sub-block; a page is ranked by its single best-matching
+(head, sub-block) pair, so one relevant sub-region is enough to select the
+page.</p>
 <p><strong>Cache.</strong> <code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code> stores, for each of the
 <span class="math notranslate nohighlight">\(n_b = \text{block\_size} / \text{LSERVE\_BLOCK\_SIZE}\)</span> sub-blocks
 <span class="math notranslate nohighlight">\(b\)</span> of page <span class="math notranslate nohighlight">\(p\)</span>, coordinate-wise envelopes via
@@ -652,8 +653,8 @@ sub-blocks:</p>
 <p>then <code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code> keeps the highest pages.</p>
 <p><strong>Shapes.</strong> <code class="docutils literal notranslate"><span class="pre">q</span></code> is <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code>; <code class="docutils literal notranslate"><span class="pre">cache[&quot;max&quot;]</span></code> / <code class="docutils literal notranslate"><span class="pre">cache[&quot;min&quot;]</span></code>
 are <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">n_b,</span> <span class="pre">D]</span></code> (indexer) / <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">n_b,</span> <span class="pre">D]</span></code> (cache). With
-<code class="docutils literal notranslate"><span class="pre">block_size</span> <span class="pre">==</span> <span class="pre">LSERVE_BLOCK_SIZE</span></code> (<span class="math notranslate nohighlight">\(n_b = 1\)</span>) this reduces to
-<a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">GQAQuestSparseAttention</span></code></a>.</p>
+<code class="docutils literal notranslate"><span class="pre">block_size</span> <span class="pre">==</span> <span class="pre">LSERVE_BLOCK_SIZE</span></code> there is one sub-block per page
+(<span class="math notranslate nohighlight">\(n_b = 1\)</span>), i.e. a single envelope over the whole page.</p>
 </dd></dl>
 
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;lserve_sparse_attention&quot;</span><span class="p">)</span>
@@ -661,11 +662,12 @@ are <code class="docutils literal notranslate"><span class="pre">[S,</span> <spa
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    LSERVE: QUEST envelopes at **sub-block** granularity.</span>
 
-<span class="sd">    Sharpens :class:`GQAQuestSparseAttention` by splitting each page into</span>
-<span class="sd">    consecutive sub-blocks of :attr:`LSERVE_BLOCK_SIZE` tokens and keeping a</span>
-<span class="sd">    separate max/min envelope **per sub-block**. A page is ranked by its</span>
-<span class="sd">    single best-matching (head, sub-block) pair, so one relevant sub-region is</span>
-<span class="sd">    enough to select the page — a tighter bound than one envelope per page.</span>
+<span class="sd">    Each page is split into consecutive sub-blocks of :attr:`LSERVE_BLOCK_SIZE`</span>
+<span class="sd">    tokens, and a coordinate-wise max/min key envelope is kept **per</span>
+<span class="sd">    sub-block**. The envelopes give a cheap upper bound on the query–key dot</span>
+<span class="sd">    product within a sub-block; a page is ranked by its single best-matching</span>
+<span class="sd">    (head, sub-block) pair, so one relevant sub-region is enough to select the</span>
+<span class="sd">    page.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores, for each of the</span>
 <span class="sd">    :math:`n_b = \text{block\_size} / \text{LSERVE\_BLOCK\_SIZE}` sub-blocks</span>
@@ -690,8 +692,8 @@ are <code class="docutils literal notranslate"><span class="pre">[S,</span> <spa
 
 <span class="sd">    **Shapes.** ``q`` is ``[B, H_q, D]``; ``cache[&quot;max&quot;]`` / ``cache[&quot;min&quot;]``</span>
 <span class="sd">    are ``[S, n_b, D]`` (indexer) / ``[B, n_b, D]`` (cache). With</span>
-<span class="sd">    ``block_size == LSERVE_BLOCK_SIZE`` (:math:`n_b = 1`) this reduces to</span>
-<span class="sd">    :class:`GQAQuestSparseAttention`.</span>
+<span class="sd">    ``block_size == LSERVE_BLOCK_SIZE`` there is one sub-block per page</span>
+<span class="sd">    (:math:`n_b = 1`), i.e. a single envelope over the whole page.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">LSERVE_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -754,12 +756,11 @@ are <code class="docutils literal notranslate"><span class="pre">[S,</span> <spa
 <dt class="sig sig-object py" id="vortex_torch.flow.algorithms.LServeCentroidSparseAttention">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">LServeCentroidSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#LServeCentroidSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.LServeCentroidSparseAttention" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
-<p>Centroid routing at LSERVE <strong>sub-block</strong> granularity.</p>
-<p>Combines <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a>’s centroid routing with the
-sub-block idea of <a class="reference internal" href="#vortex_torch.flow.algorithms.LServeSparseAttention" title="vortex_torch.flow.algorithms.LServeSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">LServeSparseAttention</span></code></a>: each page is split into
-consecutive sub-blocks of <code class="xref py py-attr docutils literal notranslate"><span class="pre">SUB_BLOCK_SIZE</span></code> tokens, a centroid is
-kept <strong>per sub-block</strong>, and a page is ranked by its best-matching
-sub-block — finer than collapsing the whole page into one centroid.</p>
+<p>Centroid routing at sub-block granularity.</p>
+<p>Each page is split into consecutive sub-blocks of <code class="xref py py-attr docutils literal notranslate"><span class="pre">SUB_BLOCK_SIZE</span></code>
+tokens, and a centroid (the mean of its keys) is kept <strong>per sub-block</strong>. A
+page is ranked by the query’s best match against any of its sub-block
+centroids, so one relevant sub-region is enough to select the page.</p>
 <p><strong>Cache.</strong> <code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code> stores, for each of the
 <span class="math notranslate nohighlight">\(n_b = \text{block\_size} / \text{SUB\_BLOCK\_SIZE}\)</span> sub-blocks
 <span class="math notranslate nohighlight">\(b\)</span> of page <span class="math notranslate nohighlight">\(p\)</span>, a centroid via <code class="xref py py-class docutils literal notranslate"><span class="pre">CMeanInterleave</span></code>:</p>
@@ -776,20 +777,19 @@ sub-block — finer than collapsing the whole page into one centroid.</p>
 <p>then <code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code> keeps the highest pages.</p>
 <p><strong>Shapes.</strong> <code class="docutils literal notranslate"><span class="pre">q</span></code> is <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">H_q,</span> <span class="pre">D]</span></code>; <code class="docutils literal notranslate"><span class="pre">cache[&quot;centroids&quot;]</span></code> is
 <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">n_b,</span> <span class="pre">D]</span></code> (indexer) / <code class="docutils literal notranslate"><span class="pre">[B,</span> <span class="pre">n_b,</span> <span class="pre">D]</span></code> (cache). With
-<code class="docutils literal notranslate"><span class="pre">block_size</span> <span class="pre">==</span> <span class="pre">SUB_BLOCK_SIZE</span></code> (<span class="math notranslate nohighlight">\(n_b = 1\)</span>) this reduces to
-<a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a>.</p>
+<code class="docutils literal notranslate"><span class="pre">block_size</span> <span class="pre">==</span> <span class="pre">SUB_BLOCK_SIZE</span></code> there is one sub-block per page
+(<span class="math notranslate nohighlight">\(n_b = 1\)</span>), i.e. a single centroid over the whole page.</p>
 </dd></dl>
 
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;lserve_centroid_sparse_attention&quot;</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">LServeCentroidSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Centroid routing at LSERVE **sub-block** granularity.</span>
+<span class="sd">    Centroid routing at sub-block granularity.</span>
 
-<span class="sd">    Combines :class:`BlockSparseAttention`&#39;s centroid routing with the</span>
-<span class="sd">    sub-block idea of :class:`LServeSparseAttention`: each page is split into</span>
-<span class="sd">    consecutive sub-blocks of :attr:`SUB_BLOCK_SIZE` tokens, a centroid is</span>
-<span class="sd">    kept **per sub-block**, and a page is ranked by its best-matching</span>
-<span class="sd">    sub-block — finer than collapsing the whole page into one centroid.</span>
+<span class="sd">    Each page is split into consecutive sub-blocks of :attr:`SUB_BLOCK_SIZE`</span>
+<span class="sd">    tokens, and a centroid (the mean of its keys) is kept **per sub-block**. A</span>
+<span class="sd">    page is ranked by the query&#39;s best match against any of its sub-block</span>
+<span class="sd">    centroids, so one relevant sub-region is enough to select the page.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores, for each of the</span>
 <span class="sd">    :math:`n_b = \text{block\_size} / \text{SUB\_BLOCK\_SIZE}` sub-blocks</span>
@@ -810,8 +810,8 @@ sub-block — finer than collapsing the whole page into one centroid.</p>
 
 <span class="sd">    **Shapes.** ``q`` is ``[B, H_q, D]``; ``cache[&quot;centroids&quot;]`` is</span>
 <span class="sd">    ``[S, n_b, D]`` (indexer) / ``[B, n_b, D]`` (cache). With</span>
-<span class="sd">    ``block_size == SUB_BLOCK_SIZE`` (:math:`n_b = 1`) this reduces to</span>
-<span class="sd">    :class:`BlockSparseAttention`.</span>
+<span class="sd">    ``block_size == SUB_BLOCK_SIZE`` there is one sub-block per page</span>
+<span class="sd">    (:math:`n_b = 1`), i.e. a single centroid over the whole page.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">SUB_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
 
@@ -869,12 +869,12 @@ sub-block — finer than collapsing the whole page into one centroid.</p>
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">MaskedQuestSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#MaskedQuestSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.MaskedQuestSparseAttention" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>QUEST routing with a feature-axis mask that drops low-signal channels.</p>
-<p>Identical to <a class="reference internal" href="#vortex_torch.flow.algorithms.GQAQuestSparseAttention" title="vortex_torch.flow.algorithms.GQAQuestSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">GQAQuestSparseAttention</span></code></a>, but a <code class="xref py py-class docutils literal notranslate"><span class="pre">MaskSlice</span></code>
-zeroes the leading <code class="docutils literal notranslate"><span class="pre">MASK_END</span></code> feature coordinates of the QUEST bound
-before the feature sum — a cheap, position-only way to exclude
-low-signal channels (e.g. large-magnitude “sink” dimensions). Since
-<code class="xref py py-class docutils literal notranslate"><span class="pre">MaskSlice</span></code> is a pure position writer, no extra state is threaded
-through <code class="docutils literal notranslate"><span class="pre">ctx</span></code>.</p>
+<p>Each page keeps a coordinate-wise max/min key envelope; their combination
+upper-bounds the largest query–key dot product in the page. Before summing
+over features, a <code class="xref py py-class docutils literal notranslate"><span class="pre">MaskSlice</span></code> zeroes the leading <code class="docutils literal notranslate"><span class="pre">MASK_END</span></code> feature
+coordinates of that bound — a cheap, position-only way to exclude
+low-signal channels (e.g. large-magnitude “sink” dimensions). The mask is a
+pure position writer, so no extra state is threaded through <code class="docutils literal notranslate"><span class="pre">ctx</span></code>.</p>
 <p><strong>Cache.</strong> Per-page key envelopes <span class="math notranslate nohighlight">\(M_p = \max_{k\in p} k\)</span> and
 <span class="math notranslate nohighlight">\(m_p = \min_{k\in p} k\)</span> via <code class="xref py py-class docutils literal notranslate"><span class="pre">CMax</span></code> / <code class="xref py py-class docutils literal notranslate"><span class="pre">CMin</span></code>.</p>
 <p><strong>Routing.</strong> With the mask <span class="math notranslate nohighlight">\(w_d = 0\)</span> for <span class="math notranslate nohighlight">\(d &lt; \text{MASK\_END}\)</span>
@@ -897,12 +897,12 @@ are <code class="docutils literal notranslate"><span class="pre">[S,</span> <spa
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    QUEST routing with a feature-axis mask that drops low-signal channels.</span>
 
-<span class="sd">    Identical to :class:`GQAQuestSparseAttention`, but a :class:`MaskSlice`</span>
-<span class="sd">    zeroes the leading ``MASK_END`` feature coordinates of the QUEST bound</span>
-<span class="sd">    before the feature sum — a cheap, position-only way to exclude</span>
-<span class="sd">    low-signal channels (e.g. large-magnitude &quot;sink&quot; dimensions). Since</span>
-<span class="sd">    :class:`MaskSlice` is a pure position writer, no extra state is threaded</span>
-<span class="sd">    through ``ctx``.</span>
+<span class="sd">    Each page keeps a coordinate-wise max/min key envelope; their combination</span>
+<span class="sd">    upper-bounds the largest query–key dot product in the page. Before summing</span>
+<span class="sd">    over features, a :class:`MaskSlice` zeroes the leading ``MASK_END`` feature</span>
+<span class="sd">    coordinates of that bound — a cheap, position-only way to exclude</span>
+<span class="sd">    low-signal channels (e.g. large-magnitude &quot;sink&quot; dimensions). The mask is a</span>
+<span class="sd">    pure position writer, so no extra state is threaded through ``ctx``.</span>
 
 <span class="sd">    **Cache.** Per-page key envelopes :math:`M_p = \max_{k\in p} k` and</span>
 <span class="sd">    :math:`m_p = \min_{k\in p} k` via :class:`CMax` / :class:`CMin`.</span>
@@ -986,9 +986,9 @@ are <code class="docutils literal notranslate"><span class="pre">[S,</span> <spa
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">CenteredBlockSparseAttention</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#CenteredBlockSparseAttention"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.CenteredBlockSparseAttention" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>Centroid block-sparse routing with per-request <strong>mean-centering</strong>.</p>
-<p>Scores pages by query–centroid similarity like
-<a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a>, then subtracts the per-request mean score
-across pages before selection — so a page competes by how far <em>above
+<p>Each page keeps a centroid (the mean of its keys); pages are scored by
+query–centroid similarity, and the per-request mean score across pages is
+subtracted before selection — so a page competes by how far <em>above
 average</em> it is, not by raw similarity.</p>
 <p><strong>Cache.</strong> Per-page centroid <span class="math notranslate nohighlight">\(c_p = \frac{1}{|p|}\sum_{k\in p} k\)</span>
 via <code class="xref py py-class docutils literal notranslate"><span class="pre">CMean</span></code>.</p>
@@ -1010,9 +1010,9 @@ per-request mean over pages <span class="math notranslate nohighlight">\(\bar s 
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Centroid block-sparse routing with per-request **mean-centering**.</span>
 
-<span class="sd">    Scores pages by query–centroid similarity like</span>
-<span class="sd">    :class:`BlockSparseAttention`, then subtracts the per-request mean score</span>
-<span class="sd">    across pages before selection — so a page competes by how far *above</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys); pages are scored by</span>
+<span class="sd">    query–centroid similarity, and the per-request mean score across pages is</span>
+<span class="sd">    subtracted before selection — so a page competes by how far *above</span>
 <span class="sd">    average* it is, not by raw similarity.</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p = \frac{1}{|p|}\sum_{k\in p} k`</span>
@@ -1083,9 +1083,10 @@ per-request mean over pages <span class="math notranslate nohighlight">\(\bar s 
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>Centroid block-sparse routing with a per-page <strong>running score</strong>
 (a <code class="xref py py-class docutils literal notranslate"><span class="pre">Save</span></code> / <code class="xref py py-class docutils literal notranslate"><span class="pre">Load</span></code> demo).</p>
-<p>Like <a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a>, but instead of scoring on the current
-step alone it keeps an exponentially-decayed running score per page across
-decode steps: pages that stay relevant accumulate, pages that fade decay.</p>
+<p>Each page keeps a centroid (the mean of its keys). Instead of scoring on
+the current step alone, the per-page query–centroid score is accumulated
+into an exponentially-decayed running score across decode steps: pages that
+stay relevant accumulate, pages that fade decay.</p>
 <p><strong>Cache.</strong> Per-page centroid <span class="math notranslate nohighlight">\(c_p\)</span> via <code class="xref py py-class docutils literal notranslate"><span class="pre">CMean</span></code>; the persistent
 <code class="docutils literal notranslate"><span class="pre">running_score</span></code> is zero-initialised with <code class="xref py py-class docutils literal notranslate"><span class="pre">CFill</span></code> when a page is
 first filled (thereafter it is owned by <code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_indexer()</span></code>).</p>
@@ -1114,9 +1115,10 @@ set <code class="docutils literal notranslate"><span class="pre">disable_radix_c
 <span class="sd">    Centroid block-sparse routing with a per-page **running score**</span>
 <span class="sd">    (a :class:`Save` / :class:`Load` demo).</span>
 
-<span class="sd">    Like :class:`BlockSparseAttention`, but instead of scoring on the current</span>
-<span class="sd">    step alone it keeps an exponentially-decayed running score per page across</span>
-<span class="sd">    decode steps: pages that stay relevant accumulate, pages that fade decay.</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys). Instead of scoring on</span>
+<span class="sd">    the current step alone, the per-page query–centroid score is accumulated</span>
+<span class="sd">    into an exponentially-decayed running score across decode steps: pages that</span>
+<span class="sd">    stay relevant accumulate, pages that fade decay.</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p` via :class:`CMean`; the persistent</span>
 <span class="sd">    ``running_score`` is zero-initialised with :class:`CFill` when a page is</span>
@@ -1199,10 +1201,10 @@ set <code class="docutils literal notranslate"><span class="pre">disable_radix_c
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.flow.algorithms.</span></span><span class="sig-name descname"><span class="pre">VEnergyGatedCentroid</span></span><a class="reference internal" href="../_modules/vortex_torch/flow/algorithms.html#VEnergyGatedCentroid"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.flow.algorithms.VEnergyGatedCentroid" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.flow.flow.html#vortex_torch.flow.flow.vFlow" title="vortex_torch.flow.flow.vFlow"><code class="xref py py-class docutils literal notranslate"><span class="pre">vFlow</span></code></a></p>
 <p>Centroid routing <strong>gated by value-block energy</strong>.</p>
-<p>Scores a page by the query–centroid dot product like
-<a class="reference internal" href="#vortex_torch.flow.algorithms.BlockSparseAttention" title="vortex_torch.flow.algorithms.BlockSparseAttention"><code class="xref py py-class docutils literal notranslate"><span class="pre">BlockSparseAttention</span></code></a>, then multiplies by the page’s mean value
-magnitude (its “energy”): pages whose values carry little energy are muted
-even when the key centroid aligns with the query.</p>
+<p>Each page keeps a key centroid (the mean of its keys); a page is scored by
+the query–centroid dot product multiplied by the page’s mean value
+magnitude (its “energy”), so pages whose values carry little energy are
+muted even when the key centroid aligns with the query.</p>
 <p><strong>Cache.</strong> <code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache()</span></code> stores a per-page key centroid
 <span class="math notranslate nohighlight">\(c_p\)</span> (<code class="xref py py-class docutils literal notranslate"><span class="pre">CMean</span></code>) and the value energy — the mean <span class="math notranslate nohighlight">\(L_2\)</span>
 norm of its value tokens (<code class="xref py py-class docutils literal notranslate"><span class="pre">CL2Norm</span></code> over <span class="math notranslate nohighlight">\(D\)</span>, then
@@ -1227,10 +1229,10 @@ norm of its value tokens (<code class="xref py py-class docutils literal notrans
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Centroid routing **gated by value-block energy**.</span>
 
-<span class="sd">    Scores a page by the query–centroid dot product like</span>
-<span class="sd">    :class:`BlockSparseAttention`, then multiplies by the page&#39;s mean value</span>
-<span class="sd">    magnitude (its &quot;energy&quot;): pages whose values carry little energy are muted</span>
-<span class="sd">    even when the key centroid aligns with the query.</span>
+<span class="sd">    Each page keeps a key centroid (the mean of its keys); a page is scored by</span>
+<span class="sd">    the query–centroid dot product multiplied by the page&#39;s mean value</span>
+<span class="sd">    magnitude (its &quot;energy&quot;), so pages whose values carry little energy are</span>
+<span class="sd">    muted even when the key centroid aligns with the query.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores a per-page key centroid</span>
 <span class="sd">    :math:`c_p` (:class:`CMean`) and the value energy — the mean :math:`L_2`</span>

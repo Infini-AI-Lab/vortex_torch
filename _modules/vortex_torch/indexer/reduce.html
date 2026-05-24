@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=bdb03c8d" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -271,60 +271,26 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Reduce</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Generic reduction op for rank-3 logical tensors ``[N, D_0, D_1]``.</span>
+<span class="sd">    Generic 1-D reduction over one axis of a rank-3 logical tensor.</span>
 
-<span class="sd">    This operator performs a 1D reduction over the leading ``N`` axis,</span>
-<span class="sd">    the ``D_0`` axis, or the ``D_1`` axis of a 3D tensor.</span>
-
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    the output logical shape depends on the configured reduction dimension</span>
-<span class="sd">    ``dim``:</span>
-
-<span class="sd">    - ``dim == 0`` (reduce over the packed leading axis):</span>
-<span class="sd">      collapses ``N`` to one row per ``(batch, kv_head)``; produces a</span>
-<span class="sd">      ``BATCHED`` output (custom standalone kernel, requires</span>
-<span class="sd">      ``RAGGED`` input).</span>
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out} \in \mathbb{R}^{N \times 1 \times D_1}.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out} \in \mathbb{R}^{N \times D_0 \times 1}.</span>
-
-<span class="sd">    For ``dim ∈ {1, 2}`` the output is ``BATCHED`` iff the input is</span>
-<span class="sd">    ``BATCHED`` (per-row reduction preserves the leading-axis layout);</span>
-<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    The specific reduction operation (e.g. mean, max, min, L2-norm, sum)</span>
-<span class="sd">    is selected via :attr:`reduce_type`.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor: must be ``0``,</span>
-<span class="sd">        ``1``, or ``2``.</span>
-
-<span class="sd">    reduce_type : Optional[ReduceType]</span>
-<span class="sd">        The type of reduction to perform (e.g. mean, max, min, L2-norm, sum).</span>
-
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer with logical shape</span>
-<span class="sd">        ``[N, out_D0, out_D1]``, where ``out_D0`` and ``out_D1`` depend on</span>
-<span class="sd">        ``dim`` as described above.</span>
+<span class="sd">    :Math:</span>
+<span class="sd">        For input :math:`X\in\mathbb{R}^{N\times D_0\times D_1}` and a</span>
+<span class="sd">        reduction :math:`\rho` (mean / max / min / L2-norm / sum, fixed by the</span>
+<span class="sd">        subclass): ``dim=1`` →</span>
+<span class="sd">        :math:`\text{out}[n,0,d_1]=\rho_{d_0}\,X[n,d_0,d_1]` (shape</span>
+<span class="sd">        ``[N, 1, D_1]``); ``dim=2`` →</span>
+<span class="sd">        :math:`\text{out}[n,d_0,0]=\rho_{d_1}\,X[n,d_0,d_1]` (shape</span>
+<span class="sd">        ``[N, D_0, 1]``); ``dim=0`` collapses the packed leading axis to one</span>
+<span class="sd">        row per ``(batch, kv_head)``.</span>
+<span class="sd">    :__init__:</span>
+<span class="sd">        ``Reduce(dim=1)`` — logical axis to reduce, one of ``0`` / ``1`` / ``2``.</span>
+<span class="sd">    :__call__:</span>
+<span class="sd">        ``y = op(x, ctx=ctx)`` — ``x`` is ``[N, D_0, D_1]``; the reduced axis is</span>
+<span class="sd">        kept with size 1. For ``dim ∈ {1, 2}`` the output is ``BATCHED`` iff the</span>
+<span class="sd">        input is; ``dim=0`` requires ``RAGGED`` input and returns ``BATCHED``.</span>
+<span class="sd">    :Note:</span>
+<span class="sd">        Use a concrete subclass — :class:`Max`, :class:`Min`, :class:`Mean`,</span>
+<span class="sd">        :class:`L2Norm`, :class:`Sum`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
@@ -346,42 +312,9 @@
 <div class="viewcode-block" id="Reduce.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Reduce.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate the input, select an implementation based on ``x._format``,</span>
-<span class="sd">        allocate the output buffer, and return a ``vTensor`` view.</span>
-
-<span class="sd">        The input tensor is expected to have logical shape ``[N, D_0, D_1]``,</span>
-<span class="sd">        where the leading dimension ``N`` may represent either a batch size or</span>
-<span class="sd">        a sequence/page count. The runtime uses ``ctx.max_num_pages`` to define</span>
-<span class="sd">        the leading dimension of the output, in line with other operators that</span>
-<span class="sd">        treat the first axis as the logical ``N`` axis.</span>
-
-<span class="sd">        According to :attr:`dim`, the output logical shape is:</span>
-
-<span class="sd">        - ``dim == 1`` → ``[N, 1, D_1]``</span>
-<span class="sd">        - ``dim == 2`` → ``[N, D_0, 1]``</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Input tensor with logical shape ``[N, D_0, D_1]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing ``ctx.max_num_pages`` for the leading</span>
-<span class="sd">            dimension and tracking auxiliary memory usage.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the allocated output buffer with the</span>
-<span class="sd">            resolved output format.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If ``x`` is not a :class:`vTensor`, if its rank is not 3, or if no</span>
-<span class="sd">            implementation is registered for ``x._format``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` (``[N, D_0, D_1]``), resolve the output</span>
+<span class="sd">        format, register the op, and return a ``vTensor`` view of the reduced</span>
+<span class="sd">        output (see the class docstring for shapes).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type &amp; rank checks</span>
@@ -437,43 +370,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Max">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Max</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Maximum reduction over a single logical axis.</span>
+<span class="sd">    Max reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    this operator computes, depending on ``dim``:</span>
-
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, 0, d_1]</span>
-<span class="sd">         = \max_{0 \le d_0 &lt; D_0} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, 1, D_1]`.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, d_0, 0]</span>
-<span class="sd">         = \max_{0 \le d_1 &lt; D_1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, D_0, 1]`.</span>
-
-<span class="sd">    The leading dimension :math:`N` may represent either a batch axis</span>
-<span class="sd">    (``B``) or a sequence/page axis (``S``); the reduction is applied</span>
-<span class="sd">    independently for each slice along this dimension.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor (``1`` for :math:`D_0`,</span>
-<span class="sd">        ``2`` for :math:`D_1`). Default is ``1``.</span>
+<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\max_{d_0}X[n,d_0,d_1]`;</span>
+<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\max_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :__init__: ``Max(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
+<span class="sd">        ``2`` → :math:`D_1`).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
+<span class="sd">        (``dim=1``) or ``[N, D_0, 1]`` (``dim=2``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
@@ -485,43 +389,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Min">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Min</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Minimum reduction over a single logical axis.</span>
+<span class="sd">    Min reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    this operator computes, depending on ``dim``:</span>
-
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, 0, d_1]</span>
-<span class="sd">         = \min_{0 \le d_0 &lt; D_0} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, 1, D_1]`.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, d_0, 0]</span>
-<span class="sd">         = \min_{0 \le d_1 &lt; D_1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, D_0, 1]`.</span>
-
-<span class="sd">    The leading dimension :math:`N` may represent either a batch axis</span>
-<span class="sd">    (``B``) or a sequence/page axis (``S``); the reduction is applied</span>
-<span class="sd">    independently for each slice along this dimension.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor (``1`` for :math:`D_0`,</span>
-<span class="sd">        ``2`` for :math:`D_1`). Default is ``1``.</span>
+<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\min_{d_0}X[n,d_0,d_1]`;</span>
+<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\min_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :__init__: ``Min(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
+<span class="sd">        ``2`` → :math:`D_1`).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
+<span class="sd">        (``dim=1``) or ``[N, D_0, 1]`` (``dim=2``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
@@ -533,43 +408,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Mean">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Mean</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Mean reduction over a single logical axis.</span>
+<span class="sd">    Mean reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    this operator computes, depending on ``dim``:</span>
-
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, 0, d_1]</span>
-<span class="sd">         = \frac{1}{D_0} \sum_{d_0=0}^{D_0-1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, 1, D_1]`.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, d_0, 0]</span>
-<span class="sd">         = \frac{1}{D_1} \sum_{d_1=0}^{D_1-1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, D_0, 1]`.</span>
-
-<span class="sd">    The leading dimension :math:`N` may represent either a batch axis</span>
-<span class="sd">    (``B``) or a sequence/page axis (``S``); the reduction is applied</span>
-<span class="sd">    independently for each slice along this dimension.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor (``1`` for :math:`D_0`,</span>
-<span class="sd">        ``2`` for :math:`D_1`). Default is ``1``.</span>
+<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\frac{1}{D_0}\sum_{d_0}X[n,d_0,d_1]`;</span>
+<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\frac{1}{D_1}\sum_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :__init__: ``Mean(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
+<span class="sd">        ``2`` → :math:`D_1`).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
+<span class="sd">        (``dim=1``) or ``[N, D_0, 1]`` (``dim=2``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
@@ -581,43 +427,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.L2Norm">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">L2Norm</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    L2-norm reduction over a single logical axis.</span>
+<span class="sd">    L2-norm reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    this operator computes, depending on ``dim``:</span>
-
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, 0, d_1]</span>
-<span class="sd">         = \sqrt{\sum_{d_0=0}^{D_0-1} X[n, d_0, d_1]^2},</span>
-
-<span class="sd">      with shape :math:`[N, 1, D_1]`.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, d_0, 0]</span>
-<span class="sd">         = \sqrt{\sum_{d_1=0}^{D_1-1} X[n, d_0, d_1]^2},</span>
-
-<span class="sd">      with shape :math:`[N, D_0, 1]`.</span>
-
-<span class="sd">    The leading dimension :math:`N` may represent either a batch axis</span>
-<span class="sd">    (``B``) or a sequence/page axis (``S``); the reduction is applied</span>
-<span class="sd">    independently for each slice along this dimension.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor (``1`` for :math:`D_0`,</span>
-<span class="sd">        ``2`` for :math:`D_1`). Default is ``1``.</span>
+<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\sqrt{\sum_{d_0}X[n,d_0,d_1]^2}`;</span>
+<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\sqrt{\sum_{d_1}X[n,d_0,d_1]^2}`.</span>
+<span class="sd">    :__init__: ``L2Norm(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
+<span class="sd">        ``2`` → :math:`D_1`).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
+<span class="sd">        (``dim=1``) or ``[N, D_0, 1]`` (``dim=2``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
@@ -629,43 +446,14 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.reduce.html#vortex_torch.indexer.reduce.Sum">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Sum</span><span class="p">(</span><span class="n">Reduce</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Sum reduction over a single logical axis.</span>
+<span class="sd">    Sum reduction over one logical axis (a :class:`Reduce`).</span>
 
-<span class="sd">    Given an input tensor</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{N \times D_0 \times D_1},</span>
-
-<span class="sd">    this operator computes, depending on ``dim``:</span>
-
-<span class="sd">    - ``dim == 1`` (reduce over :math:`D_0`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, 0, d_1]</span>
-<span class="sd">         = \sum_{d_0=0}^{D_0-1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, 1, D_1]`.</span>
-
-<span class="sd">    - ``dim == 2`` (reduce over :math:`D_1`):</span>
-
-<span class="sd">      .. math::</span>
-
-<span class="sd">         \text{out}[n, d_0, 0]</span>
-<span class="sd">         = \sum_{d_1=0}^{D_1-1} X[n, d_0, d_1],</span>
-
-<span class="sd">      with shape :math:`[N, D_0, 1]`.</span>
-
-<span class="sd">    The leading dimension :math:`N` may represent either a batch axis</span>
-<span class="sd">    (``B``) or a sequence/page axis (``S``); the reduction is applied</span>
-<span class="sd">    independently for each slice along this dimension.</span>
-
-<span class="sd">    Parameters</span>
-<span class="sd">    ----------</span>
-<span class="sd">    dim : int, optional</span>
-<span class="sd">        Reduction dimension in the logical 3D tensor (``1`` for :math:`D_0`,</span>
-<span class="sd">        ``2`` for :math:`D_1`). Default is ``1``.</span>
+<span class="sd">    :Math: ``dim=1``: :math:`\text{out}[n,0,d_1]=\sum_{d_0}X[n,d_0,d_1]`;</span>
+<span class="sd">        ``dim=2``: :math:`\text{out}[n,d_0,0]=\sum_{d_1}X[n,d_0,d_1]`.</span>
+<span class="sd">    :__init__: ``Sum(dim=1)`` — axis to reduce (``1`` → :math:`D_0`,</span>
+<span class="sd">        ``2`` → :math:`D_1`).</span>
+<span class="sd">    :__call__: ``y = op(x, ctx=ctx)`` — ``[N, D_0, D_1]`` → ``[N, 1, D_1]``</span>
+<span class="sd">        (``dim=1``) or ``[N, D_0, 1]`` (``dim=2``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>

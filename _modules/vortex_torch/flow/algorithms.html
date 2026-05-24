@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=bdb03c8d" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -370,11 +370,11 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Grouped-query block-sparse routing with a **softmax over pages**.</span>
 
-<span class="sd">    Like :class:`BlockSparseAttention` it scores pages by query–centroid</span>
-<span class="sd">    similarity, but keeps every grouped-query head separate: each head turns</span>
-<span class="sd">    its per-page scores into a softmax distribution over pages, and a page&#39;s</span>
-<span class="sd">    final score is the **max** of that probability across heads. (Design akin</span>
-<span class="sd">    to the GQA sparse-attention formulation in arXiv:2502.11089.)</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys). Every grouped-query</span>
+<span class="sd">    head is scored against the centroids separately; each head&#39;s per-page</span>
+<span class="sd">    scores are turned into a softmax distribution over pages, and a page&#39;s</span>
+<span class="sd">    final score is the **max** of that probability across heads</span>
+<span class="sd">    (cf. the GQA sparse-attention formulation in arXiv:2502.11089).</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p = \frac{1}{|p|}\sum_{k\in p} k`</span>
 <span class="sd">    via :class:`CMean`.</span>
@@ -539,11 +539,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    LSERVE: QUEST envelopes at **sub-block** granularity.</span>
 
-<span class="sd">    Sharpens :class:`GQAQuestSparseAttention` by splitting each page into</span>
-<span class="sd">    consecutive sub-blocks of :attr:`LSERVE_BLOCK_SIZE` tokens and keeping a</span>
-<span class="sd">    separate max/min envelope **per sub-block**. A page is ranked by its</span>
-<span class="sd">    single best-matching (head, sub-block) pair, so one relevant sub-region is</span>
-<span class="sd">    enough to select the page — a tighter bound than one envelope per page.</span>
+<span class="sd">    Each page is split into consecutive sub-blocks of :attr:`LSERVE_BLOCK_SIZE`</span>
+<span class="sd">    tokens, and a coordinate-wise max/min key envelope is kept **per</span>
+<span class="sd">    sub-block**. The envelopes give a cheap upper bound on the query–key dot</span>
+<span class="sd">    product within a sub-block; a page is ranked by its single best-matching</span>
+<span class="sd">    (head, sub-block) pair, so one relevant sub-region is enough to select the</span>
+<span class="sd">    page.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores, for each of the</span>
 <span class="sd">    :math:`n_b = \text{block\_size} / \text{LSERVE\_BLOCK\_SIZE}` sub-blocks</span>
@@ -568,8 +569,8 @@
 
 <span class="sd">    **Shapes.** ``q`` is ``[B, H_q, D]``; ``cache[&quot;max&quot;]`` / ``cache[&quot;min&quot;]``</span>
 <span class="sd">    are ``[S, n_b, D]`` (indexer) / ``[B, n_b, D]`` (cache). With</span>
-<span class="sd">    ``block_size == LSERVE_BLOCK_SIZE`` (:math:`n_b = 1`) this reduces to</span>
-<span class="sd">    :class:`GQAQuestSparseAttention`.</span>
+<span class="sd">    ``block_size == LSERVE_BLOCK_SIZE`` there is one sub-block per page</span>
+<span class="sd">    (:math:`n_b = 1`), i.e. a single envelope over the whole page.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">LSERVE_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -631,13 +632,12 @@
 <span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;lserve_centroid_sparse_attention&quot;</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">LServeCentroidSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Centroid routing at LSERVE **sub-block** granularity.</span>
+<span class="sd">    Centroid routing at sub-block granularity.</span>
 
-<span class="sd">    Combines :class:`BlockSparseAttention`&#39;s centroid routing with the</span>
-<span class="sd">    sub-block idea of :class:`LServeSparseAttention`: each page is split into</span>
-<span class="sd">    consecutive sub-blocks of :attr:`SUB_BLOCK_SIZE` tokens, a centroid is</span>
-<span class="sd">    kept **per sub-block**, and a page is ranked by its best-matching</span>
-<span class="sd">    sub-block — finer than collapsing the whole page into one centroid.</span>
+<span class="sd">    Each page is split into consecutive sub-blocks of :attr:`SUB_BLOCK_SIZE`</span>
+<span class="sd">    tokens, and a centroid (the mean of its keys) is kept **per sub-block**. A</span>
+<span class="sd">    page is ranked by the query&#39;s best match against any of its sub-block</span>
+<span class="sd">    centroids, so one relevant sub-region is enough to select the page.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores, for each of the</span>
 <span class="sd">    :math:`n_b = \text{block\_size} / \text{SUB\_BLOCK\_SIZE}` sub-blocks</span>
@@ -658,8 +658,8 @@
 
 <span class="sd">    **Shapes.** ``q`` is ``[B, H_q, D]``; ``cache[&quot;centroids&quot;]`` is</span>
 <span class="sd">    ``[S, n_b, D]`` (indexer) / ``[B, n_b, D]`` (cache). With</span>
-<span class="sd">    ``block_size == SUB_BLOCK_SIZE`` (:math:`n_b = 1`) this reduces to</span>
-<span class="sd">    :class:`BlockSparseAttention`.</span>
+<span class="sd">    ``block_size == SUB_BLOCK_SIZE`` there is one sub-block per page</span>
+<span class="sd">    (:math:`n_b = 1`), i.e. a single centroid over the whole page.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">SUB_BLOCK_SIZE</span> <span class="o">=</span> <span class="mi">16</span>
 
@@ -717,12 +717,12 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    QUEST routing with a feature-axis mask that drops low-signal channels.</span>
 
-<span class="sd">    Identical to :class:`GQAQuestSparseAttention`, but a :class:`MaskSlice`</span>
-<span class="sd">    zeroes the leading ``MASK_END`` feature coordinates of the QUEST bound</span>
-<span class="sd">    before the feature sum — a cheap, position-only way to exclude</span>
-<span class="sd">    low-signal channels (e.g. large-magnitude &quot;sink&quot; dimensions). Since</span>
-<span class="sd">    :class:`MaskSlice` is a pure position writer, no extra state is threaded</span>
-<span class="sd">    through ``ctx``.</span>
+<span class="sd">    Each page keeps a coordinate-wise max/min key envelope; their combination</span>
+<span class="sd">    upper-bounds the largest query–key dot product in the page. Before summing</span>
+<span class="sd">    over features, a :class:`MaskSlice` zeroes the leading ``MASK_END`` feature</span>
+<span class="sd">    coordinates of that bound — a cheap, position-only way to exclude</span>
+<span class="sd">    low-signal channels (e.g. large-magnitude &quot;sink&quot; dimensions). The mask is a</span>
+<span class="sd">    pure position writer, so no extra state is threaded through ``ctx``.</span>
 
 <span class="sd">    **Cache.** Per-page key envelopes :math:`M_p = \max_{k\in p} k` and</span>
 <span class="sd">    :math:`m_p = \min_{k\in p} k` via :class:`CMax` / :class:`CMin`.</span>
@@ -806,9 +806,9 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Centroid block-sparse routing with per-request **mean-centering**.</span>
 
-<span class="sd">    Scores pages by query–centroid similarity like</span>
-<span class="sd">    :class:`BlockSparseAttention`, then subtracts the per-request mean score</span>
-<span class="sd">    across pages before selection — so a page competes by how far *above</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys); pages are scored by</span>
+<span class="sd">    query–centroid similarity, and the per-request mean score across pages is</span>
+<span class="sd">    subtracted before selection — so a page competes by how far *above</span>
 <span class="sd">    average* it is, not by raw similarity.</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p = \frac{1}{|p|}\sum_{k\in p} k`</span>
@@ -879,9 +879,10 @@
 <span class="sd">    Centroid block-sparse routing with a per-page **running score**</span>
 <span class="sd">    (a :class:`Save` / :class:`Load` demo).</span>
 
-<span class="sd">    Like :class:`BlockSparseAttention`, but instead of scoring on the current</span>
-<span class="sd">    step alone it keeps an exponentially-decayed running score per page across</span>
-<span class="sd">    decode steps: pages that stay relevant accumulate, pages that fade decay.</span>
+<span class="sd">    Each page keeps a centroid (the mean of its keys). Instead of scoring on</span>
+<span class="sd">    the current step alone, the per-page query–centroid score is accumulated</span>
+<span class="sd">    into an exponentially-decayed running score across decode steps: pages that</span>
+<span class="sd">    stay relevant accumulate, pages that fade decay.</span>
 
 <span class="sd">    **Cache.** Per-page centroid :math:`c_p` via :class:`CMean`; the persistent</span>
 <span class="sd">    ``running_score`` is zero-initialised with :class:`CFill` when a page is</span>
@@ -964,10 +965,10 @@
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Centroid routing **gated by value-block energy**.</span>
 
-<span class="sd">    Scores a page by the query–centroid dot product like</span>
-<span class="sd">    :class:`BlockSparseAttention`, then multiplies by the page&#39;s mean value</span>
-<span class="sd">    magnitude (its &quot;energy&quot;): pages whose values carry little energy are muted</span>
-<span class="sd">    even when the key centroid aligns with the query.</span>
+<span class="sd">    Each page keeps a key centroid (the mean of its keys); a page is scored by</span>
+<span class="sd">    the query–centroid dot product multiplied by the page&#39;s mean value</span>
+<span class="sd">    magnitude (its &quot;energy&quot;), so pages whose values carry little energy are</span>
+<span class="sd">    muted even when the key centroid aligns with the query.</span>
 
 <span class="sd">    **Cache.** :meth:`forward_cache` stores a per-page key centroid</span>
 <span class="sd">    :math:`c_p` (:class:`CMean`) and the value energy — the mean :math:`L_2`</span>

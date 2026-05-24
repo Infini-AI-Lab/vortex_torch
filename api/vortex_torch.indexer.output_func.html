@@ -10,7 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=bdb03c8d" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -274,7 +274,7 @@
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-obj docutils literal notranslate"><span class="pre">topK</span></code></a>()</p></td>
-<td><p>Piecewise top-k dispatcher for packed sequences with reserved pages.</p></td>
+<td><p>Per-request top-k page selector with reserved BOS/EOS pages.</p></td>
 </tr>
 </tbody>
 </table>
@@ -283,170 +283,82 @@
 <dt class="sig sig-object py" id="vortex_torch.indexer.output_func.topK">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.output_func.</span></span><span class="sig-name descname"><span class="pre">topK</span></span><a class="reference internal" href="../_modules/vortex_torch/indexer/output_func.html#topK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.output_func.topK" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="vortex_torch.abs.op.html#vortex_torch.abs.op.vOp" title="vortex_torch.abs.op.vOp"><code class="xref py py-class docutils literal notranslate"><span class="pre">vOp</span></code></a></p>
-<p>Piecewise top-k dispatcher for packed sequences with reserved pages.</p>
-<p>The input is treated as a rank-3 tensor</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[X \in \mathbb{R}^{S_{\text{pack}} \times 1 \times 1},\]</div>
-</div>
-<p>where the leading dimension <span class="math notranslate nohighlight">\(S_{\text{pack}}\)</span> is a packed
-concatenation of <span class="math notranslate nohighlight">\(B\)</span> segments:</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\begin{split}S_{\text{pack}} = \sum_{b=0}^{B-1} S_b, \qquad
-X =
-\begin{bmatrix}
-    X_0 \\
-    X_1 \\
-    \vdots \\
-    X_{B-1}
-\end{bmatrix},\end{split}\]</div>
-</div>
-<p>with</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[X_b \in \mathbb{R}^{S_b \times 1 \times 1}.\]</div>
-</div>
-<p>For each segment <span class="math notranslate nohighlight">\(b\)</span>, the operator selects a subset of pages
-according to scores stored in <code class="docutils literal notranslate"><span class="pre">x</span></code> (and additional key/value
-metadata from <code class="xref py py-class docutils literal notranslate"><span class="pre">Context</span></code>), but <strong>always</strong> preserves:</p>
-<ul class="simple">
-<li><p>the first <code class="docutils literal notranslate"><span class="pre">page_reserved_bos</span></code> pages in that segment,</p></li>
-<li><p>the last <code class="docutils literal notranslate"><span class="pre">page_reserved_eos</span></code> pages in that segment, and</p></li>
-<li><p>an additional <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> pages chosen by top-k over the remaining
-candidates in the segment.</p></li>
-</ul>
-<p>Let <span class="math notranslate nohighlight">\(\mathcal{I}_b \subset [0, S_{\text{pack}})\)</span> denote the index
-range of segment <span class="math notranslate nohighlight">\(b\)</span>. The implementation computes a subset
-<span class="math notranslate nohighlight">\(\mathcal{J}_b \subset \mathcal{I}_b\)</span> such that:</p>
-<ul class="simple">
-<li><p>all indices corresponding to the reserved prefix (BOS) and suffix
-(EOS) pages in <span class="math notranslate nohighlight">\(\mathcal{I}_b\)</span> are included, and</p></li>
-<li><p>up to <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> additional indices are selected by score.</p></li>
-</ul>
-<p>The result is written into a preallocated output tensor <code class="docutils literal notranslate"><span class="pre">o</span></code>; the
-exact layout of <code class="docutils literal notranslate"><span class="pre">o</span></code> is defined by the upstream contract and the
-implementation.</p>
-<section id="key-properties">
-<h2>Key properties<a class="headerlink" href="#key-properties" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>Dispatch is keyed <strong>only</strong> by the input format <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p></li>
-<li><p>The operation is logically out-of-place, but writes into <code class="docutils literal notranslate"><span class="pre">o</span></code> in-place.</p></li>
-<li><p><a class="reference internal" href="#vortex_torch.indexer.output_func.topK.profile" title="vortex_torch.indexer.output_func.topK.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> only validates and selects the implementation; it does
-not allocate or return any buffers.</p></li>
-<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">execute()</span></code> performs the per-segment selection using context
-metadata (indptr arrays, indices, reserved-page counts, and <code class="docutils literal notranslate"><span class="pre">topk_val</span></code>).</p></li>
-</ul>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="vortex_torch.indexer.output_func.topK._supported_formats">
-<span class="sig-name descname"><span class="pre">_supported_formats</span></span><a class="headerlink" href="#vortex_torch.indexer.output_func.topK._supported_formats" title="Link to this definition">¶</a></dt>
-<dd><p>Set of input formats for which a top-k codegen implementation
-exists. Used by <a class="reference internal" href="#vortex_torch.indexer.output_func.topK.profile" title="vortex_torch.indexer.output_func.topK.profile"><code class="xref py py-meth docutils literal notranslate"><span class="pre">profile()</span></code></a> for dispatch validation.</p>
+<p>Per-request top-k page selector with reserved BOS/EOS pages.</p>
+<p>The terminal op of a <code class="docutils literal notranslate"><span class="pre">forward_indexer</span></code>: it turns per-page scores into the
+sparse set of pages each request attends to.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>FrozenSet</em>[<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.FORMAT" title="vortex_torch.abs.tensor.FORMAT"><em>FORMAT</em></a>]</p>
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>for each request’s packed score segment
+<span class="math notranslate nohighlight">\(X\in\mathbb{R}^{S\times 1\times 1}\)</span>, the selected page set is the
+first <code class="docutils literal notranslate"><span class="pre">block_reserved_bos</span></code> pages, the last <code class="docutils literal notranslate"><span class="pre">block_reserved_eos</span></code>
+pages, and the <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> highest-scoring of the remaining pages.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">topK()</span></code> — no arguments; the budget <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> and the
+reserved BOS/EOS counts are read from <code class="xref py py-class docutils literal notranslate"><span class="pre">Context</span></code> at runtime.</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">op(score,</span> <span class="pre">o,</span> <span class="pre">ctx=ctx)</span></code> — <code class="docutils literal notranslate"><span class="pre">score</span></code> is <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">1]</span></code> (one
+scalar per page; must be <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>); the selected page ids are written
+<strong>in place</strong> into <code class="docutils literal notranslate"><span class="pre">o</span></code>. Returns nothing.</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>every flow’s <code class="docutils literal notranslate"><span class="pre">forward_indexer</span></code> must end in this op (or
+<a class="reference internal" href="#vortex_torch.indexer.output_func.approxTopK" title="vortex_torch.indexer.output_func.approxTopK"><code class="xref py py-class docutils literal notranslate"><span class="pre">approxTopK</span></code></a>).</p>
 </dd>
 </dl>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="vortex_torch.indexer.output_func.topK.profile">
 <span class="sig-name descname"><span class="pre">profile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">o</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctx</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/output_func.html#topK.profile"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.output_func.topK.profile" title="Link to this definition">¶</a></dt>
-<dd><p>Validate input/output tensors and select the implementation.</p>
-<p>This method checks:</p>
-<ul class="simple">
-<li><p>that <code class="docutils literal notranslate"><span class="pre">x</span></code> and <code class="docutils literal notranslate"><span class="pre">o</span></code> are both rank-3 <code class="xref py py-class docutils literal notranslate"><span class="pre">vTensor</span></code> objects,</p></li>
-<li><p>that <code class="docutils literal notranslate"><span class="pre">x</span></code> has shape <code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">1]</span></code> (one scalar score per page),</p></li>
-<li><p>that a top-k implementation is registered for <code class="docutils literal notranslate"><span class="pre">x._format</span></code>, and</p></li>
-<li><p>that <code class="docutils literal notranslate"><span class="pre">x</span></code> and <code class="docutils literal notranslate"><span class="pre">o</span></code> reside on the same device.</p></li>
-</ul>
-<p>No buffers are allocated here and nothing is returned; this call
-simply validates that <code class="docutils literal notranslate"><span class="pre">x._format</span></code> has a registered codegen path.</p>
+<dd><p>Trace-time: validate <code class="docutils literal notranslate"><span class="pre">x</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">1]</span></code> and <code class="docutils literal notranslate"><span class="pre">o</span></code> (both <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>
+<code class="docutils literal notranslate"><span class="pre">vTensor</span></code> on the same device) and register the op. Allocates nothing
+and returns nothing — <code class="docutils literal notranslate"><span class="pre">o</span></code> is filled in place at execute time.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Input tensor carrying per-page scalar scores, with logical shape
-<code class="docutils literal notranslate"><span class="pre">[S_pack,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>.</p></li>
-<li><p><strong>o</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>) – Preallocated output tensor that will be filled in-place by the
-top-k implementation. Its shape and semantics are defined by
-the upstream contract and the implementation.</p></li>
-<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.cache.context.html#vortex_torch.cache.context.Context" title="vortex_torch.cache.context.Context"><em>Context</em></a>) – <p>Execution context providing:</p>
-<ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">dense_kv_indptr</span></code> and <code class="docutils literal notranslate"><span class="pre">sparse_kv_indptr</span></code>: segment
-boundaries in the packed axis,</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">dense_kv_indices</span></code>: indices into underlying storage, and</p></li>
-<li><p>scalar configuration such as <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>, <code class="docutils literal notranslate"><span class="pre">num_kv_heads</span></code>,
-<code class="docutils literal notranslate"><span class="pre">topk_val</span></code>, <code class="docutils literal notranslate"><span class="pre">page_reserved_bos</span></code>, and <code class="docutils literal notranslate"><span class="pre">page_reserved_eos</span></code>.</p></li>
-</ul>
-</p></li>
+<li><p><strong>x</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>o</strong> (<a class="reference internal" href="vortex_torch.abs.tensor.html#vortex_torch.abs.tensor.vTensor" title="vortex_torch.abs.tensor.vTensor"><em>vTensor</em></a>)</p></li>
+<li><p><strong>ctx</strong> (<a class="reference internal" href="vortex_torch.indexer.context.html#vortex_torch.indexer.context.Context" title="vortex_torch.indexer.context.Context"><em>Context</em></a>)</p></li>
 </ul>
 </dd>
-<dt class="field-even">Raises<span class="colon">:</span></dt>
-<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#AssertionError" title="(in Python v3.14)"><strong>AssertionError</strong></a> – If types, ranks, shapes, formats, or devices are incompatible,
-    or if no implementation is registered for <code class="docutils literal notranslate"><span class="pre">x._format</span></code>.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><em>None</em></p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>None</em></p>
 </dd>
 </dl>
 </dd></dl>
 
-</section>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="vortex_torch.indexer.output_func.approxTopK">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">vortex_torch.indexer.output_func.</span></span><span class="sig-name descname"><span class="pre">approxTopK</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tolerate_ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/vortex_torch/indexer/output_func.html#approxTopK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#vortex_torch.indexer.output_func.approxTopK" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a></p>
-<p>Approximate top-k page selector with bounded approximation.</p>
-<p>Drop-in replacement for <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> that swaps the exact selection
-kernel for an <strong>adaptive 8-bit radix top-k</strong> with a tunable
-cost/quality knob <code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span></code>.</p>
-<p>The radix kernel runs up to four 8-bit refinement rounds (32 bits
-total) on fp32-promoted scores. After each round, the threshold bin
-is found and <code class="docutils literal notranslate"><span class="pre">topk_remaining</span></code> is the number of slots still owed
-by that bin. The kernel <strong>stops early</strong> as soon as</p>
-<div class="math-wrapper docutils container">
-<div class="math notranslate nohighlight">
-\[\text{topk\_remaining} \;\le\; \text{tolerate\_ratio} \cdot
-\text{target\_k},\]</div>
-</div>
-<p>filling the remaining slots from the current candidate set in
-atomic-arrival order. The trade-off:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span> <span class="pre">=</span> <span class="pre">0.0</span></code> → all four rounds always run; result is
-bit-exact to <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> (sorted output is the only difference —
-this kernel emits unsorted indices, which <cite>topK</cite> semantics allow).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span> <span class="pre">=</span> <span class="pre">1.0</span></code> → kernel always stops after round 0,
-cheapest setting. Selection becomes coarse: the top page-bin is
-retained but ordering inside it is arrival-driven.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">&lt;</span> <span class="pre">tolerate_ratio</span> <span class="pre">&lt;</span> <span class="pre">1</span></code> → adaptive: cheap when scores are
-well-separated, refines when they’re tightly bunched.</p></li>
-</ul>
-<p>The output set still always contains the reserved BOS / EOS pages
-plus exactly <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> chosen pages — only the <em>selection
-quality</em> is traded for speed.</p>
+<p>Approximate <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> — faster adaptive 8-bit radix selection.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Math<span class="colon">:</span></dt>
+<dd class="field-odd"><p>same selection as <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> (reserved BOS/EOS pages +
+<code class="docutils literal notranslate"><span class="pre">topk_val</span></code> by score), but the top-<code class="docutils literal notranslate"><span class="pre">topk_val</span></code> set is found with an
+adaptive 8-bit radix kernel that stops early once the slots still owed
+by the threshold bin fall within <code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span></code> of the target,
+filling any remainder in arrival order.</p>
+</dd>
+<dt class="field-even">__init__<span class="colon">:</span></dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">approxTopK(tolerate_ratio=0.0)</span></code> — approximation budget in
+<code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">1]</span></code>: <code class="docutils literal notranslate"><span class="pre">0.0</span></code> = exact (all radix rounds run), higher = cheaper
+but looser (typical throughput sweet spot <code class="docutils literal notranslate"><span class="pre">0.05–0.15</span></code>).</p>
+</dd>
+<dt class="field-odd">__call__<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">op(score,</span> <span class="pre">o,</span> <span class="pre">ctx=ctx)</span></code> — same signature as <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a>
+(<code class="docutils literal notranslate"><span class="pre">score</span></code> <code class="docutils literal notranslate"><span class="pre">[S,</span> <span class="pre">1,</span> <span class="pre">1]</span></code>, <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code>; writes page ids into <code class="docutils literal notranslate"><span class="pre">o</span></code>).</p>
+</dd>
+<dt class="field-even">Note<span class="colon">:</span></dt>
+<dd class="field-even"><p>indices are <strong>unsorted within each request</strong>; downstream consumers
+must not assume sorted order.</p>
+</dd>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>tolerate_ratio</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a><em>, </em><em>default 0.0</em>) – Approximation budget in <code class="docutils literal notranslate"><span class="pre">[0.0,</span> <span class="pre">1.0]</span></code>. Higher = cheaper but
-looser. <code class="docutils literal notranslate"><span class="pre">0.0</span></code> recovers exact (radix) top-k. Typical values
-for throughput hunting: <code class="docutils literal notranslate"><span class="pre">0.05</span> <span class="pre">-</span> <span class="pre">0.15</span></code>.</p>
+<dd class="field-odd"><p><strong>tolerate_ratio</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><em>float</em></a>)</p>
 </dd>
 </dl>
-<p class="rubric">Notes</p>
-<ul class="simple">
-<li><p>Same dispatch as <a class="reference internal" href="#vortex_torch.indexer.output_func.topK" title="vortex_torch.indexer.output_func.topK"><code class="xref py py-class docutils literal notranslate"><span class="pre">topK</span></code></a> (only <code class="docutils literal notranslate"><span class="pre">RAGGED</span></code> input format).</p></li>
-<li><p>Same per-segment contract (BOS/EOS preserved, <code class="docutils literal notranslate"><span class="pre">topk_val</span></code> chosen).</p></li>
-<li><p>Output indices are <strong>unsorted within each segment</strong> (this matches
-<code class="docutils literal notranslate"><span class="pre">topk_output_v2</span></code> in the C kernel; downstream consumers must not
-assume sorted order).</p></li>
-<li><p>Use this op when score distributions are heavy-tailed and the
-exact top-k cost dominates indexer time. For score distributions
-where many candidates are near the threshold, low
-<code class="docutils literal notranslate"><span class="pre">tolerate_ratio</span></code> (≤ 0.05) is safer; for distributions with a
-clear gap between selected and dropped pages, push higher
-(0.2 - 0.5).</p></li>
-</ul>
 </dd></dl>
 
 <dl class="py class">
@@ -589,7 +501,6 @@ so the seqlens buffer the trtllm decode call reads is up to date.</p>
             <ul>
 <li><a class="reference internal" href="#">vortex_torch.indexer.output_func</a><ul>
 <li><a class="reference internal" href="#vortex_torch.indexer.output_func.topK"><code class="docutils literal notranslate"><span class="pre">topK</span></code></a><ul>
-<li><a class="reference internal" href="#vortex_torch.indexer.output_func.topK._supported_formats"><code class="docutils literal notranslate"><span class="pre">topK._supported_formats</span></code></a></li>
 <li><a class="reference internal" href="#vortex_torch.indexer.output_func.topK.profile"><code class="docutils literal notranslate"><span class="pre">topK.profile()</span></code></a></li>
 </ul>
 </li>

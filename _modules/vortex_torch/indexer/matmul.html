@@ -9,7 +9,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=f0fabe4f" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=bdb03c8d" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -272,69 +272,17 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GeMV</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    General matrix-vector multiplication (GEMV) dispatcher.</span>
+<span class="sd">    Per-request batched matrix–vector product, :math:`O = Y X^{\top}`.</span>
 
-<span class="sd">    This operator computes a *piecewise* batched matrix-vector product.</span>
-<span class="sd">    Let</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X \in \mathbb{R}^{B \times 1 \times D}, \qquad</span>
-<span class="sd">        Y \in \mathbb{R}^{S_{\text{pack}} \times 1 \times D},</span>
-
-<span class="sd">    where the ``S``-axis of :math:`Y` is a concatenation of batch-wise</span>
-<span class="sd">    segments</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        S_{\text{pack}} = \sum_{i=0}^{B-1} S_i, \qquad</span>
-<span class="sd">        Y =</span>
-<span class="sd">        \begin{bmatrix}</span>
-<span class="sd">            Y_0 \\</span>
-<span class="sd">            Y_1 \\</span>
-<span class="sd">            \vdots \\</span>
-<span class="sd">            Y_{B-1}</span>
-<span class="sd">        \end{bmatrix},</span>
-
-<span class="sd">    with</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        Y_i \in \mathbb{R}^{S_i \times 1 \times D}, \qquad</span>
-<span class="sd">        X_i = X[i, 0, :] \in \mathbb{R}^{1 \times D}.</span>
-
-<span class="sd">    For each batch index :math:`i \in \{0,\dots,B-1\}`, we define</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        O_i = Y_i X_i^{\mathsf{T}} \in \mathbb{R}^{S_i \times 1 \times 1},</span>
-
-<span class="sd">    and the overall output is the concatenation</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        O =</span>
-<span class="sd">        \begin{bmatrix}</span>
-<span class="sd">            O_0 \\</span>
-<span class="sd">            O_1 \\</span>
-<span class="sd">            \vdots \\</span>
-<span class="sd">            O_{B-1}</span>
-<span class="sd">        \end{bmatrix}</span>
-<span class="sd">        \in \mathbb{R}^{S_{\text{pack}} \times 1 \times 1}.</span>
-
-<span class="sd">    In the runtime, :math:`S_{\text{pack}}` is given by</span>
-<span class="sd">    ``ctx.max_num_pages``. Output format rule: ``BATCHED`` iff both</span>
-<span class="sd">    inputs are ``BATCHED`` (both have their ``S`` axis already collapsed</span>
-<span class="sd">    to 1), otherwise ``RAGGED``. Format compatibility is enforced by</span>
-<span class="sd">    the compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer of shape ``[S_pack, 1, 1]``.</span>
+<span class="sd">    :Math: with a batched query :math:`X\in\mathbb{R}^{B\times 1\times D}` and</span>
+<span class="sd">        packed pages :math:`Y\in\mathbb{R}^{S\times 1\times D}`, each page</span>
+<span class="sd">        :math:`s` of request :math:`i` scores as</span>
+<span class="sd">        :math:`O[s]=\langle Y[s],\,X[i]\rangle`, giving</span>
+<span class="sd">        :math:`O\in\mathbb{R}^{S\times 1\times 1}`.</span>
+<span class="sd">    :__init__: ``GeMV()`` — no arguments.</span>
+<span class="sd">    :__call__: ``o = op(x, y, ctx=ctx)`` — ``x`` is ``[B, 1, D]``, ``y`` is</span>
+<span class="sd">        ``[S, 1, D]`` (matching ``D``); returns ``o`` ``[S, 1, 1]``. Output is</span>
+<span class="sd">        ``BATCHED`` iff both inputs are, else ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -346,19 +294,9 @@
 <div class="viewcode-block" id="GeMV.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMV.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs, allocate the output buffer, and return a</span>
-<span class="sd">        :class:`vTensor` view.</span>
-
-<span class="sd">        The method enforces the logical shapes</span>
-
-<span class="sd">        - ``x``: ``[B, 1, D]``</span>
-<span class="sd">        - ``y``: ``[S_pack, 1, D]``</span>
-
-<span class="sd">        and checks that the last dimensions match. The output buffer is</span>
-<span class="sd">        allocated with shape ``[S_pack, 1, 1]``, where ``S_pack`` is taken</span>
-<span class="sd">        from the runtime context as ``ctx.max_num_pages``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[B, 1, D]`` / ``y`` ``[S, 1, D]``,</span>
+<span class="sd">        register the op, and return a ``vTensor`` view of the ``[S, 1, 1]``</span>
+<span class="sd">        output (see the class docstring).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type checks</span>
@@ -408,51 +346,17 @@
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GeMM</span><span class="p">(</span><span class="n">vOp</span><span class="p">):</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    General matrix-matrix multiplication (GeMM) dispatcher.</span>
+<span class="sd">    Per-page matrix–matrix product, :math:`O[s] = Y[s]\,X[s]^{\top}`.</span>
 
-<span class="sd">    Logically this computes, for each logical ``S``-slice, a matrix-matrix</span>
-<span class="sd">    product</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        O[s] = Y[s] X[s]^{\mathsf{T}}, \quad s = 0, \dots, S-1,</span>
-
-<span class="sd">    with slice-wise shapes</span>
-
-<span class="sd">    .. math::</span>
-
-<span class="sd">        X[s] \in \mathbb{R}^{N_x \times K}, \quad</span>
-<span class="sd">        Y[s] \in \mathbb{R}^{N_y \times K}, \quad</span>
-<span class="sd">        O[s] \in \mathbb{R}^{N_y \times N_x}.</span>
-
-<span class="sd">    In the packed 3D representation used by this dispatcher:</span>
-
-<span class="sd">    - ``Y`` has logical shape ``[S, N_y, K]``.</span>
-<span class="sd">    - ``X`` has logical shape ``[L_x, N_x, K]``, where the leading</span>
-<span class="sd">      dimension :math:`L_x` can represent **either**:</span>
-
-<span class="sd">      * a batch axis :math:`B` (when ``x_format == FORMAT.BATCHED``), or</span>
-<span class="sd">      * the same ``S`` axis as ``Y`` (when ``x_format`` is ragged/paged and</span>
-<span class="sd">        already laid out per-page).</span>
-
-<span class="sd">      This is why the code comments use ``X: [B/S, N_x, K]``: the first</span>
-<span class="sd">      dimension is interpreted as either a batch size :math:`B` or an</span>
-<span class="sd">      ``S``-like logical page index, depending on the format.</span>
-
-<span class="sd">    - The output tensor ``O`` has logical shape ``[S, N_y, N_x]``.</span>
-
-<span class="sd">    At runtime, the logical ``S`` is taken from ``ctx.max_num_pages``.</span>
-<span class="sd">    Output format rule: ``BATCHED`` iff both inputs are ``BATCHED``,</span>
-<span class="sd">    otherwise ``RAGGED``. Format compatibility is enforced by the</span>
-<span class="sd">    compiler&#39;s per-workload kernel.</span>
-
-<span class="sd">    Attributes</span>
-<span class="sd">    ----------</span>
-<span class="sd">    output_format : Optional[FORMAT]</span>
-<span class="sd">        The output tensor format as determined in :meth:`profile`.</span>
-
-<span class="sd">    output_buffer : Optional[torch.Tensor]</span>
-<span class="sd">        Preallocated output tensor buffer of shape ``[S, N_y, N_x]``.</span>
+<span class="sd">    :Math: with :math:`Y\in\mathbb{R}^{S\times N_y\times K}` and</span>
+<span class="sd">        :math:`X\in\mathbb{R}^{(B\,\text{or}\,S)\times N_x\times K}`, per page</span>
+<span class="sd">        :math:`s`:</span>
+<span class="sd">        :math:`O[s]=Y[s]\,X[s]^{\top}\in\mathbb{R}^{N_y\times N_x}` — i.e.</span>
+<span class="sd">        ``GeMM(x, y) = y xᵀ``. Output :math:`O\in\mathbb{R}^{S\times N_y\times N_x}`.</span>
+<span class="sd">    :__init__: ``GeMM()`` — no arguments.</span>
+<span class="sd">    :__call__: ``o = op(x, y, ctx=ctx)`` — ``x`` is ``[B|S, N_x, K]``, ``y`` is</span>
+<span class="sd">        ``[S, N_y, K]`` (matching ``K``); returns ``o`` ``[S, N_y, N_x]``.</span>
+<span class="sd">        Output is ``BATCHED`` iff both inputs are, else ``RAGGED``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -465,48 +369,9 @@
 <div class="viewcode-block" id="GeMM.profile">
 <a class="viewcode-back" href="../../../api/vortex_torch.indexer.matmul.html#vortex_torch.indexer.matmul.GeMM.profile">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">profile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">vTensor</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">Context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">vTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Validate inputs, allocate the output buffer, and return a</span>
-<span class="sd">        :class:`vTensor` view.</span>
-
-<span class="sd">        The method enforces that both inputs are rank-3 tensors and that the</span>
-<span class="sd">        inner dimension :math:`K` matches:</span>
-
-<span class="sd">        - ``x``: ``[B_or_S, N_x, K]``</span>
-
-<span class="sd">          *When* ``x_format == FORMAT.BATCHED``, the leading dimension is a</span>
-<span class="sd">          batch size :math:`B`. For ragged/paged formats, it may conceptually</span>
-<span class="sd">          coincide with :math:`S`.</span>
-
-<span class="sd">        - ``y``: ``[S, N_y, K]``</span>
-
-<span class="sd">        The output buffer is allocated with shape ``[S, N_y, N_x]``, where</span>
-<span class="sd">        ``S`` is taken from the runtime context as ``ctx.max_num_pages``.</span>
-
-<span class="sd">        Parameters</span>
-<span class="sd">        ----------</span>
-<span class="sd">        x : vTensor</span>
-<span class="sd">            Right-hand operand (transposed in the mathematical view), with</span>
-<span class="sd">            shape ``[B_or_S, N_x, K]``.</span>
-
-<span class="sd">        y : vTensor</span>
-<span class="sd">            Left-hand operand with shape ``[S, N_y, K]``.</span>
-
-<span class="sd">        ctx : Context</span>
-<span class="sd">            Execution context providing ``ctx.max_num_pages`` for the logical</span>
-<span class="sd">            ``S`` dimension and tracking auxiliary memory.</span>
-
-<span class="sd">        Returns</span>
-<span class="sd">        -------</span>
-<span class="sd">        vTensor</span>
-<span class="sd">            A ``vTensor`` view wrapping the allocated output buffer.</span>
-
-<span class="sd">        Raises</span>
-<span class="sd">        ------</span>
-<span class="sd">        AssertionError</span>
-<span class="sd">            If types are not ``vTensor``, ranks are not 3, or the inner</span>
-<span class="sd">            dimensions :math:`K` do not match.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Trace-time: validate ``x`` ``[B|S, N_x, K]`` / ``y`` ``[S, N_y, K]``</span>
+<span class="sd">        (matching ``K``), register the op, and return a ``vTensor`` view of the</span>
+<span class="sd">        ``[S, N_y, N_x]`` output (see the class docstring).&quot;&quot;&quot;</span>
         <span class="n">prefix</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prefix</span><span class="p">()</span>
 
         <span class="c1"># Type checks</span>
