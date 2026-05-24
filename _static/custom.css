@@ -1,20 +1,86 @@
-/* Class signature: compact (smaller, not oversized). */
+/* ===========================================================================
+   Vortex docs theme — light pink-purple background + structured op blocks.
+   =========================================================================== */
+
+/* ---- 1. Light pink-purple page background (furo CSS variables) ----------
+   Set on both ``body`` and the more-specific light selector furo uses, so the
+   override reliably wins in light / auto modes. */
+body,
+body:not([data-theme="dark"]) {
+    --color-background-primary:   #fdf7fe;   /* main content surface */
+    --color-background-secondary: #f6ecfb;   /* sidebars / secondary surface */
+    --color-sidebar-background:   #f4e9fb;
+    --color-code-background:      #f3e8fb;    /* inline / block code */
+    --color-api-background:       #f6ecfb;
+}
+
+/* Dark mode: keep it readable with a deep plum instead of pink. */
+@media (prefers-color-scheme: dark) {
+    body:not([data-theme="light"]) {
+        --color-background-primary:   #17111e;
+        --color-background-secondary: #20172a;
+        --color-sidebar-background:   #20172a;
+        --color-code-background:      #241a30;
+        --color-api-background:       #20172a;
+    }
+}
+body[data-theme="dark"] {
+    --color-background-primary:   #17111e;
+    --color-background-secondary: #20172a;
+    --color-sidebar-background:   #20172a;
+    --color-code-background:      #241a30;
+    --color-api-background:       #20172a;
+}
+
+/* ---- 2. Class / method signatures: compact (not oversized) -------------- */
 dl.py.class > dt.sig {
     font-size: 0.9em;
     padding: 0.3rem 0.6rem;
     border-radius: 0.4rem;
 }
+dl.py.class .sig-name { font-weight: 700; font-size: 1em; }
+dl.py.method > dt.sig { font-size: 0.85em; }
+dl.py.method > dt.sig .sig-name { font-weight: 600; }
 
-dl.py.class .sig-name {
+/* ---- 3. Structured colored blocks for the op field lists ----------------
+   Each op docstring is a field list (:Math: / :__init__: / :__call__: / :Note:).
+   Render every field as a stacked block: a colored label "pill" above a
+   tinted card with a matching accent border. The region order is always
+   Math, __init__, __call__, Note, so :nth-of-type gives a stable accent. */
+dl.field-list {
+    display: block;
+    margin: 0.6rem 0 0.4rem 0;
+}
+dl.field-list > dt {            /* the region label (Math / __init__ / …) */
+    display: inline-block;
+    font-family: var(--font-stack--monospace, monospace);
     font-weight: 700;
-    font-size: 1em;
+    font-size: 0.82em;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    background: #7c3aed;
+    padding: 0.08rem 0.55rem;
+    border-radius: 0.4rem;
+    margin: 0.55rem 0 0 0;
 }
+dl.field-list > dt .colon { display: none; }   /* drop the trailing colon */
+dl.field-list > dd {            /* the region body card */
+    display: block;
+    margin: 0.2rem 0 0.1rem 0;
+    padding: 0.4rem 0.75rem;
+    border-left: 3px solid #7c3aed;
+    background: rgba(124, 58, 237, 0.07);
+    border-radius: 0 0.45rem 0.45rem 0;
+}
+dl.field-list > dd > p { margin: 0; }
 
-/* Method signatures: a touch smaller than body text. */
-dl.py.method > dt.sig {
-    font-size: 0.85em;
-}
-
-dl.py.method > dt.sig .sig-name {
-    font-weight: 600;
-}
+/* per-region accents (Math → violet, __init__ → pink, __call__ → indigo,
+   Note → amber) */
+dl.field-list > dt:nth-of-type(1) { background: #7c3aed; }
+dl.field-list > dd:nth-of-type(1) { border-left-color: #7c3aed; background: rgba(124, 58, 237, 0.07); }
+dl.field-list > dt:nth-of-type(2) { background: #db2777; }
+dl.field-list > dd:nth-of-type(2) { border-left-color: #db2777; background: rgba(219, 39, 119, 0.07); }
+dl.field-list > dt:nth-of-type(3) { background: #4f46e5; }
+dl.field-list > dd:nth-of-type(3) { border-left-color: #4f46e5; background: rgba(79, 70, 229, 0.07); }
+dl.field-list > dt:nth-of-type(4) { background: #b45309; }
+dl.field-list > dd:nth-of-type(4) { border-left-color: #b45309; background: rgba(180, 83, 9, 0.08); }
