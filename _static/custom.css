@@ -151,10 +151,15 @@ dl.py.class > dt.sig {
     border-radius: 0.55rem;
     background: linear-gradient(135deg, #ffffff 0%, #fff2f8 100%);
     border: 1px solid var(--vtx-pink-soft);
-    border-left: 4px solid transparent;
-    border-image: var(--vtx-grad) 1;
-    border-image-slice: 1;
+    border-left: 4px solid var(--vtx-pink);
     box-shadow: var(--vtx-shadow);
+    /* Long dotted paths + arg lists must wrap inside the card, never spill
+       out of it. ``box-sizing`` keeps the padding/border within the width. */
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 dl.py.class > dt.sig .sig-name { font-weight: 700; font-size: 1em; color: var(--vtx-pink-deep); }
 dl.py.class > dt.sig .sig-prename { opacity: 0.7; }
@@ -166,6 +171,11 @@ dl.py.property > dt.sig {
     border-radius: 0.4rem;
     border-left: 3px solid var(--vtx-pink-soft);
     background: #fff7fb;
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 dl.py.method > dt.sig .sig-name { font-weight: 600; }
 
