@@ -378,7 +378,7 @@ between these two views using indptr arrays and layout metadata.</p>
 <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.create_cache" title="vortex_torch.flow.flow.vFlow.create_cache"><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache()</span></code></a>, e.g.:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
     <span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
-    <span class="s2">&quot;my_aux_tensor&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">page_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
+    <span class="s2">&quot;my_aux_tensor&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">block_size</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">),</span>
     <span class="o">...</span>
 <span class="p">}</span>
 </pre></div>
@@ -387,8 +387,8 @@ between these two views using indptr arrays and layout metadata.</p>
 entries:</p>
 <div class="math-wrapper docutils container">
 <div class="math notranslate nohighlight">
-\[\begin{split}\text{k} &amp;: (\text{page_size}, \text{head_dim}), \\
-\text{v} &amp;: (\text{page_size}, \text{head_dim}),\end{split}\]</div>
+\[\begin{split}\text{k} &amp;: (\text{block_size}, \text{head_dim}), \\
+\text{v} &amp;: (\text{block_size}, \text{head_dim}),\end{split}\]</div>
 </div>
 <p>so subclasses must not add <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> themselves.</p>
 </section>
@@ -401,11 +401,11 @@ storage is used (per head) relative to one <code class="docutils literal notrans
 \[\text{token_ratio}
 = \sum_{\text{key}}
   \frac{r_{\text{key}} \cdot c_{\text{key}}}
-       {\text{page_size} \cdot \text{head_dim}}.\]</div>
+       {\text{block_size} \cdot \text{head_dim}}.\]</div>
 </div>
 <p>This ignores the leading dimension (whether <span class="math notranslate nohighlight">\(B\)</span> or
 <span class="math notranslate nohighlight">\(S\)</span>) and compares only inner shapes to the
-baseline <code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code>.</p>
+baseline <code class="docutils literal notranslate"><span class="pre">(block_size,</span> <span class="pre">head_dim)</span></code>.</p>
 </section>
 <section id="subclass-responsibilities">
 <h2>Subclass responsibilities<a class="headerlink" href="#subclass-responsibilities" title="Link to this heading">¶</a></h2>
@@ -417,7 +417,7 @@ using cache in the <span class="math notranslate nohighlight">\(S\)</span> view.
 <li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">forward_cache(cache,</span> <span class="pre">loc,</span> <span class="pre">ctx)()</span></code>:
 update cache tensors using the <span class="math notranslate nohighlight">\(B\)</span>-major view and positional
 metadata.</p></li>
-<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache(page_size,</span> <span class="pre">head_dim)()</span></code>:
+<li><p><code class="xref py py-meth docutils literal notranslate"><span class="pre">create_cache(block_size,</span> <span class="pre">head_dim)()</span></code>:
 declare inner shapes <span class="math notranslate nohighlight">\((r, c)\)</span> for all extra cache tensors
 (excluding <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code>).</p></li>
 </ul>
@@ -551,11 +551,11 @@ or <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.forward_ind
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>page_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of tokens per page. For the standard <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and
-<code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries, this will be the first dimension.</p></li>
+<li><p><strong>block_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Number of tokens per block (the inner length of a <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code>
+cache slot). For the standard <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries this is
+the first inner dimension.</p></li>
 <li><p><strong>head_dim</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>) – Head dimension. For the standard <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> entries,
 this will be the second dimension.</p></li>
-<li><p><strong>block_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><em>int</em></a>)</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -576,7 +576,7 @@ this will be the second dimension.</p></li>
 <p>The keys <code class="docutils literal notranslate"><span class="pre">&quot;k&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;v&quot;</span></code> are reserved and <strong>must not</strong> be
 present in the returned dictionary. They are added automatically
 by <a class="reference internal" href="#vortex_torch.flow.flow.vFlow.get_cache_meta_info" title="vortex_torch.flow.flow.vFlow.get_cache_meta_info"><code class="xref py py-meth docutils literal notranslate"><span class="pre">get_cache_meta_info()</span></code></a> with inner shape
-<code class="docutils literal notranslate"><span class="pre">(page_size,</span> <span class="pre">head_dim)</span></code>.</p>
+<code class="docutils literal notranslate"><span class="pre">(block_size,</span> <span class="pre">head_dim)</span></code>.</p>
 </dd></dl>
 
 <dl class="py method">

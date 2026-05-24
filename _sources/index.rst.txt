@@ -24,10 +24,10 @@ Installation
 
 .. code-block:: bash
 
-   git clone -b v1 --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
+   git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
    cd vortex_torch
    cd third_party/sglang/v0.5.9/sglang
-   bash install.sh
+   pip install -e "python"
    cd ../../../../
    pip install -e .
 

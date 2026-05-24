@@ -376,7 +376,7 @@
 
 <span class="sd">        {</span>
 <span class="sd">            &quot;centroids&quot;: (1, head_dim),</span>
-<span class="sd">            &quot;my_aux_tensor&quot;: (page_size, head_dim),</span>
+<span class="sd">            &quot;my_aux_tensor&quot;: (block_size, head_dim),</span>
 <span class="sd">            ...</span>
 <span class="sd">        }</span>
 
@@ -385,8 +385,8 @@
 
 <span class="sd">    .. math::</span>
 
-<span class="sd">        \text{k} &amp;: (\text{page_size}, \text{head_dim}), \\</span>
-<span class="sd">        \text{v} &amp;: (\text{page_size}, \text{head_dim}),</span>
+<span class="sd">        \text{k} &amp;: (\text{block_size}, \text{head_dim}), \\</span>
+<span class="sd">        \text{v} &amp;: (\text{block_size}, \text{head_dim}),</span>
 
 <span class="sd">    so subclasses must not add ``&quot;k&quot;`` or ``&quot;v&quot;`` themselves.</span>
 
@@ -400,11 +400,11 @@
 <span class="sd">        \text{token_ratio}</span>
 <span class="sd">        = \sum_{\text{key}}</span>
 <span class="sd">          \frac{r_{\text{key}} \cdot c_{\text{key}}}</span>
-<span class="sd">               {\text{page_size} \cdot \text{head_dim}}.</span>
+<span class="sd">               {\text{block_size} \cdot \text{head_dim}}.</span>
 
 <span class="sd">    This ignores the leading dimension (whether :math:`B` or</span>
 <span class="sd">    :math:`S`) and compares only inner shapes to the</span>
-<span class="sd">    baseline ``(page_size, head_dim)``.</span>
+<span class="sd">    baseline ``(block_size, head_dim)``.</span>
 
 <span class="sd">    Subclass responsibilities</span>
 <span class="sd">    -------------------------</span>
@@ -418,7 +418,7 @@
 <span class="sd">      update cache tensors using the :math:`B`-major view and positional</span>
 <span class="sd">      metadata.</span>
 
-<span class="sd">    - :meth:`create_cache(page_size, head_dim)`:</span>
+<span class="sd">    - :meth:`create_cache(block_size, head_dim)`:</span>
 <span class="sd">      declare inner shapes :math:`(r, c)` for all extra cache tensors</span>
 <span class="sd">      (excluding ``&quot;k&quot;`` and ``&quot;v&quot;``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -575,9 +575,10 @@
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        page_size : int</span>
-<span class="sd">            Number of tokens per page. For the standard ``&quot;k&quot;`` and</span>
-<span class="sd">            ``&quot;v&quot;`` entries, this will be the first dimension.</span>
+<span class="sd">        block_size : int</span>
+<span class="sd">            Number of tokens per block (the inner length of a ``&quot;k&quot;`` / ``&quot;v&quot;``</span>
+<span class="sd">            cache slot). For the standard ``&quot;k&quot;`` and ``&quot;v&quot;`` entries this is</span>
+<span class="sd">            the first inner dimension.</span>
 
 <span class="sd">        head_dim : int</span>
 <span class="sd">            Head dimension. For the standard ``&quot;k&quot;`` and ``&quot;v&quot;`` entries,</span>
@@ -598,7 +599,7 @@
 <span class="sd">        The keys ``&quot;k&quot;`` and ``&quot;v&quot;`` are reserved and **must not** be</span>
 <span class="sd">        present in the returned dictionary. They are added automatically</span>
 <span class="sd">        by :meth:`get_cache_meta_info` with inner shape</span>
-<span class="sd">        ``(page_size, head_dim)``.</span>
+<span class="sd">        ``(block_size, head_dim)``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">pass</span></div>
 
