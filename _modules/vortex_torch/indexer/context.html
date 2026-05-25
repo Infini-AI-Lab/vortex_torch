@@ -324,6 +324,7 @@
         <span class="s2">&quot;op_to_input_tensor_list&quot;</span><span class="p">,</span> <span class="s2">&quot;op_to_output_tensor_list&quot;</span><span class="p">,</span>
         <span class="s2">&quot;side_effect_op_ids&quot;</span><span class="p">,</span>
         <span class="s2">&quot;sparse_attention_name&quot;</span><span class="p">,</span> <span class="s2">&quot;impl_backend&quot;</span><span class="p">,</span> <span class="s2">&quot;tensor_id_to_tensor_name_map&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;query_arg_names&quot;</span><span class="p">,</span>
         <span class="s2">&quot;compilation_header_lines&quot;</span><span class="p">,</span> <span class="s2">&quot;auxilary_func_def_lines&quot;</span><span class="p">,</span>
         <span class="s2">&quot;compilation_cache_dir&quot;</span><span class="p">,</span>
         <span class="c1"># ---- tensor-core (bf16-compute) codegen toggle ----</span>
@@ -497,6 +498,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">op_to_output_tensor_list</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">side_effect_op_ids</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">tensor_id_to_tensor_name_map</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># Query argument name(s) for the generated ``forward(...)`` entry point.</span>
+        <span class="c1"># MHA flows pass a single ``q``; MLA flows pass the absorbed pair</span>
+        <span class="c1"># ``q_nope_out``/``q_pe`` and set this to [&quot;q_nope_out&quot;, &quot;q_pe&quot;].</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">query_arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;q&quot;</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">compilation_header_lines</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">auxilary_func_def_lines</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">compilation_cache_dir</span> <span class="o">=</span> <span class="n">sa</span><span class="o">.</span><span class="n">vortex_compilation_cache_dir</span>

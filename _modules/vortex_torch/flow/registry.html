@@ -262,11 +262,13 @@
         <article role="main" id="furo-main-content">
           <h1>Source code for vortex_torch.flow.registry</h1><div class="highlight"><pre>
 <span></span><span class="c1"># registry.py</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Type</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">vFlow</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.flow_mla</span><span class="w"> </span><span class="kn">import</span> <span class="n">vFlowMLA</span>
 
-<span class="c1"># Global registry: key -&gt; subclass of vFlow</span>
-<span class="n">_REGISTRY</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">vFlow</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="c1"># Global registry: key -&gt; subclass of vFlow (MHA) or vFlowMLA (latent attention)</span>
+<span class="n">_FlowBase</span> <span class="o">=</span> <span class="p">(</span><span class="n">vFlow</span><span class="p">,</span> <span class="n">vFlowMLA</span><span class="p">)</span>
+<span class="n">_REGISTRY</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">vFlow</span><span class="p">,</span> <span class="n">vFlowMLA</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">{}</span>
 
 <div class="viewcode-block" id="RegistryError">
 <a class="viewcode-back" href="../../../api/vortex_torch.flow.registry.html#vortex_torch.flow.registry.RegistryError">[docs]</a>
@@ -284,9 +286,9 @@
 <span class="sd">        @register(&quot;cls_a&quot;)</span>
 <span class="sd">        class MyFlow(vFlow): ...</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">deco</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="n">vFlow</span><span class="p">]):</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">vFlow</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">RegistryError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> must inherit from vFlow&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deco</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">issubclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">_FlowBase</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">RegistryError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> must inherit from vFlow or vFlowMLA&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">_REGISTRY</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">RegistryError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Registration name &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; already exists&quot;</span><span class="p">)</span>
         <span class="n">_REGISTRY</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">cls</span>
