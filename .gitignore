@@ -292,9 +292,13 @@ RLG/
 scripts/
 vortex_torch/kernels/centroid_score
 
-# Local source-tree clones (flashinfer / flash-attention / cpu_kernels) used
-# for reference; not part of this repo. Anchored so only the root-level dirs
-# are ignored.
-/flashinfer/
-/flash-attention/
+# Local source-tree clone (cpu_kernels) used for reference; not part of this
+# repo. (flashinfer / flash-attention are now git submodules under third_party/.)
 /cpu_kernels/
+# Vortex NeurIPS paper sources (extracted locally; not part of this repo)
+vortex_paper.zip
+/vortex_paper/
+
+# Research toolkit: regenerable trace blobs + generated survey briefs
+/algorithm_scientist/research/traces/
+/algorithm_scientist/research/briefs/
