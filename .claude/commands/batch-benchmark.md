@@ -15,6 +15,13 @@ size is fixed at 4.** Parallelism depends on free-GPU count `N`:
 This is the *only* benchmark command sanctioned by the protocol;
 single-variant runs are debug-only.
 
+**Task / model.** Defaults to AIME24 with whatever `model_path` each JSON
+declares. To target another task set `TASK_ARG` before the launch loop:
+`TASK_ARG="--task aime25"` (built-ins: aime24/25/26, amc23) or
+`TASK_ARG="--data examples/<task>__<modelslug>.jsonl"` for a non-default model
+(regenerate the tokenizer-bound jsonl first with `examples/make_task.py --task
+<t> --model <m>` — see [AI/workflows/run_tasks.md](../../AI/workflows/run_tasks.md)).
+
 The user passes **4 submission names** (not JSON paths); this
 command expands each `<nameI>` into `submissions/<tag>/<nameI>.json`,
 where `<tag>` is the session's agent identifier. For the standard
@@ -87,7 +94,13 @@ Step 4 — launch the 4 variants in waves of `PARALLEL = min(N, 4)`,
 each pinned to a *free* GPU index (NOT 0…N-1), with `wait`
 between waves so a wave's GPUs are free before the next reuses
 them:
+**Decide a per-run timeout — you choose it; there is no fixed limit.**
+Wall-clock ≈ (questions × 16 trials × output tokens) / throughput, so it scales
+with model size, MLA, and harder/longer tasks (and with the 32768 max-new-tokens
+budget). Set `TIMEOUT_MIN` to ~1.5× your estimate so it fires only on a genuine
+stall; the `timeout` wrapper **enforces** it (you don't hand-kill).
 ```bash
+TIMEOUT_MIN=<your estimate, minutes>      # agent-decided per model+task
 LOGDIR="logs/submission/${TAG}_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOGDIR"
 for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
@@ -96,14 +109,16 @@ for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
     for y in $(seq $start $((end - 1))); do
         name="${NAMES[$y]}"
         gpu="${FREE_GPUS[$((y - start))]}"
-        CUDA_VISIBLE_DEVICES=$gpu \
-            python algorithm_scientist/run_submission_aime24.py --config "submissions/${TAG}/${name}.json" \
+        CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
+            python algorithm_scientist/run_submission.py ${TASK_ARG:---task aime24} --config "submissions/${TAG}/${name}.json" \
             > "$LOGDIR/gpu${gpu}_${name}.out" \
             2> "$LOGDIR/gpu${gpu}_${name}.err" &
     done
     wait
 done
 ```
+A child `timeout` killed exits **124** and writes no `latest.json` — treat it as
+a timed-out/failed variant.
 When `N >= 4` this is one wave of 4 (fully parallel — same
 behaviour as the old protocol). When `N < 4` it's
 `ceil(4/N)` sequential waves on the available GPUs.
@@ -119,10 +134,10 @@ Step 5 — append a row to `algorithm_scientist/memory.md` §1
 *In-flight batches* the moment you launch:
 `| <tag> | <batch_id> | <UTC time> | <LOGDIR> | <name1>,…,<name4> | RUNNING |`
 
-Step 6 — while waiting (the batch takes **20–60 minutes** when fully
-parallel, longer with `N < 4` due to sequential waves; **kill any
-child still running after 60 minutes** — log the error in
-memory.md §4 and treat that variant as failed), do NOT idle. Spend the time
+Step 6 — while waiting (runtime depends on model + task; the `TIMEOUT_MIN` you
+set enforces the cap, longer with `N < 4` due to sequential waves; a child that
+exits 124 / leaves no `latest.json` timed out — log it in memory.md §4 and treat
+that variant as failed), do NOT idle. Spend the time
 reading tutorials / developer guides / source, or designing the
 next batch (don't launch — concurrent batches OOM the shared
 GPUs), or analysing children that have already produced their

@@ -284,6 +284,7 @@ Cargo.lock
 !examples/aime26.jsonl
 !examples/aime26_minimax.jsonl
 !examples/aime26_glm.jsonl
+!.claude/commands/debug.md
 RLG
 .codex
 .claude/.nfs*

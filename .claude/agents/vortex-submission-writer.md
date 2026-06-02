@@ -214,6 +214,7 @@ do not launch.
    [ "$PARALLEL" -gt "$BATCH_SIZE" ] && PARALLEL=$BATCH_SIZE
    LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"
    mkdir -p "$LOGDIR"
+   TIMEOUT_MIN=<your estimate, minutes>      # agent-decided per model+task
    for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
        end=$((start + PARALLEL))
        [ "$end" -gt "$BATCH_SIZE" ] && end=$BATCH_SIZE
@@ -221,8 +222,8 @@ do not launch.
            cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"
            gpu="${FREE_GPUS[$((y - start))]}"
            stem=$(basename "$cfg" .json)
-           CUDA_VISIBLE_DEVICES=$gpu \
-               python algorithm_scientist/run_submission_aime24.py --config "$cfg" \
+           CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
+               python algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
                > "$LOGDIR/gpu${gpu}_${stem}.out" \
                2> "$LOGDIR/gpu${gpu}_${stem}.err" &
        done
@@ -230,15 +231,15 @@ do not launch.
    done
    ```
    When `N >= 4` this is one wave of 4 (fully parallel); when
-   `N < 4` it serialises into ⌈4/N⌉ waves. Add a row to
-   memory.md §1 with the batch tag and `$LOGDIR`. **Never run
-   `python algorithm_scientist/run_submission_aime24.py` on a
-   single config from this workflow** — that single-variant
-   form is debug-only.
-8. **While the 4 children run (20–60 min fully parallel; longer
-   when `N < 4` due to sequential waves)**, on every poll cycle
-   do ONE of (and **kill any child still running after 60 min** —
-   it has stalled; log in memory.md §4 and treat as failed):
+   `N < 4` it serialises into ⌈4/N⌉ waves. Use `--task <task>` (or
+   `--data <jsonl>` for a non-default model). Add a row to
+   memory.md §1 with the batch tag, `$LOGDIR`, and your `TIMEOUT_MIN`.
+   **Never run a single config through this workflow** — that
+   single-variant form is debug-only.
+8. **While the children run (runtime varies by model + task — you set
+   `TIMEOUT_MIN` and `timeout` enforces it)**, on every poll cycle
+   do ONE of (a child that exits 124 / leaves no `latest.json` timed
+   out — log in memory.md §4 and treat as failed):
    (a) **Read** the next file in priority order
    (`AI/tutorials/` → `AI/developer_guides/` → `papers/` →
    `vortex_torch/flow/algorithms.py` →

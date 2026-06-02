@@ -1,27 +1,41 @@
-"""Run a sparse-attention submission against AMC23 (fixed protocol).
+"""Run a sparse-attention submission against a math benchmark (generalized).
 
-Given a submission's engine JSON (e.g. ``submissions/<your_name>.json``),
-this script:
+This is the **task-generalized** successor to ``run_submission_aime24.py`` /
+``run_submission_amc23.py``. Those two remain as thin back-compat shims; new
+workflows (``/iterate``, ``/batch-benchmark``) call this script with
+``--task``.
 
-  1. Validates the config via :func:`check_engine_config`
-     (JSON shape, pow-2 constraints, ``@register(<name>)`` exists,
-     flow compiles on a small grid).
-  2. Boots an sglang engine with the submission's ``vortex_*`` settings
-     plus the fixed AMC23 protocol constants below.
-  3. Runs :file:`examples/amc23.jsonl` with 16 trials.
-  4. Scores with lighteval's ``MultilingualExtractiveMatchMetric``
-     (same setup as ``examples/verify_algo.py``).
-  5. Writes a per-run summary JSON to ``summary_amc23_submissions/``.
+Given a submission's engine JSON it:
 
-All benchmark-protocol settings are fixed — the **only** CLI argument
-is the submission config path.
+  1. Validates the config via :func:`check_engine_config`.
+  2. Boots an sglang engine with the submission's ``vortex_*`` settings plus
+     the fixed protocol constants below.
+  3. Runs the selected task's ``examples/<task>.jsonl`` with 16 trials.
+  4. Scores with lighteval's ``MultilingualExtractiveMatchMetric`` (identical
+     to the per-task runners — every supported task is math, same schema:
+     ``{prompt, question, answer}``).
+  5. Writes a per-run summary JSON into the task's summary dir, mirroring the
+     config's path under ``submissions/`` (per-agent isolation, content-hashed
+     filenames) — exactly like the original runners.
+
+Tasks
+-----
+``aime24``, ``aime25``, ``aime26``, ``amc23`` are built-in. Any other math
+benchmark with the same ``{prompt, question, answer}`` schema can be run via
+``--data examples/<file>.jsonl`` (summary dir defaults to ``summary_submissions``
+or ``--summary-dir``). LiveCodeBench (``lcbv5``) is *not* supported here — it
+needs code-execution scoring, not extractive math matching.
 
 Usage
 -----
 ::
 
-    python algorithm_scientist/run_submission_amc23.py \\
-        --config submissions/example_block_sparse_attention.json
+    python algorithm_scientist/run_submission.py --task aime25 \\
+        --config submissions/<tag>/batch_0_id0.json
+
+    python algorithm_scientist/run_submission.py \\
+        --data examples/my_math.jsonl --summary-dir summary_my_math \\
+        --config submissions/<tag>/foo.json
 """
 
 import argparse
@@ -53,8 +67,39 @@ TRIALS                      = 16
 MAX_INPUT_LENGTH            = 4096
 GENERATION_MAX_NEW_TOKENS   = 32768
 TP_SIZE                     = 1
-DATA_PATH                   = "examples/amc23.jsonl"
-SUMMARY_DIR                 = "summary_amc23_submissions"
+
+# Built-in tasks: (dataset path, summary dir). All share the AIME/AMC math
+# schema and the extractive-match scorer below.
+TASKS: Dict[str, Tuple[str, str]] = {
+    "aime24": ("examples/aime24.jsonl", "summary_submissions"),
+    "aime25": ("examples/aime25.jsonl", "summary_aime25_submissions"),
+    "aime26": ("examples/aime26.jsonl", "summary_aime26_submissions"),
+    "amc23":  ("examples/amc23.jsonl",  "summary_amc23_submissions"),
+}
+
+
+def resolve_task(args: argparse.Namespace) -> Tuple[str, str, str]:
+    """Return ``(task_label, data_path, summary_dir)`` from the CLI args."""
+    if args.data is not None:
+        data_path = str(args.data)
+        label = Path(data_path).stem
+        summary_dir = args.summary_dir or "summary_submissions"
+        return label, data_path, summary_dir
+    task = (args.task or "aime24").lower()
+    if task == "lcbv5":
+        raise SystemExit(
+            "lcbv5 (LiveCodeBench) needs code-execution scoring, not the "
+            "extractive math metric this runner uses. Use a dedicated "
+            "code-eval harness for lcbv5."
+        )
+    if task not in TASKS:
+        raise SystemExit(
+            f"unknown task {task!r}. Built-in: {', '.join(sorted(TASKS))}. "
+            f"For a custom math jsonl pass --data <path> instead."
+        )
+    data_path, summary_dir = TASKS[task]
+    summary_dir = args.summary_dir or summary_dir
+    return task, data_path, summary_dir
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +107,6 @@ SUMMARY_DIR                 = "summary_amc23_submissions"
 # ---------------------------------------------------------------------------
 
 def _load_and_validate_config(config_path: Path) -> Dict[str, Any]:
-    """Run the pre-flight check and return the parsed config dict."""
     print(f"[pre-flight] validating {config_path}")
     config = check_engine_config(config_path)
     print(f"[pre-flight] OK — module={config.get('vortex_module_name')}")
@@ -70,12 +114,6 @@ def _load_and_validate_config(config_path: Path) -> Dict[str, Any]:
 
 
 def _build_engine_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge the submission JSON with the fixed protocol settings.
-
-    Everything else (``model_path``, ``mem_fraction_static``, etc.) is
-    either taken from the submission JSON or filled in by
-    :func:`get_engine`'s defaults.
-    """
     kwargs = dict(config)
     kwargs["tp_size"]              = TP_SIZE
     kwargs["vortex_max_seq_lens"]  = MAX_INPUT_LENGTH + GENERATION_MAX_NEW_TOKENS
@@ -165,12 +203,12 @@ def _summarize(results) -> Dict[str, Any]:
     }
 
 
-def run(config_path: Path) -> Dict[str, Any]:
+def run(config_path: Path, data_path: str) -> Dict[str, Any]:
     config = _load_and_validate_config(config_path)
     engine_kwargs = _build_engine_kwargs(config)
     llm = _boot_engine(engine_kwargs)
 
-    requests = _load_requests(Path(DATA_PATH)) * TRIALS
+    requests = _load_requests(Path(data_path)) * TRIALS
     prompts = [req["prompt"] for req in requests]
 
     sampling_params = {
@@ -197,18 +235,19 @@ def run(config_path: Path) -> Dict[str, Any]:
         "generation_max_new_tokens":  GENERATION_MAX_NEW_TOKENS,
         "mem_fraction_static":        engine_kwargs.get("mem_fraction_static"),
         "tp_size":                    TP_SIZE,
-        "data_path":                  DATA_PATH,
+        "data_path":                  data_path,
     }
     return summary
 
 
 # ---------------------------------------------------------------------------
-# CLI (only one knob: the submission config)
+# CLI
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate a submission and run it on AMC23 with the fixed protocol.",
+        description="Validate a submission and run it on a math benchmark "
+                    "(aime24/25/26, amc23, or a custom --data jsonl).",
     )
     parser.add_argument(
         "--config",
@@ -216,19 +255,30 @@ def parse_args() -> argparse.Namespace:
         default=Path("submissions/example_block_sparse_attention.json"),
         help="Path to the submission JSON (default: the bundled example).",
     )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default="aime24",
+        help="Built-in task: aime24 (default), aime25, aime26, amc23.",
+    )
+    parser.add_argument(
+        "--data",
+        type=Path,
+        default=None,
+        help="Custom math jsonl ({prompt,question,answer}); overrides --task.",
+    )
+    parser.add_argument(
+        "--summary-dir",
+        type=str,
+        default=None,
+        help="Override the summary output dir (default: per-task).",
+    )
     return parser.parse_args()
 
 
 def _read_submission_artifacts(
     config_path: Path,
 ) -> Tuple[str, Optional[str], str]:
-    """Return (config_json_text, module_py_text or None, content_hash).
-
-    ``content_hash`` is a short sha256 over the config JSON bytes + the
-    module .py bytes (if resolvable). Two runs of the exact same
-    (.py, .json) pair produce the same hash — so re-runs are visible
-    at a glance, and a code change forces a new hash.
-    """
     config_text = config_path.read_text(encoding="utf-8")
 
     module_text: Optional[str] = None
@@ -253,29 +303,14 @@ def _read_submission_artifacts(
     return config_text, module_text, content_hash
 
 
-def _append_index(
-    index_path: Path,
-    row: Dict[str, Any],
-) -> None:
-    """Append a one-line JSONL record so the directory has a grep-able index."""
+def _append_index(index_path: Path, row: Dict[str, Any]) -> None:
     index_path.parent.mkdir(parents=True, exist_ok=True)
     with index_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
 def _summary_subpath(config_path: Path) -> Path:
-    """Mirror the config's location under ``submissions/`` into the summary tree.
-
-    ``submissions/example_x.json``                       → ``example_x``
-    ``submissions/<tag>/batch_3_id5.json``               → ``<tag>/batch_3_id5``
-    ``submissions/<tag>/<sub>/<stem>.json`` (nested)     → ``<tag>/<sub>/<stem>``
-    Configs not under ``submissions/`` fall back to just the file stem
-    (preserving the old single-level layout for ad-hoc paths).
-
-    The agent-tagged path (``submissions/<tag>/...``) preserves per-agent
-    isolation in ``summary_amc23_submissions/`` so two agents producing the
-    same ``batch_x_idy`` stem never clobber each other's ``latest.json``.
-    """
+    """Mirror the config's location under ``submissions/`` into the summary tree."""
     parts = config_path.with_suffix("").parts  # drop the .json
     if "submissions" in parts:
         idx = parts.index("submissions")
@@ -285,31 +320,18 @@ def _summary_subpath(config_path: Path) -> Path:
     return Path(config_path.stem)
 
 
-def _write_summary(summary: Dict[str, Any], config_path: Path) -> str:
-    """Write the summary into a per-submission subfolder with a content-hashed name.
-
-    Layout (mirrors the config's location relative to ``submissions/``):
-        summary_amc23_submissions/
-            <tag>/<config_stem>/                          — agent-tagged batches
-                <timestamp>__<hash12>.json                — full summary + embedded artifacts
-                INDEX.jsonl                               — one row per run (headline metrics)
-                latest.json                               — symlink to the most recent run
-            <config_stem>/                                — top-level examples / ad-hoc
-                ...
-    """
+def _write_summary(summary: Dict[str, Any], config_path: Path, summary_dir: str) -> str:
     rel = _summary_subpath(config_path)
-    tag = str(rel)                            # used downstream as the "submission" label
-    run_dir = Path(SUMMARY_DIR) / rel
+    tag = str(rel)
+    run_dir = Path(summary_dir) / rel
     run_dir.mkdir(parents=True, exist_ok=True)
 
     config_text, module_text, content_hash = _read_submission_artifacts(config_path)
 
-    # Microsecond precision so 8 concurrent runs of the same submission
-    # (one per GPU in a batched node job) never clobber each other.
     finished_at = datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
     cuda_visible = os.environ.get("CUDA_VISIBLE_DEVICES")
 
-    summary = dict(summary)  # shallow copy so we don't mutate the caller's dict
+    summary = dict(summary)
     summary["content_hash"] = content_hash
     summary["finished_at"] = finished_at
     summary["cuda_visible_devices"] = cuda_visible
@@ -321,7 +343,6 @@ def _write_summary(summary: Dict[str, Any], config_path: Path) -> str:
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)
 
-    # Append a one-line index row so you can `grep / sort / less` at a glance.
     _append_index(
         run_dir / "INDEX.jsonl",
         {
@@ -339,14 +360,12 @@ def _write_summary(summary: Dict[str, Any], config_path: Path) -> str:
         },
     )
 
-    # Maintain a `latest.json` pointer that always points at the newest run.
     latest = run_dir / "latest.json"
     try:
         if latest.is_symlink() or latest.exists():
             latest.unlink()
         latest.symlink_to(fname)
     except OSError:
-        # Filesystem doesn't support symlinks — fall back to a plain copy.
         latest.write_text(out_path.read_text(encoding="utf-8"), encoding="utf-8")
 
     return str(out_path)
@@ -354,14 +373,16 @@ def _write_summary(summary: Dict[str, Any], config_path: Path) -> str:
 
 if __name__ == "__main__":
     args = parse_args()
+    task_label, data_path, summary_dir = resolve_task(args)
 
     if not args.config.is_file():
         raise SystemExit(f"config not found: {args.config}")
-    if not Path(DATA_PATH).is_file():
-        raise SystemExit(f"dataset not found: {DATA_PATH}")
+    if not Path(data_path).is_file():
+        raise SystemExit(f"dataset not found: {data_path}")
 
-    summary = run(args.config)
-    out_path = _write_summary(summary, args.config)
+    print(f"[task] {task_label}  data={data_path}  summary_dir={summary_dir}")
+    summary = run(args.config, data_path)
+    out_path = _write_summary(summary, args.config, summary_dir)
 
     print("[summary]")
     for k, v in summary.items():

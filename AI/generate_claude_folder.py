@@ -1,4 +1,15 @@
-"""Generate a ``.claude/`` folder at the repo root so the vortex_torch
+"""DEPRECATED — do not run. ``.claude/`` is now hand-maintained.
+
+As of the June 2026 refactor the ``.claude/`` tree (CLAUDE.md, agents/,
+commands/) is edited **directly** and is the source of truth: seven top-level
+commands (innovate, iterate, add-ops, support-model, debug, write-paper,
+reproduce-paper) plus the low-level helpers, and the vortex-op-author /
+vortex-paper-writer subagents. Re-running this script would **clobber** the
+current hand-written commands with the old generated set. It is kept only for
+historical reference. Edit ``.claude/`` files instead.
+
+----------------------------------------------------------------------
+Generate a ``.claude/`` folder at the repo root so the vortex_torch
 submission workflow drops straight into Claude Code.
 
 The authoritative instructions live in ``AI/AGENTS.md`` and
@@ -1450,6 +1461,13 @@ FILES = {
 
 
 def main() -> None:
+    import sys
+    if "--force-clobber" not in sys.argv:
+        raise SystemExit(
+            "DEPRECATED: .claude/ is now hand-maintained — running this would "
+            "clobber the current commands. Pass --force-clobber only if you "
+            "really intend to regenerate the OLD command set."
+        )
     for path, body in FILES.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(body, encoding="utf-8")

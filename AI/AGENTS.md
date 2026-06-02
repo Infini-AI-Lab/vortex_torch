@@ -467,10 +467,13 @@ AIME24 protocol:
 python algorithm_scientist/run_submission_aime24.py --config submissions/<tag>/<name>.json
 ```
 
-Everything else is hard-coded inside `algorithm_scientist/run_submission_aime24.py`
-(16 trials, `Qwen/Qwen3-1.7B`, single GPU, 4096-token input cap, 16384
-max new tokens, `examples/aime24.jsonl`). The only thing you change
-between runs is your flow's JSON.
+Everything else is hard-coded inside the task runner
+`algorithm_scientist/run_submission.py` (16 trials, single GPU, 4096-token input
+cap, **32768** max new tokens; task + dataset via `--task`/`--data`; model via
+the JSON's `model_path`). The legacy `run_submission_aime24.py` /
+`run_submission_amc23.py` are back-compat shims. The only thing you change
+between runs is your flow's JSON (and, for a non-default model, the
+tokenizer-bound task jsonl built with `examples/make_task.py`).
 
 The script prints a summary to stdout and writes it into a
 **per-submission subfolder** under `summary_submissions/`:
@@ -778,11 +781,13 @@ so the verdict (after `wait`) lands on a pre-registered prediction.
 
 ## 5d. The "while-you-wait" protocol
 
-A single batch takes **20–60 minutes** of wall-clock time when fully
-parallel (`N >= 4`), longer when the 4 variants are running in
-waves on fewer GPUs. **Kill any child still running after 60 minutes**
-— it has likely stalled; log the error in §4 and treat that
-variant as failed. While the 4 children (or wave's children) are
+A single batch's wall-clock time **depends on the model and task**
+(≈ questions × 16 trials × output tokens ÷ throughput; bigger models, MLA,
+and harder/longer tasks take much longer — and the 32768 max-new-tokens
+budget raises it). **You decide a per-run timeout** (`TIMEOUT_MIN`, ~1.5× your
+estimate) and the launch loop **enforces it** by wrapping each child in
+`timeout ${TIMEOUT_MIN}m`; a child that exits 124 / leaves no `latest.json`
+timed out — log it in §4 and treat that variant as failed. While the children are
 running, do one of the following on each polling cycle (e.g. `jobs`
 to see how many are still alive, or `ls -lt
 summary_submissions/<tag>/<stem>/latest.json` to see which children

@@ -51,7 +51,7 @@ from lighteval.models.model_output import ModelResponse
 
 TRIALS                      = 16
 MAX_INPUT_LENGTH            = 4096
-GENERATION_MAX_NEW_TOKENS   = 16384
+GENERATION_MAX_NEW_TOKENS   = 32768
 TP_SIZE                     = 1
 DATA_PATH                   = "examples/aime24.jsonl"
 SUMMARY_DIR                 = "summary_submissions"
