@@ -36,6 +36,10 @@ for algo in "${sparse_algos[@]}"; do
             --generation-max-new-tokens 32768 \
             --max-input-length 4096 \
             --tp-size 1 \
+            --vortex-impl-backend triton \
+            --vortex-attention-backend trtllm \
+            --vortex-use-tensor-core \
+            --vortex-layers-skip \
             --summary-dir summary-Qwen3-30B-A3B-FP8
       done
     done
