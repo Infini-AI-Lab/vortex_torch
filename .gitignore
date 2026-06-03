@@ -303,3 +303,4 @@ vortex_paper.zip
 # Research toolkit: regenerable trace blobs + generated survey briefs
 /algorithm_scientist/research/traces/
 /algorithm_scientist/research/briefs/
+! .claude/commands/debug.md
