@@ -10,8 +10,9 @@ not, **wire it up** and re-verify. Reference:
 ## Step 0 — env + static check (CPU, no GPU)
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-python algorithm_scientist/support_model.py "$1"
+python algorithm_scientist/detect_env.py    # dont assume vortex_v1; adopt the recommended prefix
+RUN="conda run -n vortex_v1 python"   # the recommended prefix (substitute if different)
+$RUN algorithm_scientist/support_model.py "$1"
 ```
 This prints the geometry (MLA vs MHA/GQA), recommended backend(s), recommended
 conda env (`vortex_glm` for GLM-family, else `vortex_v1`), and shapes. Activate
@@ -25,7 +26,7 @@ the recommended env now.
 engine on a default flow with `model_path: $1` and run the RULER quality gate:
 ```bash
 FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; exit 1; }
-CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} python algorithm_scientist/run_ruler.py \
+CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} $RUN algorithm_scientist/run_ruler.py \
   --config <a minimal submission JSON whose model_path is $1>
 ```
 A RULER ≥ 0.85 means the attention path is structurally sound for this model.

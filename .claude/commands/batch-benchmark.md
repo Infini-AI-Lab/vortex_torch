@@ -32,6 +32,8 @@ Step 0 — resolve `<tag>`, detect *free* GPUs (not the physical
 count — other users may be sharing this host), then count
 arguments:
 ```bash
+python algorithm_scientist/detect_env.py >/dev/null 2>&1   # establish the env (don't assume vortex_v1)
+RUN="conda run -n vortex_v1 python"        # ← detect_env.py's recommended prefix; substitute if different
 TAG=<your_agent_tag>           # sanitized model name, set once per session
 FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || {
     echo "no free GPUs — wait, do not launch" >&2; exit 1
@@ -67,7 +69,7 @@ processes are already filtered out by `free_gpus.sh`.)
 Step 2 — pre-flight every config locally first (cheap, no GPU):
 ```bash
 for name in "${NAMES[@]}"; do
-    python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/${name}.json')" \
+    $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/${name}.json')" \
         || echo "[preflight] FAILED: ${TAG}/${name}"
 done
 ```
@@ -84,7 +86,7 @@ launching AIME24.
 ```bash
 for name in "${NAMES[@]}"; do
     CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
-        python algorithm_scientist/run_ruler.py --config "submissions/${TAG}/${name}.json"
+        $RUN algorithm_scientist/run_ruler.py --config "submissions/${TAG}/${name}.json"
 done
 ```
 Results land in `summary_ruler_submissions/<tag>/<name>/latest.json`.
@@ -110,7 +112,7 @@ for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
         name="${NAMES[$y]}"
         gpu="${FREE_GPUS[$((y - start))]}"
         CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
-            python algorithm_scientist/run_submission.py ${TASK_ARG:---task aime24} --config "submissions/${TAG}/${name}.json" \
+            $RUN algorithm_scientist/run_submission.py ${TASK_ARG:---task aime24} --config "submissions/${TAG}/${name}.json" \
             > "$LOGDIR/gpu${gpu}_${name}.out" \
             2> "$LOGDIR/gpu${gpu}_${name}.err" &
     done

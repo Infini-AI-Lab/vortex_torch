@@ -98,25 +98,32 @@ modifying the compiler itself, not when writing a submission.
   across requests with matching prompt prefixes, corrupting
   Save/Load values. `check_engine_config` rejects the violation.
 
-## Environment — activate the `vortex_v1` conda env first
+## Environment — resolve a working env FIRST (don't assume `vortex_v1`)
 
-Every python invocation in this project (`check_engine_config`,
-`run_submission_aime24.py`, the pre-flight loops in the slash
-commands, etc.) expects the **`vortex_v1`** conda environment.
-**Activate it once at session start** before running any of the
-bash snippets below:
+Every python call in this project needs an interpreter where `import
+vortex_torch` works (with sglang for serving). **Do not assume a specific env
+exists** — the host may have a different conda env, a uv/venv, or docker, and
+**GLM models need a newer transformers** (a separate env). The very first action
+of any session is to **establish a working env yourself**:
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate vortex_v1
-python -c "import sys; print(sys.executable)"   # expect a path under .../envs/vortex_v1/
+python algorithm_scientist/detect_env.py    # probes conda/uv/venv/docker, recommends a run prefix
 ```
 
-If `conda activate` isn't available in the current shell (e.g. a
-non-interactive sub-shell that didn't source the conda profile),
-fall back to `conda run -n vortex_v1 python ...` for every
-python call. Either form is acceptable; what matters is that the
-running interpreter is the one inside `vortex_v1`.
+Adopt the recommended **run prefix** and use it on every python call this session
+(robust in non-interactive subshells), e.g. `RUN="conda run -n vortex_v1 python"`
+— or `".venv/bin/python"`, `"uv run python"`, a docker invocation, etc.:
+
+```bash
+RUN="<recommended prefix>"
+$RUN -c "import sys, vortex_torch; print(sys.executable, vortex_torch.__version__)"
+```
+
+If no working env is found, **build one** — that's the **`/setup-env`** skill
+(creates/repairs a conda/uv/venv/docker env from the repo specs, and a separate
+`transformers>=5` env for GLM). The `conda activate vortex_v1` snippets in the
+command docs below are the **common default** — substitute your detected prefix
+when it differs. Confirm `import vortex_torch` succeeds before any GPU work.
 
 ## GPU usage — detect dynamically, never hardcode
 
@@ -365,6 +372,9 @@ so any later session resumes cleanly from the same prompt.
 
 **Low-level helpers** (used standalone or called by the seven above):
 
+- `/setup-env [--model]` — **run first**: detect/build a working env
+  (conda/uv/venv/docker) where `import vortex_torch` works; returns the run
+  prefix; handles the GLM transformers-5 split. Helper: `detect_env.py`.
 - `/new-submission <name>` — scaffold a submission pair.
 - `/preflight <name>` — cheap local `check_engine_config`.
 - `/batch-benchmark <n1> <n2> <n3> <n4>` — the sanctioned 4-variant batch

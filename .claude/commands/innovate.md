@@ -22,7 +22,7 @@ case "$N" in *[!0-9]*) echo "N must be a positive integer"; exit 1 ;; esac
   `/support-model <model>` first if unsure.
 - The remaining non-flag words are a free-form theme hint.
 
-Activate `vortex_v1` (or `vortex_glm` for GLM). `TAG=<sanitized model name>`;
+Establish the env first (`python algorithm_scientist/detect_env.py`; `/setup-env` builds one) and use its run prefix as `$RUN` (GLM = transformers-5 env). `TAG=<sanitized model name>`;
 `X=$(ls submissions/${TAG}/innovate_*_id0.json 2>/dev/null | wc -l)`.
 
 ## Step 1 — read context (and optionally research like a human)
@@ -68,7 +68,7 @@ now-available op. Do not fake an op or call one that isn't registered.
 
 ```bash
 for y in $(seq 0 $((N-1))); do
-  python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/innovate_${X}_id${y}.json')" \
+  $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/innovate_${X}_id${y}.json')" \
     && echo "ok id$y" || echo "FAIL id$y"
 done
 ```

@@ -17,10 +17,12 @@ into `summary_submissions/`, so
 `submissions/<tag>/batch_3_id5.json` produces
 `summary_submissions/<tag>/batch_3_id5/`.
 
-Step 1 — pre-flight (CPU-only):
+Step 1 — establish the env + pre-flight (CPU-only):
 ```bash
+python algorithm_scientist/detect_env.py >/dev/null 2>&1   # don't assume vortex_v1
+RUN="conda run -n vortex_v1 python"        # ← detect_env.py's recommended prefix; substitute if different
 CFG=<resolved path to submissions/.../$1.json>
-python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('$CFG')"
+$RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('$CFG')"
 ```
 Refuse to run the benchmark if pre-flight fails.
 
@@ -33,7 +35,7 @@ SUMMARY_REL="${CFG#submissions/}"; SUMMARY_REL="${SUMMARY_REL%.json}"   # tag/st
 LOGDIR="logs/submission/single_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOGDIR"
 CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
-    python algorithm_scientist/run_submission.py --task aime24 --config "$CFG" \
+    $RUN algorithm_scientist/run_submission.py --task aime24 --config "$CFG" \
     > "$LOGDIR/${STEM}.out" \
     2> "$LOGDIR/${STEM}.err"
 ```

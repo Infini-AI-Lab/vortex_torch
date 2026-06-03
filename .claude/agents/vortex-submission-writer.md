@@ -41,21 +41,21 @@ model name (e.g. `claude_opus_4_7`, `claude_sonnet_4_6`,
 yet exist, create it; otherwise resume into it. Confirm the tag
 with the user only if you cannot determine your model name.
 
-### Second action — activate the `vortex_v1` conda env
+### Second action — establish a working env (don't assume `vortex_v1`)
 
-Every python call in this workflow must run inside the
-**`vortex_v1`** conda env. Activate once at session start:
+Every python call must run in an env where `import vortex_torch` works — but
+don't assume `vortex_v1` exists (it may be a different conda env, uv/venv, or
+docker; GLM needs a transformers-5 env). Detect once and adopt the run prefix:
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate vortex_v1
-python -c "import sys; print(sys.executable)"   # must be .../envs/vortex_v1/...
+python algorithm_scientist/detect_env.py            # recommends a run prefix
+RUN="conda run -n vortex_v1 python"                 # ← the recommended prefix; substitute if different
+$RUN -c "import sys, vortex_torch; print(sys.executable)"
 ```
 
-If `conda activate` isn't usable in the current shell, prefix
-each python invocation with `conda run -n vortex_v1` instead.
-A wrong-env python will fail to import the framework's C
-extension and every pre-flight / benchmark call below will error.
+Prepend `$RUN` to every python call below. If no env works, build one — that's
+`/setup-env`. A wrong/missing env fails to import the framework's C extension and
+every pre-flight / benchmark call will error.
 
 ## Read these before writing code
 
@@ -174,7 +174,7 @@ do not launch.
    ```bash
    TAG=<your_tag>; BATCH=<x>
    for y in 0 1 2 3; do
-     python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')"
+     $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')"
    done
    ```
    Drop or fix any failing variant before step 5.
@@ -189,7 +189,7 @@ do not launch.
    TAG=<your_tag>; BATCH=<x>
    for y in 0 1 2 3; do
      CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
-       python algorithm_scientist/run_ruler.py \
+       $RUN algorithm_scientist/run_ruler.py \
          --config "submissions/${TAG}/batch_${BATCH}_id${y}.json"
    done
    ```
@@ -223,7 +223,7 @@ do not launch.
            gpu="${FREE_GPUS[$((y - start))]}"
            stem=$(basename "$cfg" .json)
            CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
-               python algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
+               $RUN algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
                > "$LOGDIR/gpu${gpu}_${stem}.out" \
                2> "$LOGDIR/gpu${gpu}_${stem}.err" &
        done

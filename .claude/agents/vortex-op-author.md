@@ -19,7 +19,7 @@ result, the measured delta, and the exact flow snippet that calls it.
 
 ## First actions
 
-1. Activate `vortex_v1` (or `conda run -n vortex_v1`); confirm the interpreter.
+1. Establish the env (`python algorithm_scientist/detect_env.py`; `/setup-env` if none works); adopt its run prefix as `$RUN` and confirm `$RUN -c "import vortex_torch"`.
 2. Read [AI/workflows/add_op.md](../../AI/workflows/add_op.md) and the developer
    guide sections it names ([AI/developer_guides/developer_guide.md](../../AI/developer_guides/developer_guide.md)
    §5, §8, §9, §16, §20). Open the closest existing op

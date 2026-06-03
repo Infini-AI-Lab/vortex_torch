@@ -12,7 +12,7 @@ Unlike `/iterate` (orthogonal variants) this is a clean controlled experiment.
 `$1` = base config path; `$2` = knob (a JSON field, e.g. `vortex_topk_val`,
 `vortex_block_size`, `vortex_layers_skip`, `kv_cache_dtype`,
 `vortex_attention_backend`); `$3` = comma-separated values. `--task` (default
-aime24); `--full` also runs the end-to-end task. Activate `vortex_v1`.
+aime24); `--full` also runs the end-to-end task. Establish the env first (`python algorithm_scientist/detect_env.py` / `/setup-env`); use its run prefix as `$RUN`.
 
 ## Step 1 — generate the variants (one knob changed)
 
@@ -22,7 +22,7 @@ is structural — reuse the base `.py` otherwise). Keep the same model, block-si
 (unless that's the knob), reserved blocks, etc. Preflight each:
 ```bash
 for v in <values>; do
-  python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/<tag>/ablate_<knob>_'$v'.json')" && echo "ok $v" || echo "FAIL $v"
+  $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/<tag>/ablate_<knob>_'$v'.json')" && echo "ok $v" || echo "FAIL $v"
 done
 ```
 
@@ -39,7 +39,7 @@ For each variant:
   N=${#FREE_GPUS[@]}; i=0
   for v in <values>; do
       gpu=${FREE_GPUS[$((i % N))]}; i=$((i+1))
-      CUDA_VISIBLE_DEVICES=$gpu python algorithm_scientist/run_ruler.py \
+      CUDA_VISIBLE_DEVICES=$gpu $RUN algorithm_scientist/run_ruler.py \
           --config "submissions/<tag>/ablate_<knob>_${v}.json" &
       (( i % N == 0 )) && wait    # fill all free GPUs, then drain the wave
   done; wait

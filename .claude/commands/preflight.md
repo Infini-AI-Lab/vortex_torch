@@ -10,7 +10,9 @@ itself as a path if it ends in `.json`. Then run the cheap
 pre-flight check:
 
 ```bash
-python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('<resolved path>')"
+python algorithm_scientist/detect_env.py >/dev/null 2>&1   # establish the env if not already
+RUN="conda run -n vortex_v1 python"        # ← detect_env.py's recommended prefix; substitute if different
+$RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('<resolved path>')"
 ```
 
 Capture the output. If it raises, paste the relevant traceback line

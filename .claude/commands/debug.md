@@ -9,12 +9,15 @@ the user wants) apply the **minimal** fix. Don't guess — read the actual error
 
 ## Step 0 — environment sanity (the most common failure)
 
+Don't assume `vortex_v1` exists — detect the right env first:
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"; conda activate vortex_v1
-python -c "import sys, vortex_torch; print(sys.executable)"   # must be .../envs/vortex_v1/
+python algorithm_scientist/detect_env.py     # recommends a run prefix
+RUN="<recommended>"; $RUN -c "import sys, vortex_torch; print(sys.executable)"
 ```
-GLM-family ⇒ `vortex_glm` instead. A wrong-env interpreter fails to import the C
-extension and makes every preflight/benchmark error — rule this out first.
+A wrong/missing env (no such conda env, uv/venv/docker host, GLM needing
+transformers≥5, or a broken C-extension build) makes every preflight/benchmark
+error — rule it out first. If no env works or the build is broken, that's
+**`/setup-env`** (build/repair). GLM-family ⇒ the transformers-5 env.
 
 ## Step 1 — classify the symptom and go to the matching playbook
 

@@ -24,7 +24,7 @@ checklist and [the developer guide](../../AI/developer_guides/developer_guide.md
 
 ## Steps
 
-0. Activate `vortex_v1`. State the mode + a one-sentence goal.
+0. Establish the env (`python algorithm_scientist/detect_env.py`; `/setup-env`); adopt its run prefix as `$RUN`. State the mode + a one-sentence goal.
 1. **Delegate to the op author.** Invoke
    `Task(subagent_type="vortex-op-author", ...)` with: the mode, the op math /
    the chain to fuse / the algorithm to investigate, the target side

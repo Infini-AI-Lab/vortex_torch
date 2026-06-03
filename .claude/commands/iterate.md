@@ -14,16 +14,17 @@ Parse `$ARGUMENTS`:
   amc23. A `*.jsonl` value is treated as a custom math dataset.
 - `--max-iterations N` (default: 3).
 
+**Establish the env first** — don't assume `vortex_v1` (see `/setup-env`). Adopt
+the recommended **run prefix** as `$RUN` and use it for every python call below:
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"; conda activate vortex_v1
-python -c "import sys; print(sys.executable)"
+python algorithm_scientist/detect_env.py            # recommends a run prefix (GLM ⇒ vortex_glm env)
+RUN="conda run -n vortex_v1 python"                 # ← the recommended prefix; substitute if different
+$RUN -c "import sys, vortex_torch; print(sys.executable)"
 ```
-If the model is GLM-family, use `vortex_glm` instead (see
-[AI/workflows/support_model.md](../../AI/workflows/support_model.md)).
 
 ## Step 1 — verify the model is supported, prepare task data
 
-1. **Model support** (once): `python algorithm_scientist/support_model.py <model>`.
+1. **Model support** (once): `$RUN algorithm_scientist/support_model.py <model>`.
    If exit ≠ 0, stop and tell the user to run `/support-model <model>` first.
    MLA models (DeepSeek/GLM) require `vFlowMLA` flows.
 2. **Task data is tokenizer-bound** — see
@@ -31,7 +32,7 @@ If the model is GLM-family, use `vortex_glm` instead (see
    model + a built-in task, `examples/<task>.jsonl` already exists. For any
    other model, regenerate it:
    ```bash
-   python examples/make_task.py --task <task> --model <model> \
+   $RUN examples/make_task.py --task <task> --model <model> \
        --output examples/<task>__<modelslug>.jsonl
    ```
    Remember `DATA=examples/<task>__<modelslug>.jsonl` (or the built-in path);
@@ -66,7 +67,7 @@ full survey→analyze→screen→iterate loop is `/research`.
 `model_path` = the chosen model. `BATCH=$(ls submissions/$TAG/batch_*_id0.json 2>/dev/null | wc -l)`.
 ```bash
 for y in 0 1 2 3; do
-  python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')" && echo "ok id$y" || echo "FAIL id$y"
+  $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')" && echo "ok id$y" || echo "FAIL id$y"
 done
 ```
 Fix every failure before continuing.
@@ -80,7 +81,7 @@ FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPUs — wait
 N=${#FREE_GPUS[@]}
 for y in 0 1 2 3; do
   gpu=${FREE_GPUS[$((y % N))]}
-  CUDA_VISIBLE_DEVICES=$gpu python algorithm_scientist/run_ruler.py \
+  CUDA_VISIBLE_DEVICES=$gpu $RUN algorithm_scientist/run_ruler.py \
     --config "submissions/${TAG}/batch_${BATCH}_id${y}.json" &
   (( (y+1) % N == 0 )) && wait
 done; wait
@@ -109,7 +110,7 @@ for start in $(seq 0 $PARALLEL $((BATCH_SIZE-1))); do
   for y in $(seq $start $((end-1))); do
     cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"; gpu="${FREE_GPUS[$((y-start))]}"; stem=$(basename "$cfg" .json)
     CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
-        python algorithm_scientist/run_submission.py $RUN_DATA_ARG --config "$cfg" \
+        $RUN algorithm_scientist/run_submission.py $RUN_DATA_ARG --config "$cfg" \
         > "$LOGDIR/gpu${gpu}_${stem}.out" 2> "$LOGDIR/gpu${gpu}_${stem}.err" &
   done
   wait

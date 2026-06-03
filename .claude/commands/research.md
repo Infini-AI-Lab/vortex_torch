@@ -9,8 +9,8 @@ survivors. Reference:
 [AI/workflows/research_toolkit.md](../../AI/workflows/research_toolkit.md). Record
 everything in `algorithm_scientist/research/journal.md`.
 
-Defaults: `--model Qwen/Qwen3-1.7B`, `--task aime24`. Activate `vortex_v1`
-(`vortex_glm` for GLM). Pick a `<tag>`.
+Defaults: `--model Qwen/Qwen3-1.7B`, `--task aime24`. Establish the env first (`python algorithm_scientist/detect_env.py`; `/setup-env`) and adopt its run prefix as `$RUN`
+(GLM = the transformers-5 env). Pick a `<tag>`.
 
 ## 1 — Survey (prior art)
 
@@ -43,11 +43,11 @@ yourself to save tensors (for sglang set `"disable_cuda_graph": true` and dump i
 with several free, run multiple captures/RULER in parallel, one per free GPU):
 ```bash
 FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; exit 1; }
-CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} python algorithm_scientist/research/capture_trace.py \
+CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} $RUN algorithm_scientist/research/capture_trace.py \
   --model <model> --data <dataset you chose> --num-samples 3 --max-ctx 8192 \
   [--generate 1024] --layers even8 --device cuda \
   --out algorithm_scientist/research/traces/<slug>.pt
-python algorithm_scientist/research/analyze_attention.py \
+$RUN algorithm_scientist/research/analyze_attention.py \
   --trace algorithm_scientist/research/traces/<slug>.pt   # CPU, no GPU needed
 ```
 Note sink/local mass, effective context, and which heads are retrieval-y — this
@@ -65,7 +65,7 @@ For each recall-testable hypothesis, write a scoring method in
 `algorithm_scientist/research/methods/<name>.py` (contract in `methods/_base.py`)
 and screen it against the baselines (centroid/quest/h2o/streaming/random):
 ```bash
-python algorithm_scientist/research/eval_recall.py \
+$RUN algorithm_scientist/research/eval_recall.py \
   --trace algorithm_scientist/research/traces/<modelslug>.pt \
   --method algorithm_scientist/research/methods/<name>.py
 ```
