@@ -360,6 +360,8 @@ def already_finished(summary_dir, args):
         if (
             prev_args.get("trials") == args.trials
             and prev_args.get("topk_val") == args.topk_val
+            and prev_args.get("block_size") == args.block_size
+            and prev_args.get("page_size") == args.page_size
             and prev_args.get("topk_ratio") == args.topk_ratio
             and prev_args.get("vortex_module_name") == args.vortex_module_name
             and prev_args.get("model_name") == args.model_name
