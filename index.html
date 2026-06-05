@@ -242,21 +242,17 @@
           <p>The result drops into FlashInfer / CUDA Graph / radix-cache decoding — so a new algorithm is deployable and benchmarkable the moment it compiles, and its speedups survive contact with a real serving system.</p>
         </div>
       </div>
-      <p class="lead reveal" style="margin-top:34px">Vortex is designed to close <strong>three gaps</strong> that have kept sparse attention slow to iterate on:</p>
-      <div class="trio">
-        <div class="blk reveal"><span class="idx">⚙︎</span><h3>Dynamic sparsity</h3><p>Static-pattern kernels (FlashInfer, FlexAttention) optimize attention once the pattern is known. Vortex makes computing the pattern on the fly — the accurate, dynamic case — efficient too.</p></div>
-        <div class="blk reveal"><span class="idx">⌘</span><h3>Programmability</h3><p>Adding a variant to a serving system can mean ~2000 lines of code re-implementing <code>GeMM</code>/<code>Reduce</code>/<code>Top-K</code> over paged tensors. In Vortex it is a few composable lines.</p></div>
-        <div class="blk reveal"><span class="idx">🔌</span><h3>Serving compatibility</h3><p>Custom-kernel methods often break paged attention or prefix caching — Quest's original code is <strong>44.4×</strong> slower than full attention. Vortex stays native to the stack.</p></div>
-      </div>
-      <div class="features">
-        <div class="feature reveal"><div class="ico">🧩</div><h3>Easy Programming</h3><p>PyTorch-like frontend. No batching, caching, or paged-attention plumbing to worry about.</p></div>
-        <div class="feature reveal"><div class="ico">⚡</div><h3>High Performance</h3><p>Fused Triton/CUDA kernels with FlashInfer, CUDA Graph, and radix attention.</p></div>
-        <div class="feature reveal"><div class="ico">🤖</div><h3>Agent Native</h3><p>Agents generate, deploy, and refine algorithms end-to-end — discovery in a loop.</p></div>
-      </div>
+      <p class="lead reveal" style="margin-top:34px">Under the hood, a flow flows through <strong>three composable layers</strong>:</p>
       <div class="trio">
         <div class="blk reveal"><span class="idx">▣</span><h3><code>vFlow</code></h3><p>A Python-embedded frontend language. Declare what to attend to; the framework handles batching, caching, and fusion.</p></div>
         <div class="blk reveal"><span class="idx">▦</span><h3><code>vTensor</code></h3><p>A page-centric tensor abstraction where the page is the unit of sparsity — uniform across MHA and MLA models.</p></div>
         <div class="blk reveal"><span class="idx">▤</span><h3>Serving System</h3><p>A backend tightly integrated with SGLang: FlashInfer kernels, CUDA Graph, and radix-cache decoding.</p></div>
+      </div>
+      <p class="lead reveal" style="margin-top:34px">Together, these close <strong>three gaps</strong> that have kept sparse attention slow to iterate on:</p>
+      <div class="trio">
+        <div class="blk reveal"><span class="idx">⚙︎</span><h3>Dynamic sparsity</h3><p>Static-pattern kernels (FlashInfer, FlexAttention) optimize attention once the pattern is known. Vortex makes computing the pattern on the fly — the accurate, dynamic case — efficient too.</p></div>
+        <div class="blk reveal"><span class="idx">⌘</span><h3>Programmability</h3><p>Adding a variant to a serving system can mean ~2000 lines of code re-implementing <code>GeMM</code>/<code>Reduce</code>/<code>Top-K</code> over paged tensors. In Vortex it is a few composable lines.</p></div>
+        <div class="blk reveal"><span class="idx">🔌</span><h3>Serving compatibility</h3><p>Custom-kernel methods often break paged attention or prefix caching — Quest's original code is <strong>44.4×</strong> slower than full attention. Vortex stays native to the stack.</p></div>
       </div>
     </section>
 
