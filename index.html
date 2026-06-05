@@ -30,7 +30,7 @@
       --maxw: 1040px;
     }
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+    html { scroll-behavior: smooth; overflow-x: hidden; }
     html, body { margin: 0; padding: 0; }
     body {
       background:
@@ -88,7 +88,13 @@
     @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
 
     /* ---------- sections ---------- */
-    section.block { padding: 70px 0 8px; }
+    section.block { position: relative; isolation: isolate; padding: 70px 0 46px; }
+    /* full-bleed, subtly different background tint per section */
+    section.block::before { content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: 50%; width: 100vw; transform: translateX(-50%); }
+    #vision::before      { background: #fff1f7; }
+    #design::before      { background: linear-gradient(180deg, #f7f0ff, #f9f1ff); }
+    #experiments::before { background: #fff2f4; }
+    #getstarted::before  { background: linear-gradient(180deg, #fff7fb, #ffeef6); }
     .sec-head { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
     .sec-chip { font-weight: 800; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: linear-gradient(120deg, var(--accent), var(--accent-2)); padding: 6px 12px; border-radius: 999px; }
     h2.sec-title { font-family: var(--serif); font-size: clamp(1.9rem, 3.8vw, 2.7rem); font-weight: 600; letter-spacing: -.02em; margin: 14px 0 12px; }
@@ -149,6 +155,18 @@
     .exp h3 { margin: 4px 0 6px; font-size: 1.08rem; }
     .exp p { margin: 0; color: var(--muted); font-size: .9rem; }
     .exp .big { font-weight: 900; color: var(--accent-deep); }
+
+    /* results table */
+    .table-wrap { margin-top: 28px; overflow-x: auto; border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-soft); background: var(--card); }
+    table.results { width: 100%; border-collapse: collapse; font-size: .96rem; min-width: 640px; }
+    table.results th, table.results td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border-soft); white-space: nowrap; }
+    table.results thead th { background: var(--bg-soft); color: var(--accent-deep); font-weight: 800; font-size: .76rem; letter-spacing: .06em; text-transform: uppercase; }
+    table.results tbody tr:last-child td { border-bottom: none; }
+    table.results tbody tr:hover { background: #fff5f9; }
+    table.results .model { font-weight: 700; color: var(--fg); }
+    table.results .sub { color: var(--muted); font-weight: 500; font-size: .86rem; }
+    table.results .spd { font-weight: 900; font-size: 1.05rem; background: linear-gradient(120deg, var(--accent-deep), var(--accent-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .table-note { color: var(--muted); font-size: .85rem; margin: 10px 2px 0; }
 
     /* install */
     .panel { margin-top: 28px; background: linear-gradient(180deg, #fff, #fff6fa); border: 1px solid var(--border); border-radius: 18px; padding: 24px; box-shadow: var(--shadow-soft); }
@@ -310,11 +328,25 @@
           </div>
         </article>
       </div>
+      <div class="table-wrap reveal">
+        <table class="results">
+          <thead>
+            <tr><th>Model</th><th>Benchmark</th><th>Hardware</th><th>Throughput vs. full attn</th><th>Accuracy</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="model">Qwen3-1.7B <span class="sub">agent-discovered</span></td><td>AIME24</td><td>H200</td><td><span class="spd">↑ 3.46×</span></td><td>matched (38.96 vs 38.54)</td></tr>
+            <tr><td class="model">GLM-4.7-Flash <span class="sub">MLA</span></td><td>AIME26 · 32K</td><td>B200</td><td><span class="spd">↑ 4.7×</span></td><td>matched (mean@16 ≈ 0.75)</td></tr>
+            <tr><td class="model">Qwen3-30B-A3B <span class="sub">MoE, FP8</span></td><td>AIME24 · 32K</td><td>B200</td><td><span class="spd">↑ 1.63×</span></td><td>matched (0.802 vs 0.80)</td></tr>
+            <tr><td class="model">MiniMax-M2.7 <span class="sub">229B, TP=4</span></td><td>AIME26 · 32K</td><td>4× B200</td><td><span class="spd">↑ 1.37×</span></td><td>≥ full (0.84 vs 0.83)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="table-note reveal">Best operating point per model; “throughput vs. full attn” is end-to-end decode throughput at matched-or-better accuracy. Block top-<em>k</em> also reaches up to <strong>3.60×</strong> server throughput and <strong>11.7–12.8×</strong> lower P95 latency at high request rates.</p>
       <p class="lead reveal" style="margin-top:30px">Because every algorithm is benchmarked end-to-end in a real serving stack, these are <strong>measured</strong> throughput gains, not paper estimates. Beyond raw numbers, Vortex doubles as a research instrument: agents produce <strong>structurally diverse</strong> algorithms, and controlled ablations using the same abstraction localize <em>where the routing signal lives</em> — a small set of query–key channel groups turns out to carry most of the routing information across model sizes.</p>
     </section>
 
     <!-- ================= GET STARTED ================= -->
-    <section class="block">
+    <section class="block" id="getstarted">
       <div class="sec-head reveal"><span class="sec-chip">Get started</span></div>
       <h2 class="sec-title reveal">Install in a minute</h2>
       <div class="panel reveal">
