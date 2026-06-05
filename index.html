@@ -266,14 +266,14 @@
         <figcaption><b>(a)</b> A workflow to study sparse attention with Vortex. &nbsp; <b>(b)</b> Agent-generated sparse attention (Qwen3-1.7B, AIME, NVIDIA H200) — the best reaches up to <strong>3.46×</strong> the throughput of full attention while preserving accuracy.</figcaption>
       </figure>
 
-      <p class="lead reveal" style="margin-top:26px"><strong>Many agents, many algorithms.</strong> This isn't one hand-tuned kernel. Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 each independently discover <em>structurally diverse</em>, Pareto-efficient designs — full-attention accuracy at 2–3.1× higher throughput across three benchmarks.</p>
+      <p class="lead reveal" style="margin-top:26px"><strong>Many agents, many algorithms.</strong> This isn't one hand-tuned kernel. Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 each generate <em>structurally diverse</em> designs — and after a staged filtering pipeline, the selected ones are <em>efficient</em>: full-attention accuracy at 2–3.1× higher throughput across three benchmarks.</p>
       <figure class="fig show reveal">
         <div class="shots">
           <img src="assets/fig10_inno_a.png" alt="Agent-generated algorithms on RULER" />
           <img src="assets/fig10_inno_b.png" alt="Agent-generated algorithms on AMC23" />
           <img src="assets/fig10_inno_c.png" alt="Agent-generated algorithms on AIME24" />
         </div>
-        <figcaption>Performance of AI-agent-generated algorithms across <b>(a)</b> RULER, <b>(b)</b> AMC23, and <b>(c)</b> AIME24 — Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 all produce Pareto-efficient designs with full-attention accuracy and substantially higher throughput.</figcaption>
+        <figcaption>Performance of AI-agent-generated algorithms across <b>(a)</b> RULER, <b>(b)</b> AMC23, and <b>(c)</b> AIME24 — Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 each produce <b>diverse</b> sparse-attention designs; after a staged filtering pipeline, the selected ones are <b>efficient</b> — full-attention accuracy at substantially higher throughput.</figcaption>
       </figure>
 
       <p class="lead reveal" style="margin-top:26px"><strong>And it compounds.</strong> Given only the framework and a goal, an agent runs a long-horizon loop — proposing, benchmarking, and refining four variants per round. Over 18 hours (23 iterations, 92 submissions) it steadily pushes the accuracy–throughput frontier outward, entirely on its own.</p>
