@@ -255,8 +255,9 @@
     <section class="block" id="highlights">
       <div class="sec-head reveal"><span class="sec-chip">★ Highlights</span></div>
       <h2 class="sec-title reveal">Agents discover sparse attention — and it actually runs faster</h2>
-      <p class="lead reveal">AI agents generate and refine diverse sparse-attention algorithms with Vortex, and every one is benchmarked <strong>end-to-end in a real serving stack</strong>. The headline results:</p>
+      <p class="lead reveal">AI agents generate and refine diverse sparse-attention algorithms with Vortex, and every one is benchmarked <strong>end-to-end in a real serving stack</strong> — so these are measured throughput gains, not paper estimates. The headline results:</p>
 
+      <p class="lead reveal" style="margin-top:26px"><strong>From idea to deployed algorithm.</strong> A researcher or agent writes a flow over Vortex's page-centric tensor abstraction, and it compiles into fused kernels that plug straight into SGLang. The payoff is immediate: across agent-generated variants, the best reaches up to <strong>3.46×</strong> the throughput of full attention while preserving accuracy.</p>
       <figure class="fig show reveal">
         <div class="figrow">
           <img src="assets/fig1_workflow.png" alt="The Vortex workflow: papers and agents to vFlow, vTensor, and a serving system" style="width:40%" />
@@ -265,6 +266,7 @@
         <figcaption><b>(a)</b> A workflow to study sparse attention with Vortex. &nbsp; <b>(b)</b> Agent-generated sparse attention (Qwen3-1.7B, AIME, NVIDIA H200) — the best reaches up to <strong>3.46×</strong> the throughput of full attention while preserving accuracy.</figcaption>
       </figure>
 
+      <p class="lead reveal" style="margin-top:26px"><strong>Many agents, many algorithms.</strong> This isn't one hand-tuned kernel. Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 each independently discover <em>structurally diverse</em>, Pareto-efficient designs — full-attention accuracy at 2–3.1× higher throughput across three benchmarks.</p>
       <figure class="fig show reveal">
         <div class="shots">
           <img src="assets/fig10_inno_a.png" alt="Agent-generated algorithms on RULER" />
@@ -274,6 +276,7 @@
         <figcaption>Performance of AI-agent-generated algorithms across <b>(a)</b> RULER, <b>(b)</b> AMC23, and <b>(c)</b> AIME24 — Claude Opus 4.7, Claude Sonnet 4.6, and GPT-5 all produce Pareto-efficient designs with full-attention accuracy and substantially higher throughput.</figcaption>
       </figure>
 
+      <p class="lead reveal" style="margin-top:26px"><strong>And it compounds.</strong> Given only the framework and a goal, an agent runs a long-horizon loop — proposing, benchmarking, and refining four variants per round. Over 18 hours (23 iterations, 92 submissions) it steadily pushes the accuracy–throughput frontier outward, entirely on its own.</p>
       <figure class="fig show reveal">
         <div class="shots">
           <img src="assets/fig11_iter_a.png" alt="mean@16 per iteration" />
