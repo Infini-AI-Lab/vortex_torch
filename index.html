@@ -207,11 +207,12 @@
     <section class="block" id="vision">
       <div class="sec-head reveal"><span class="sec-chip">01 · Vision</span></div>
       <h2 class="sec-title reveal">Agents as algorithm designers</h2>
-      <p class="lead reveal">Sparse attention is becoming essential for serving LLMs as generation lengths grow — yet deploying and evaluating <strong>new</strong> algorithms at scale has stayed painfully engineering-intensive, slowing down both human researchers and AI agents. Vortex removes that wall, making sparse-attention research a loop an agent can run on its own.</p>
+      <p class="lead reveal">Sparse attention has become a fundamental technique for serving large language models. As generation lengths explode across reasoning, agentic systems, and reinforcement learning, <strong>moving the KV cache during decoding</strong> — not compute — is the dominant bottleneck. Attending to only the tokens that matter is the way out, and it now appears both as a core architectural choice in frontier models (DeepSeek, GLM) and as a drop-in optimization for pretrained ones.</p>
       <div class="split reveal">
         <div class="prose">
-          <p>Vortex is built for <strong>autonomous algorithm discovery</strong>. AI agents propose a sparse-attention idea, express it in a few lines of high-level Python, and Vortex compiles it into fused kernels that run inside a production serving stack — then measures real throughput and accuracy. The agent reads the result and iterates.</p>
-          <p>Across hundreds of generated variants, agents consistently discover Pareto-efficient algorithms: full-attention–level accuracy at a fraction of the cost. The best reaches up to <strong>3.46× higher throughput</strong> than full attention while preserving accuracy.</p>
+          <p>Yet deploying and evaluating <strong>new</strong> sparse-attention algorithms at scale, with real end-to-end speedups, has stayed painfully engineering-intensive — slowing both human researchers and the emerging class of AI agents that could explore this design space. Modern serving systems store the KV cache in a non-contiguous, paged, block-sparse layout reached through indirect addressing, which breaks the contiguous-tensor assumptions of frameworks like PyTorch. As a result, a new idea that is a few lines of math on paper can take thousands of lines of kernel and plumbing code to try.</p>
+          <p>Vortex removes that wall. It is built for <strong>autonomous algorithm discovery</strong>: an AI agent proposes a sparse-attention idea, expresses it in a few lines of high-level Python, and Vortex compiles it into fused kernels that run inside a production serving stack — then measures real throughput and accuracy. The agent reads the result and refines, closing the research loop without a human in the inner iteration.</p>
+          <p>Across hundreds of generated variants, agents consistently discover Pareto-efficient algorithms: full-attention–level accuracy at a fraction of the cost. The best reaches up to <strong>3.46× higher throughput</strong> than full attention while preserving accuracy — and because every variant is benchmarked in a real serving stack, those gains are measured, not theoretical.</p>
         </div>
         <figure class="fig">
           <img src="assets/fig1_results.png" alt="Agent-generated sparse attention on the accuracy–throughput plane" />
@@ -229,16 +230,23 @@
     <section class="block" id="design">
       <div class="sec-head reveal"><span class="sec-chip">02 · Design</span></div>
       <h2 class="sec-title reveal">A frontend for ideas, a backend for serving</h2>
-      <p class="lead reveal">Vortex pairs a <strong>Python-embedded frontend</strong> over a <strong>page-centric tensor abstraction</strong> — concise enough to express a broad range of sparse-attention algorithms — with an efficient backend tightly integrated into modern LLM serving stacks (SGLang). Theoretical efficiency becomes real-world throughput, without touching core model code.</p>
+      <p class="lead reveal">Vortex pairs a <strong>Python-embedded frontend</strong> over a <strong>page-centric tensor abstraction</strong> (<code>vTensor</code>) — concise enough to express a broad range of sparse-attention algorithms — with an efficient backend tightly integrated into modern LLM serving stacks (SGLang). The guiding principle is a clean split: you say <em>what</em> sparsity to apply and <em>how</em> attention is computed, and the framework owns the low-level tensor layout and memory management. Theoretical efficiency becomes real-world throughput, without touching core model code.</p>
       <div class="split rev reveal">
         <figure class="fig">
           <img src="assets/fig1_workflow.png" alt="The Vortex workflow: papers and agents to vFlow, vTensor, and a serving system" />
           <figcaption>From idea to serving: a <code>vFlow</code> program over <code>vTensor</code> pages compiles straight into the serving system.</figcaption>
         </figure>
         <div class="prose">
-          <p>You describe <em>what</em> to attend to — score pages, reduce per-block summaries, select a top-<em>k</em> — and Vortex handles batching, paged KV caching, and kernel fusion. The same abstraction covers MHA and <strong>MLA</strong> models, exact and approximate top-<em>k</em>, and even a programmable per-sequence budget written as a CUDA snippet.</p>
-          <p>The result drops into FlashInfer / CUDA Graph / radix-cache decoding — so a new algorithm is deployable and benchmarkable the moment it compiles.</p>
+          <p>You describe <em>what</em> to attend to — score pages, reduce per-block summaries, select a top-<em>k</em> — and Vortex handles batching, paged KV caching, gather minimization, and kernel fusion. A flow is written as <strong>modular, composable operators</strong> (<code>GeMM</code>, <code>Reduce</code>, <code>Top-K</code>, …) over paged tensors, rather than a monolithic custom kernel per algorithm — so new patterns combine instead of being reimplemented from scratch.</p>
+          <p>Crucially, Vortex treats the <strong>dynamic part</strong> — deciding the sparsity pattern on the fly — as a first-class, optimized stage, not an afterthought. The same abstraction covers MHA and <strong>MLA</strong> models, exact and approximate top-<em>k</em>, and even a programmable per-sequence token budget written as a small CUDA snippet.</p>
+          <p>The result drops into FlashInfer / CUDA Graph / radix-cache decoding — so a new algorithm is deployable and benchmarkable the moment it compiles, and its speedups survive contact with a real serving system.</p>
         </div>
+      </div>
+      <p class="lead reveal" style="margin-top:34px">Vortex is designed to close <strong>three gaps</strong> that have kept sparse attention slow to iterate on:</p>
+      <div class="trio">
+        <div class="blk reveal"><span class="idx">⚙︎</span><h3>Dynamic sparsity</h3><p>Static-pattern kernels (FlashInfer, FlexAttention) optimize attention once the pattern is known. Vortex makes computing the pattern on the fly — the accurate, dynamic case — efficient too.</p></div>
+        <div class="blk reveal"><span class="idx">⌘</span><h3>Programmability</h3><p>Adding a variant to a serving system can mean ~2000 lines of code re-implementing <code>GeMM</code>/<code>Reduce</code>/<code>Top-K</code> over paged tensors. In Vortex it is a few composable lines.</p></div>
+        <div class="blk reveal"><span class="idx">🔌</span><h3>Serving compatibility</h3><p>Custom-kernel methods often break paged attention or prefix caching — Quest's original code is <strong>44.4×</strong> slower than full attention. Vortex stays native to the stack.</p></div>
       </div>
       <div class="features">
         <div class="feature reveal"><div class="ico">🧩</div><h3>Easy Programming</h3><p>PyTorch-like frontend. No batching, caching, or paged-attention plumbing to worry about.</p></div>
@@ -268,7 +276,7 @@
           <div class="body">
             <div class="tag">Autonomous optimization</div>
             <h3>23 iterations, 92 submissions</h3>
-            <p>A Claude agent pushes the AIME24 accuracy–throughput frontier outward over a long-horizon loop on Qwen3-1.7B.</p>
+            <p>Given only the framework and a goal, a Claude agent runs a long-horizon loop on AIME24 (Qwen3-1.7B), generating four variants per round and pushing the accuracy–throughput frontier steadily outward — each point colored by iteration order.</p>
           </div>
         </article>
         <article class="exp reveal">
@@ -276,7 +284,7 @@
           <div class="body">
             <div class="tag">MLA models</div>
             <h3>GLM-4.7-Flash · up to <span class="big">4.7×</span></h3>
-            <p>MLA sparse-attention flows expressed in vFlow on AIME26 with 32K-token generation (NVIDIA B200).</p>
+            <p>Three MLA sparse-attention flows (rope-aware / rope-unaware block-sparse, and Quest) expressed in vFlow and swept over block sizes on AIME26 with 32K-token generation — extending sparse attention to an architecture that is otherwise hard to experiment with (NVIDIA B200).</p>
           </div>
         </article>
         <article class="exp reveal">
@@ -284,10 +292,11 @@
           <div class="body">
             <div class="tag">Scaling · 229B</div>
             <h3>MiniMax-M2.7 · up to <span class="big">1.37×</span></h3>
-            <p>Sparse attention on a 229B-parameter model with tensor parallelism (TP=4, four NVIDIA B200 GPUs).</p>
+            <p>The same flows scale to a 229B-parameter model under tensor parallelism (TP=4, four NVIDIA B200 GPUs) on AIME26 — sparse attention staying practical at the largest scales, with full-attention accuracy preserved.</p>
           </div>
         </article>
       </div>
+      <p class="lead reveal" style="margin-top:30px">Because every algorithm is benchmarked end-to-end in a real serving stack, these are <strong>measured</strong> throughput gains, not paper estimates. Beyond raw numbers, Vortex doubles as a research instrument: agents produce <strong>structurally diverse</strong> algorithms, and controlled ablations using the same abstraction localize <em>where the routing signal lives</em> — a small set of query–key channel groups turns out to carry most of the routing information across model sizes.</p>
     </section>
 
     <!-- ================= GET STARTED ================= -->
