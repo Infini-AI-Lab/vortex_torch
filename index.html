@@ -11,7 +11,7 @@
   <link rel="icon" href="assets/vortex_mark.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
       --bg: #fff7fa;
@@ -26,6 +26,8 @@
       --accent-deep: #c2185b;
       --shadow: 0 18px 50px -20px rgba(200, 24, 91, .35);
       --shadow-soft: 0 10px 30px -16px rgba(176, 106, 179, .35);
+      --serif: "Fraunces", Georgia, "Times New Roman", serif;
+      --maxw: 1040px;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -42,7 +44,7 @@
       -webkit-font-smoothing: antialiased;
     }
     a { color: var(--accent-deep); }
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
 
     /* ---------- nav ---------- */
     nav {
@@ -51,7 +53,7 @@
       background: rgba(255, 247, 250, .78);
       border-bottom: 1px solid var(--border-soft);
     }
-    .nav-inner { max-width: 1080px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 18px; }
+    .nav-inner { max-width: var(--maxw); margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 18px; }
     .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; font-size: 1.12rem; text-decoration: none; color: var(--fg); }
     .brand img { width: 28px; height: 28px; }
     .brand .grad { background: linear-gradient(100deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -66,9 +68,9 @@
     header.hero { text-align: center; padding: 76px 0 26px; }
     .hero .mark { width: min(120px, 32%); height: auto; margin: 0 auto 18px; display: block; filter: drop-shadow(0 14px 30px rgba(232,67,147,.30)); }
     .eyebrow { display: inline-block; font-weight: 700; font-size: .82rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-deep); background: var(--bg-soft); border: 1px solid var(--border); padding: 6px 14px; border-radius: 999px; }
-    h1.title { font-size: clamp(2.6rem, 6vw, 4.3rem); line-height: 1.05; letter-spacing: -.035em; margin: 20px 0 6px; font-weight: 900; }
+    h1.title { font-family: var(--serif); font-size: clamp(3rem, 7vw, 5rem); line-height: 1.02; letter-spacing: -.03em; margin: 18px 0 8px; font-weight: 900; }
     h1.title .grad { background: linear-gradient(110deg, var(--accent-deep), var(--accent) 45%, var(--accent-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-    .subtitle { font-size: clamp(1.05rem, 2.4vw, 1.4rem); font-weight: 600; color: var(--fg); margin: 6px auto 0; max-width: 760px; letter-spacing: -.01em; }
+    .subtitle { font-family: var(--serif); font-style: italic; font-size: clamp(1.15rem, 2.6vw, 1.55rem); font-weight: 500; color: var(--fg); margin: 8px auto 0; max-width: 760px; letter-spacing: -.01em; }
     .tagline { color: var(--muted); font-size: 1.06rem; margin: 16px auto 0; max-width: 680px; }
     .tagline strong { color: var(--accent-deep); }
 
@@ -89,8 +91,8 @@
     section.block { padding: 70px 0 8px; }
     .sec-head { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
     .sec-chip { font-weight: 800; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: #fff; background: linear-gradient(120deg, var(--accent), var(--accent-2)); padding: 6px 12px; border-radius: 999px; }
-    h2.sec-title { font-size: clamp(1.7rem, 3.6vw, 2.4rem); font-weight: 800; letter-spacing: -.025em; margin: 14px 0 10px; }
-    .lead { font-size: 1.1rem; color: #4a313c; max-width: 760px; }
+    h2.sec-title { font-family: var(--serif); font-size: clamp(1.9rem, 3.8vw, 2.7rem); font-weight: 600; letter-spacing: -.02em; margin: 14px 0 12px; }
+    .lead { font-size: 1.12rem; color: #4a313c; max-width: none; }
     .lead strong { color: var(--accent-deep); }
 
     .split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 30px; align-items: center; margin-top: 26px; }
@@ -111,6 +113,17 @@
     .feature .ico { font-size: 1.5rem; }
     .feature h3 { margin: 8px 0 6px; font-size: 1.12rem; }
     .feature p { margin: 0; color: var(--muted); font-size: .95rem; }
+
+    /* pipeline (numbered steps with arrows) */
+    .pipeline { display: flex; align-items: stretch; gap: 8px; margin-top: 28px; }
+    .pipeline .step { flex: 1; background: linear-gradient(180deg, #fff, #fff7fb); border: 1px solid var(--border); border-radius: 18px; padding: 20px 18px; box-shadow: var(--shadow-soft); transition: transform .14s, border-color .14s; }
+    .pipeline .step:hover { transform: translateY(-3px); border-color: var(--accent); }
+    .pipeline .step .num { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; font-weight: 900; color: #fff; background: linear-gradient(120deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow-soft); }
+    .pipeline .step h4 { margin: 11px 0 6px; font-size: 1.08rem; }
+    .pipeline .step p { margin: 0; color: var(--muted); font-size: .92rem; }
+    .pipeline .arrow { display: flex; align-items: center; color: var(--accent); font-size: 1.4rem; font-weight: 800; }
+    .pipeline .arrow.loop { color: var(--accent-2); }
+    @media (max-width: 760px) { .pipeline { flex-direction: column; } .pipeline .arrow { justify-content: center; transform: rotate(90deg); } }
 
     /* trio blocks (per-section supporting cards) */
     .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
@@ -148,7 +161,7 @@
     .cite pre { background: #fff; color: #50363f; border: 1px solid var(--border); }
 
     footer { margin-top: 80px; border-top: 1px solid var(--border-soft); background: rgba(255,238,245,.5); }
-    .foot-inner { max-width: 1080px; margin: 0 auto; padding: 36px 24px; display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: .92rem; }
+    .foot-inner { max-width: var(--maxw); margin: 0 auto; padding: 36px 24px; display: flex; flex-wrap: wrap; gap: 14px 26px; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: .92rem; }
     .foot-inner a { color: var(--accent-deep); text-decoration: none; font-weight: 600; }
     .foot-inner a:hover { text-decoration: underline; }
     .foot-sep { color: var(--border); }
@@ -219,10 +232,15 @@
           <figcaption>Each point is one sparse-attention algorithm generated or optimized by AI agents using Vortex (Qwen3-1.7B, AIME, NVIDIA H200).</figcaption>
         </figure>
       </div>
-      <div class="trio">
-        <div class="blk reveal"><span class="idx">01</span><h3>Express</h3><p>An agent writes the sparse-attention idea in a few lines of high-level Python ops — scoring, reductions, top-<em>k</em>.</p></div>
-        <div class="blk reveal"><span class="idx">02</span><h3>Deploy</h3><p>Vortex JIT-compiles it into fused kernels that run inside a real LLM serving stack — no model-code changes.</p></div>
-        <div class="blk reveal"><span class="idx">03</span><h3>Iterate</h3><p>The agent reads measured throughput and accuracy, then refines — autonomous discovery in a closed loop.</p></div>
+      <p class="lead reveal" style="margin-top:34px">It runs as a closed <strong>discovery loop</strong>:</p>
+      <div class="pipeline reveal">
+        <div class="step"><span class="num">1</span><h4>Express</h4><p>An agent writes the idea in a few lines of high-level Python ops — scoring, reductions, top-<em>k</em>.</p></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">2</span><h4>Deploy</h4><p>Vortex JIT-compiles it into fused kernels inside a real LLM serving stack — no model-code changes.</p></div>
+        <div class="arrow">→</div>
+        <div class="step"><span class="num">3</span><h4>Measure</h4><p>Real throughput and accuracy come back from an end-to-end benchmark, not an estimate.</p></div>
+        <div class="arrow loop">↺</div>
+        <div class="step"><span class="num">4</span><h4>Refine</h4><p>The agent reads the result and proposes the next variant — discovery without a human in the inner loop.</p></div>
       </div>
     </section>
 
