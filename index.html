@@ -26,7 +26,7 @@
     }
     .wrap { max-width: 880px; margin: 0 auto; padding: 72px 24px 96px; }
     header { text-align: center; }
-    .logo { width: min(360px, 70%); height: auto; margin: 0 auto 12px; display: block; }
+    .logo { width: min(168px, 42%); height: auto; margin: 0 auto 6px; display: block; filter: drop-shadow(0 8px 28px rgba(110,168,254,.25)); }
     h1 { font-size: 2.6rem; margin: 8px 0 4px; letter-spacing: -0.02em; }
     .tagline { color: var(--muted); font-size: 1.15rem; margin: 0 auto 8px; max-width: 620px; }
     .badges { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 20px 0 0; }
@@ -74,7 +74,7 @@
 <body>
   <div class="wrap">
     <header>
-      <img class="logo" src="assets/vortex_logo_flat.png" alt="Vortex" onerror="this.style.display='none'" />
+      <img class="logo" src="assets/vortex_mark.png" alt="Vortex" onerror="this.style.display='none'" />
       <h1>Vortex</h1>
       <p class="tagline">A flexible and efficient <strong>sparse-attention</strong> framework for fast LLM decoding. Describe a flow in a few lines of Python — Vortex JIT-compiles it into fused Triton kernels that plug straight into SGLang.</p>
       <div class="badges">
