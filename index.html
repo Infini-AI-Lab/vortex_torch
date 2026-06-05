@@ -112,6 +112,18 @@
     .feature h3 { margin: 8px 0 6px; font-size: 1.12rem; }
     .feature p { margin: 0; color: var(--muted); font-size: .95rem; }
 
+    /* trio blocks (per-section supporting cards) */
+    .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 26px; }
+    @media (max-width: 760px) { .trio { grid-template-columns: 1fr; } }
+    .blk { position: relative; background: linear-gradient(180deg, #fff, #fff7fb); border: 1px solid var(--border); border-radius: 18px; padding: 22px 20px 20px; box-shadow: var(--shadow-soft); transition: transform .14s, border-color .14s; overflow: hidden; }
+    .blk::before { content: ""; position: absolute; left: 0; top: 0; height: 4px; width: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); opacity: .9; }
+    .blk:hover { transform: translateY(-3px); border-color: var(--accent); }
+    .blk .idx { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px; font-weight: 900; font-size: .95rem; color: #fff; background: linear-gradient(120deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow-soft); }
+    .blk h3 { margin: 12px 0 6px; font-size: 1.1rem; letter-spacing: -.01em; }
+    .blk h3 code { font-family: "JetBrains Mono", monospace; font-size: .98rem; color: var(--accent-deep); background: var(--bg-soft); padding: 1px 7px; border-radius: 7px; }
+    .blk p { margin: 0; color: var(--muted); font-size: .94rem; }
+    .blk .metric { display: inline-block; margin-top: 10px; font-weight: 800; color: var(--accent-deep); font-size: .9rem; background: var(--bg-soft); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
+
     /* experiment gallery */
     .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 28px; }
     @media (max-width: 880px) { .gallery { grid-template-columns: 1fr; } }
@@ -206,6 +218,11 @@
           <figcaption>Each point is one sparse-attention algorithm generated or optimized by AI agents using Vortex (Qwen3-1.7B, AIME, NVIDIA H200).</figcaption>
         </figure>
       </div>
+      <div class="trio">
+        <div class="blk reveal"><span class="idx">01</span><h3>Express</h3><p>An agent writes the sparse-attention idea in a few lines of high-level Python ops — scoring, reductions, top-<em>k</em>.</p></div>
+        <div class="blk reveal"><span class="idx">02</span><h3>Deploy</h3><p>Vortex JIT-compiles it into fused kernels that run inside a real LLM serving stack — no model-code changes.</p></div>
+        <div class="blk reveal"><span class="idx">03</span><h3>Iterate</h3><p>The agent reads measured throughput and accuracy, then refines — autonomous discovery in a closed loop.</p></div>
+      </div>
     </section>
 
     <!-- ================= DESIGN ================= -->
@@ -228,6 +245,11 @@
         <div class="feature reveal"><div class="ico">⚡</div><h3>High Performance</h3><p>Fused Triton/CUDA kernels with FlashInfer, CUDA Graph, and radix attention.</p></div>
         <div class="feature reveal"><div class="ico">🤖</div><h3>Agent Native</h3><p>Agents generate, deploy, and refine algorithms end-to-end — discovery in a loop.</p></div>
       </div>
+      <div class="trio">
+        <div class="blk reveal"><span class="idx">▣</span><h3><code>vFlow</code></h3><p>A Python-embedded frontend language. Declare what to attend to; the framework handles batching, caching, and fusion.</p></div>
+        <div class="blk reveal"><span class="idx">▦</span><h3><code>vTensor</code></h3><p>A page-centric tensor abstraction where the page is the unit of sparsity — uniform across MHA and MLA models.</p></div>
+        <div class="blk reveal"><span class="idx">▤</span><h3>Serving System</h3><p>A backend tightly integrated with SGLang: FlashInfer kernels, CUDA Graph, and radix-cache decoding.</p></div>
+      </div>
     </section>
 
     <!-- ================= EXPERIMENTS ================= -->
@@ -235,6 +257,11 @@
       <div class="sec-head reveal"><span class="sec-chip">03 · Experiments</span></div>
       <h2 class="sec-title reveal">Discovery, scale, and emerging architectures</h2>
       <p class="lead reveal">Vortex accelerates sparse-attention research along three axes: <strong>autonomous discovery</strong>, reach into <strong>emerging architectures and very large models</strong>, and use as a <strong>research instrument</strong> for understanding where the routing signal lives.</p>
+      <div class="trio">
+        <div class="blk reveal"><span class="idx">①</span><h3>Autonomous discovery</h3><p>Agents generate and refine diverse algorithms that are consistently Pareto-efficient.</p><span class="metric">up to 3.46× throughput</span></div>
+        <div class="blk reveal"><span class="idx">②</span><h3>Scale &amp; architectures</h3><p>Sparse attention extended to MLA models and very large models that are otherwise hard to experiment with.</p><span class="metric">4.7× GLM-4.7 · 1.37× 229B</span></div>
+        <div class="blk reveal"><span class="idx">③</span><h3>Research instrument</h3><p>A lens on sparse attention itself — pinpointing where the routing signal lives.</p><span class="metric">interpretability</span></div>
+      </div>
       <div class="gallery">
         <article class="exp reveal">
           <div class="imgwrap"><img src="assets/fig11_iter_c.png" alt="Accuracy–throughput frontier across 23 autonomous iterations" /></div>
