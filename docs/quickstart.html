@@ -2,10 +2,12 @@
 <html class="no-js" lang="en" data-content_root="./">
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="genindex.html"><link rel="search" title="Search" href="search.html"><link rel="next" title="Examples" href="examples.html"><link rel="prev" title="Installation" href="installation.html">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 --><title>Python Module Index - Vortex Documentation</title>
-<link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Quick Start - Vortex Documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="_static/custom.css?v=48202724" />
@@ -172,7 +174,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
       </label>
     </div>
@@ -191,9 +193,9 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <p class="caption" role="heading"><span class="caption-text">Getting started</span></p>
-<ul>
+<ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quick Start</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Quick Start</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Guides</span></p>
 <ul>
@@ -259,7 +261,13 @@
           <span>Back to top</span>
         </a>
         <div class="content-icon-container">
-          <div class="theme-toggle-container theme-toggle-content">
+          <div class="view-this-page">
+  <a class="muted-link" href="_sources/quickstart.md.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
               <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
               <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
@@ -267,363 +275,133 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          
-<section class="domainindex-section">
-  <h1>Python Module Index</h1>
-  <div class="domainindex-jumpbox"><a href="#cap-v"><strong>v</strong></a></div>
+          <section id="quick-start">
+<h1>Quick Start<a class="headerlink" href="#quick-start" title="Link to this heading">¶</a></h1>
+<p>A working setup is <strong>two files</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>The flow module</strong> — a <code class="docutils literal notranslate"><span class="pre">.py</span></code> file that <em>defines</em> your sparse-attention
+algorithm as a <code class="docutils literal notranslate"><span class="pre">vFlow</span></code> subclass and <code class="docutils literal notranslate"><span class="pre">&#64;register</span></code>s it under a name. It contains
+only Vortex ops; it never imports SGLang.</p></li>
+<li><p><strong>The launch script</strong> — imports <code class="docutils literal notranslate"><span class="pre">sglang</span></code> + <code class="docutils literal notranslate"><span class="pre">vortex_torch</span></code> and starts the
+engine, pointing at the flow by its registered name.</p></li>
+</ol>
+<section id="define-a-flow-custom-sparse-attention-py">
+<h2>1. Define a flow — <code class="docutils literal notranslate"><span class="pre">custom_sparse_attention.py</span></code><a class="headerlink" href="#define-a-flow-custom-sparse-attention-py" title="Link to this heading">¶</a></h2>
+<p>A <code class="docutils literal notranslate"><span class="pre">vFlow</span></code> declares its cache layout in <code class="docutils literal notranslate"><span class="pre">create_cache</span></code>, refreshes per-page state
+in <code class="docutils literal notranslate"><span class="pre">forward_cache</span></code>, and scores/selects pages every decode step in
+<code class="docutils literal notranslate"><span class="pre">forward_indexer</span></code>. Save this anywhere on disk:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch.flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">vFlow</span><span class="p">,</span> <span class="n">register</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch.indexer</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeMM</span><span class="p">,</span> <span class="n">Mean</span><span class="p">,</span> <span class="n">topK</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mean</span> <span class="k">as</span> <span class="n">CMean</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch.abs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ContextBase</span>
+
+
+<span class="nd">@register</span><span class="p">(</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CustomSparseAttention</span><span class="p">(</span><span class="n">vFlow</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="c1"># Indexer-side ops (run every decode step)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mean</span> <span class="o">=</span> <span class="n">Mean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>        <span class="c1"># average over the query heads</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span> <span class="o">=</span> <span class="n">GeMM</span><span class="p">()</span>             <span class="c1"># GeMM(x, y) = y @ xᵀ</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span> <span class="o">=</span> <span class="n">topK</span><span class="p">()</span>      <span class="c1"># must end in topK / approxTopK</span>
+        <span class="c1"># Cache-side ops (run once per finished page)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span> <span class="o">=</span> <span class="n">CMean</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># one centroid (mean key) per page</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_indexer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">):</span>
+        <span class="c1"># No native torch ops here — every tensor flows through Vortex ops.</span>
+        <span class="n">q_mean</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                          <span class="c1"># [B, 1, D]</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">gemm</span><span class="p">(</span><span class="n">q_mean</span><span class="p">,</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>  <span class="c1"># [S, 1, 1]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">output_func</span><span class="p">(</span><span class="n">score</span><span class="p">,</span> <span class="n">o</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>                     <span class="c1"># selected pages -&gt; o</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="n">ContextBase</span><span class="p">):</span>
+        <span class="c1"># triggered only when a page is finished</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reduction</span><span class="p">(</span><span class="n">cache</span><span class="p">[</span><span class="s2">&quot;k&quot;</span><span class="p">],</span> <span class="n">cache</span><span class="p">[</span><span class="s2">&quot;centroids&quot;</span><span class="p">],</span> <span class="n">loc</span><span class="o">=</span><span class="n">loc</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ctx</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">block_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="c1"># &quot;k&quot; and &quot;v&quot; are provided automatically — do not declare them</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;centroids&quot;</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">head_dim</span><span class="p">)}</span>
+</pre></div>
+</div>
 </section>
-<table class="domainindex-table">
-  <tr class="pcap">
-    <td></td><td>&#160;</td><td></td>
-  </tr>
-  <tr class="cap" id="cap-v">
-    <td></td><td><strong>v</strong></td><td></td>
-  </tr>
-  <tr>
-    <td><img src="_static/minus.png" class="toggler"
-              id="toggle-1" style="display: none" alt="-" /></td>
-    <td>
-        <a href="api/vortex_torch.html#module-vortex_torch"><code class="xref">vortex_torch</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.abs.html#module-vortex_torch.abs"><code class="xref">vortex_torch.abs</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.abs.context_base.html#module-vortex_torch.abs.context_base"><code class="xref">vortex_torch.abs.context_base</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.abs.op.html#module-vortex_torch.abs.op"><code class="xref">vortex_torch.abs.op</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.abs.tensor.html#module-vortex_torch.abs.tensor"><code class="xref">vortex_torch.abs.tensor</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.html#module-vortex_torch.cache"><code class="xref">vortex_torch.cache</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.context.html#module-vortex_torch.cache.context"><code class="xref">vortex_torch.cache.context</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.elementwise.html#module-vortex_torch.cache.elementwise"><code class="xref">vortex_torch.cache.elementwise</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.elementwise_binary.html#module-vortex_torch.cache.elementwise_binary"><code class="xref">vortex_torch.cache.elementwise_binary</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.fill.html#module-vortex_torch.cache.fill"><code class="xref">vortex_torch.cache.fill</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.mask.html#module-vortex_torch.cache.mask"><code class="xref">vortex_torch.cache.mask</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.matmul.html#module-vortex_torch.cache.matmul"><code class="xref">vortex_torch.cache.matmul</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.reduce.html#module-vortex_torch.cache.reduce"><code class="xref">vortex_torch.cache.reduce</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.reduce_interleave.html#module-vortex_torch.cache.reduce_interleave"><code class="xref">vortex_torch.cache.reduce_interleave</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.reshape.html#module-vortex_torch.cache.reshape"><code class="xref">vortex_torch.cache.reshape</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.html#module-vortex_torch.cache.triton_kernels"><code class="xref">vortex_torch.cache.triton_kernels</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_binary_impl"><code class="xref">vortex_torch.cache.triton_kernels.elementwise_binary_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.elementwise_impl.html#module-vortex_torch.cache.triton_kernels.elementwise_impl"><code class="xref">vortex_torch.cache.triton_kernels.elementwise_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.fill_impl.html#module-vortex_torch.cache.triton_kernels.fill_impl"><code class="xref">vortex_torch.cache.triton_kernels.fill_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.matmul_impl.html#module-vortex_torch.cache.triton_kernels.matmul_impl"><code class="xref">vortex_torch.cache.triton_kernels.matmul_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.reduce_impl.html#module-vortex_torch.cache.triton_kernels.reduce_impl"><code class="xref">vortex_torch.cache.triton_kernels.reduce_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.cache.triton_kernels.set_kv.html#module-vortex_torch.cache.triton_kernels.set_kv"><code class="xref">vortex_torch.cache.triton_kernels.set_kv</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.flow.html#module-vortex_torch.flow"><code class="xref">vortex_torch.flow</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.flow.algorithms.html#module-vortex_torch.flow.algorithms"><code class="xref">vortex_torch.flow.algorithms</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.flow.flow.html#module-vortex_torch.flow.flow"><code class="xref">vortex_torch.flow.flow</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.flow.loader.html#module-vortex_torch.flow.loader"><code class="xref">vortex_torch.flow.loader</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.flow.registry.html#module-vortex_torch.flow.registry"><code class="xref">vortex_torch.flow.registry</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.html#module-vortex_torch.indexer"><code class="xref">vortex_torch.indexer</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.context.html#module-vortex_torch.indexer.context"><code class="xref">vortex_torch.indexer.context</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.elementwise.html#module-vortex_torch.indexer.elementwise"><code class="xref">vortex_torch.indexer.elementwise</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.elementwise_binary.html#module-vortex_torch.indexer.elementwise_binary"><code class="xref">vortex_torch.indexer.elementwise_binary</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.kron.html#module-vortex_torch.indexer.kron"><code class="xref">vortex_torch.indexer.kron</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.mask.html#module-vortex_torch.indexer.mask"><code class="xref">vortex_torch.indexer.mask</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.matmul.html#module-vortex_torch.indexer.matmul"><code class="xref">vortex_torch.indexer.matmul</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.output_func.html#module-vortex_torch.indexer.output_func"><code class="xref">vortex_torch.indexer.output_func</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.reduce.html#module-vortex_torch.indexer.reduce"><code class="xref">vortex_torch.indexer.reduce</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.reshape.html#module-vortex_torch.indexer.reshape"><code class="xref">vortex_torch.indexer.reshape</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.save_load.html#module-vortex_torch.indexer.save_load"><code class="xref">vortex_torch.indexer.save_load</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.scan.html#module-vortex_torch.indexer.scan"><code class="xref">vortex_torch.indexer.scan</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.select.html#module-vortex_torch.indexer.select"><code class="xref">vortex_torch.indexer.select</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.transpose.html#module-vortex_torch.indexer.transpose"><code class="xref">vortex_torch.indexer.transpose</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.html#module-vortex_torch.indexer.triton_kernels"><code class="xref">vortex_torch.indexer.triton_kernels</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.elementwise_binary_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_binary_impl"><code class="xref">vortex_torch.indexer.triton_kernels.elementwise_binary_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.elementwise_impl.html#module-vortex_torch.indexer.triton_kernels.elementwise_impl"><code class="xref">vortex_torch.indexer.triton_kernels.elementwise_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.matmul_impl.html#module-vortex_torch.indexer.triton_kernels.matmul_impl"><code class="xref">vortex_torch.indexer.triton_kernels.matmul_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.mv_impl.html#module-vortex_torch.indexer.triton_kernels.mv_impl"><code class="xref">vortex_torch.indexer.triton_kernels.mv_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.normalize_impl.html#module-vortex_torch.indexer.triton_kernels.normalize_impl"><code class="xref">vortex_torch.indexer.triton_kernels.normalize_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.reduce_impl.html#module-vortex_torch.indexer.triton_kernels.reduce_impl"><code class="xref">vortex_torch.indexer.triton_kernels.reduce_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.save_load_impl.html#module-vortex_torch.indexer.triton_kernels.save_load_impl"><code class="xref">vortex_torch.indexer.triton_kernels.save_load_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.softmax_impl.html#module-vortex_torch.indexer.triton_kernels.softmax_impl"><code class="xref">vortex_torch.indexer.triton_kernels.softmax_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.transpose_impl.html#module-vortex_torch.indexer.triton_kernels.transpose_impl"><code class="xref">vortex_torch.indexer.triton_kernels.transpose_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.triton_kernels.utils_impl.html#module-vortex_torch.indexer.triton_kernels.utils_impl"><code class="xref">vortex_torch.indexer.triton_kernels.utils_impl</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.indexer.utils_sglang.html#module-vortex_torch.indexer.utils_sglang"><code class="xref">vortex_torch.indexer.utils_sglang</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.utils.html#module-vortex_torch.utils"><code class="xref">vortex_torch.utils</code></a></td><td>
-    <em></em></td>
-  </tr>
-  <tr class="cg-1">
-    <td></td>
-    <td>&#160;&#160;&#160;
-        <a href="api/vortex_torch.version.html#module-vortex_torch.version"><code class="xref">vortex_torch.version</code></a></td><td>
-    <em></em></td>
-  </tr>
-</table>
+<section id="launch-sglang-with-your-flow">
+<h2>2. Launch SGLang with your flow<a class="headerlink" href="#launch-sglang-with-your-flow" title="Link to this heading">¶</a></h2>
+<p>The launch script is a <strong>separate file</strong>. Importing <code class="docutils literal notranslate"><span class="pre">vortex_torch</span></code> is what wires
+Vortex into SGLang (it installs the <code class="docutils literal notranslate"><span class="pre">ServerArgs</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">VortexConfig</span></code> adapter), so the
+import is required even though you don’t call it directly. Every Vortex knob lives
+in a single <a class="reference internal" href="examples.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">VortexConfig</span></code></span></a>; passing it turns sparsity <strong>on</strong>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">sglang</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sgl</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">vortex_torch</span>  <span class="c1"># noqa: F401 — installs the VortexConfig adapter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">vortex_torch.engine.sgl.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">VortexConfig</span>
+
+<span class="n">llm</span> <span class="o">=</span> <span class="n">sgl</span><span class="o">.</span><span class="n">Engine</span><span class="p">(</span>
+    <span class="n">model_path</span><span class="o">=</span><span class="s2">&quot;Qwen/Qwen3-0.6B&quot;</span><span class="p">,</span>
+    <span class="n">page_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">attention_backend</span><span class="o">=</span><span class="s2">&quot;flashinfer&quot;</span><span class="p">,</span>   <span class="c1"># mandatory: SGLang&#39;s base backend</span>
+    <span class="n">disable_overlap_schedule</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># mandatory for Vortex sparsity</span>
+    <span class="n">mem_fraction_static</span><span class="o">=</span><span class="mf">0.85</span><span class="p">,</span>
+    <span class="n">vortex</span><span class="o">=</span><span class="n">VortexConfig</span><span class="p">(</span>
+        <span class="n">module_path</span><span class="o">=</span><span class="s2">&quot;path/to/custom_sparse_attention.py&quot;</span><span class="p">,</span>
+        <span class="n">module_name</span><span class="o">=</span><span class="s2">&quot;custom_sparse_attention&quot;</span><span class="p">,</span>  <span class="c1"># the @register name</span>
+        <span class="n">topk_val</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>            <span class="c1"># pages kept per query</span>
+        <span class="n">layers_skip</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>        <span class="c1"># layer 0 runs full/dense attention</span>
+        <span class="n">block_reserved_bos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>   <span class="c1"># always keep the first page (sink)</span>
+        <span class="n">block_reserved_eos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>   <span class="c1"># always keep the most-recent page</span>
+        <span class="n">max_seq_lens</span><span class="o">=</span><span class="mi">8192</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="generate">
+<h2>3. Generate<a class="headerlink" href="#generate" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">out</span> <span class="o">=</span> <span class="n">llm</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+    <span class="p">[</span><span class="s2">&quot;The capital of France is&quot;</span><span class="p">],</span>
+    <span class="p">{</span><span class="s2">&quot;temperature&quot;</span><span class="p">:</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s2">&quot;max_new_tokens&quot;</span><span class="p">:</span> <span class="mi">32</span><span class="p">},</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;text&quot;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>That’s the whole loop: write a flow, point the engine at it, generate — with the
+sparse attention running as fused kernels inside SGLang. Next, see
+<a class="reference internal" href="examples.html"><span class="std std-doc">Examples</span></a> for <code class="docutils literal notranslate"><span class="pre">VortexConfig</span></code> in full, a programmable per-sequence
+budget, MLA models, and serving over HTTP.</p>
+</section>
+</section>
 
         </article>
       </div>
       <footer>
         
         <div class="related-pages">
-          
-          
+          <a class="next-page" href="examples.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Examples</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="installation.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Installation</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -642,8 +420,29 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Quick Start</a><ul>
+<li><a class="reference internal" href="#define-a-flow-custom-sparse-attention-py">1. Define a flow — <code class="docutils literal notranslate"><span class="pre">custom_sparse_attention.py</span></code></a></li>
+<li><a class="reference internal" href="#launch-sglang-with-your-flow">2. Launch SGLang with your flow</a></li>
+<li><a class="reference internal" href="#generate">3. Generate</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

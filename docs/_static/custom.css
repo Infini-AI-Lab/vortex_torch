@@ -1,40 +1,34 @@
 /* ===========================================================================
-   Vortex docs theme — light pink + white, polished.
-
-   Layers:
-     1. Fonts                       6. Sidebar / navigation
-     2. Brand + surface variables   7. Class / method signature cards
-     3. Page chrome                 8. Op field-list blocks (Math/__init__/…)
-     4. Headings                    9. Code, admonitions, tables
-     5. Links                      10. Display math
+   Vortex docs theme — soft light-pink + white, aligned with the landing page.
+   Restrained: white surfaces, muted-rose accents, subtle tints. No neon.
    =========================================================================== */
 
-/* ---- 1. Fonts -----------------------------------------------------------
-   Webfonts with a full system fallback, so the page still looks clean
-   offline / before the fonts load. */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* ---- 1. Fonts ----------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ---- 2. Brand + surface variables --------------------------------------- */
 :root {
-    --vtx-pink:        #db2777;   /* primary pink            */
-    --vtx-pink-bright: #ec4899;   /* secondary / alt accent  */
-    --vtx-pink-deep:   #be185d;   /* deep accent (hover)     */
-    --vtx-pink-soft:   #f6c9dd;   /* hairline borders        */
-    --vtx-grad: linear-gradient(135deg, #ec4899 0%, #db2777 55%, #be185d 100%);
-    --vtx-shadow:    0 1px 2px rgba(190, 24, 93, 0.06), 0 4px 16px rgba(219, 39, 119, 0.08);
-    --vtx-shadow-lg: 0 2px 6px rgba(190, 24, 93, 0.10), 0 12px 32px rgba(219, 39, 119, 0.14);
+    --vtx-pink:        #c43b6e;   /* muted rose primary       */
+    --vtx-pink-bright: #d76a93;   /* soft secondary accent    */
+    --vtx-pink-deep:   #a02050;   /* deep accent (hover/links)*/
+    --vtx-pink-soft:   #f1dde6;   /* hairline borders (light) */
+    /* Deep rose -> plum, intentionally low-neon. */
+    --vtx-grad: linear-gradient(135deg, #c2185b 0%, #a02050 55%, #8e3b86 100%);
+    --vtx-serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --vtx-shadow:    0 1px 2px rgba(160, 32, 80, 0.05), 0 4px 14px rgba(160, 32, 80, 0.06);
+    --vtx-shadow-lg: 0 2px 6px rgba(160, 32, 80, 0.08), 0 12px 30px rgba(160, 32, 80, 0.10);
 }
 
 body,
 body:not([data-theme="dark"]) {
-    --color-background-primary:   #fffafd;   /* main content surface  */
-    --color-background-secondary: #ffeef5;   /* secondary surface     */
-    --color-sidebar-background:   #ffe9f1;
-    --color-code-background:      #fdeef4;
-    --color-api-background:       #fff5fa;
+    --color-background-primary:   #ffffff;   /* main content surface  */
+    --color-background-secondary: #fcf6f9;   /* secondary surface     */
+    --color-sidebar-background:   #fbf4f7;   /* barely-tinted sidebar */
+    --color-code-background:      #faf4f7;   /* soft code surface     */
+    --color-api-background:       #fffbfc;
 
     --color-brand-primary: var(--vtx-pink-deep);
-    --color-brand-content: var(--vtx-pink);
+    --color-brand-content: var(--vtx-pink-deep);
     --color-brand-visited: var(--vtx-pink-deep);
 
     --font-stack:            "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -44,21 +38,21 @@ body:not([data-theme="dark"]) {
 /* Dark mode: muted rose-tinted dark. */
 @media (prefers-color-scheme: dark) {
     body:not([data-theme="light"]) {
-        --color-background-primary:   #1c151a;
-        --color-background-secondary: #261b22;
-        --color-sidebar-background:   #261b22;
-        --color-code-background:      #2a1d25;
-        --color-api-background:       #241921;
+        --color-background-primary:   #1b151a;
+        --color-background-secondary: #241a20;
+        --color-sidebar-background:   #241a20;
+        --color-code-background:      #281c23;
+        --color-api-background:       #221820;
         --color-brand-primary: var(--vtx-pink-bright);
         --color-brand-content: var(--vtx-pink-bright);
     }
 }
 body[data-theme="dark"] {
-    --color-background-primary:   #1c151a;
-    --color-background-secondary: #261b22;
-    --color-sidebar-background:   #261b22;
-    --color-code-background:      #2a1d25;
-    --color-api-background:       #241921;
+    --color-background-primary:   #1b151a;
+    --color-background-secondary: #241a20;
+    --color-sidebar-background:   #241a20;
+    --color-code-background:      #281c23;
+    --color-api-background:       #221820;
     --color-brand-primary: var(--vtx-pink-bright);
     --color-brand-content: var(--vtx-pink-bright);
 }
@@ -67,39 +61,35 @@ body[data-theme="dark"] {
 body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Faint pink wash that fades to white down the page. */
+    /* Very faint pink wash — kept subtle so the page reads as white. */
     background-attachment: fixed;
     background-image:
-        radial-gradient(1200px 600px at 100% -5%, rgba(236, 72, 153, 0.08), transparent 60%),
-        radial-gradient(900px 500px at -10% 0%, rgba(219, 39, 119, 0.06), transparent 55%);
+        radial-gradient(1100px 560px at 100% -6%, rgba(196, 59, 110, 0.035), transparent 60%),
+        radial-gradient(820px 460px at -8% 0%, rgba(142, 59, 134, 0.03), transparent 55%);
 }
 article.content,
-.content {
-    line-height: 1.62;
-}
+.content { line-height: 1.62; }
 
 /* ---- 4. Headings -------------------------------------------------------- */
 .content h1 {
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    background: var(--vtx-grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    font-family: var(--vtx-serif);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--vtx-pink-deep);
     padding-bottom: 0.3rem;
 }
 .content h2,
 .content h3 {
-    font-weight: 700;
+    font-family: var(--vtx-serif);
+    font-weight: 600;
     letter-spacing: -0.01em;
+    color: #3a2530;
 }
 .content h2 {
     margin-top: 2.2rem;
     padding-bottom: 0.25rem;
-    border-bottom: 2px solid transparent;
-    border-image: var(--vtx-grad) 1;
+    border-bottom: 1px solid var(--vtx-pink-soft);
 }
-/* Hide furo's default heading anchor "#" until hover, for a cleaner look. */
 .content h1 .headerlink,
 .content h2 .headerlink,
 .content h3 .headerlink { opacity: 0; transition: opacity 0.15s ease; }
@@ -120,12 +110,10 @@ article.content,
 
 /* ---- 6. Sidebar / navigation -------------------------------------------- */
 .sidebar-brand-text {
-    font-weight: 800;
+    font-family: var(--vtx-serif);
+    font-weight: 700;
     letter-spacing: -0.01em;
-    background: var(--vtx-grad);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--vtx-pink-deep);
 }
 .sidebar-tree .current-page > .reference {
     color: var(--vtx-pink-deep);
@@ -135,9 +123,7 @@ article.content,
     border-radius: 0.35rem;
     transition: background 0.12s ease, color 0.12s ease;
 }
-.sidebar-tree .reference:hover {
-    background: rgba(236, 72, 153, 0.10);
-}
+.sidebar-tree .reference:hover { background: rgba(196, 59, 110, 0.07); }
 .toc-tree li.scroll-current > .reference {
     color: var(--vtx-pink-deep);
     font-weight: 600;
@@ -147,17 +133,12 @@ article.content,
 /* ---- 7. Class / method signature cards ---------------------------------- */
 dl.py.class > dt.sig {
     font-size: 0.9em;
-    /* Hanging indent for wrapped lines, kept *inside* the card: the first
-       line's negative text-indent (the ``class`` keyword) is fully absorbed
-       by the matching left padding, so nothing spills past the left border.
-       This overrides furo's ``padding-left:3em; text-indent:-2.5em`` whose
-       geometry assumed furo's own padding, not our card padding. */
     padding: 0.45rem 0.7rem 0.45rem 2.6rem;
     text-indent: -1.9rem;
     border-radius: 0.55rem;
-    background: linear-gradient(135deg, #ffffff 0%, #fff2f8 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #fdf3f7 100%);
     border: 1px solid var(--vtx-pink-soft);
-    border-left: 4px solid var(--vtx-pink);
+    border-left: 3px solid var(--vtx-pink);
     box-shadow: var(--vtx-shadow);
     box-sizing: border-box;
     max-width: 100%;
@@ -174,7 +155,7 @@ dl.py.property > dt.sig {
     font-size: 0.85em;
     border-radius: 0.4rem;
     border-left: 3px solid var(--vtx-pink-soft);
-    background: #fff7fb;
+    background: #fffafc;
     box-sizing: border-box;
     max-width: 100%;
     white-space: normal;
@@ -183,18 +164,14 @@ dl.py.property > dt.sig {
 }
 dl.py.method > dt.sig .sig-name { font-weight: 600; }
 
-/* The class body gets a subtle gutter so members feel grouped under it. */
 dl.py.class > dd {
-    border-left: 2px solid var(--vtx-pink-soft);
+    border-left: 1px solid var(--vtx-pink-soft);
     padding-left: 1rem;
     margin-left: 0.15rem;
 }
 
 /* ---- 8. Op field-list blocks (Math / __init__ / __call__ / Note) -------- */
-dl.field-list {
-    display: block;
-    margin: 0.7rem 0 0.5rem 0;
-}
+dl.field-list { display: block; margin: 0.7rem 0 0.5rem 0; }
 dl.field-list > dt {                       /* region label "pill" */
     display: inline-block;
     font-family: var(--font-stack--monospace);
@@ -206,7 +183,7 @@ dl.field-list > dt {                       /* region label "pill" */
     padding: 0.12rem 0.62rem;
     border-radius: 0.5rem;
     margin: 0.7rem 0 0 0;
-    box-shadow: 0 2px 6px rgba(219, 39, 119, 0.22);
+    box-shadow: 0 2px 6px rgba(160, 32, 80, 0.16);
 }
 dl.field-list > dt .colon { display: none; }
 dl.field-list > dd {                       /* region body card */
@@ -220,19 +197,16 @@ dl.field-list > dd {                       /* region body card */
     box-shadow: var(--vtx-shadow);
     transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
-dl.field-list > dd:hover {
-    box-shadow: var(--vtx-shadow-lg);
-    transform: translateX(2px);
-}
+dl.field-list > dd:hover { box-shadow: var(--vtx-shadow-lg); transform: translateX(2px); }
 dl.field-list > dd > p { margin: 0; }
 
-/* Two-tone rhythm so adjacent blocks read as separate regions. */
+/* Subtle two-tone rhythm so adjacent blocks read as separate regions. */
 dl.field-list > dt:nth-of-type(even) {
-    background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+    background: linear-gradient(135deg, #b06ab3 0%, #8e3b86 100%);
 }
 dl.field-list > dd:nth-of-type(even) {
     border-left-color: var(--vtx-pink-bright);
-    background: #fff8fb;
+    background: #fdf8fb;
 }
 
 /* ---- 9. Code, admonitions, tables --------------------------------------- */
@@ -245,7 +219,7 @@ dl.field-list > dd:nth-of-type(even) {
 code.literal {
     border-radius: 0.3rem;
     padding: 0.05rem 0.32rem;
-    border: 1px solid rgba(219, 39, 119, 0.12);
+    border: 1px solid rgba(160, 32, 80, 0.10);
 }
 .admonition,
 div.admonition {
@@ -265,11 +239,11 @@ table.docutils thead th {
     color: #ffffff;
     font-weight: 600;
 }
-table.docutils tbody tr:nth-child(even) { background: #fff6fa; }
+table.docutils tbody tr:nth-child(even) { background: #fdf6fa; }
 
 /* ---- 10. Display math --------------------------------------------------- */
 dl.field-list > dd div.math {
     text-align: left;
     margin: 0.15rem 0;
-    overflow-x: auto;          /* let long equations scroll, never clip */
+    overflow-x: auto;
 }
