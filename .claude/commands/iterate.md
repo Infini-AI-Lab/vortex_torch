@@ -116,6 +116,14 @@ Fix every failure before continuing.
 
 ## Step 5 — RULER gate (≥0.85), then launch the task
 
+**Warm the shared JIT first (once, serial).** The decode-planner and prefill
+kernels are shared across all 4 variants; if the variants compile them in
+parallel they race on torch's build lock (slow, can wedge). Compile them once in
+a single process before any parallel launch — children then hit a warm cache:
+```bash
+$RUN -c "import vortex_torch; print('jit warmup:', vortex_torch.warmup_jit())"
+```
+
 Both RULER and the task allocate **`TP` GPUs per variant**, run at most
 **`floor(min(free, MAX_GPUS) / TP)` variants at once**, and **re-detect free
 GPUs at the start of every wave**. The reusable allocator (Bash):
