@@ -41,21 +41,21 @@ model name (e.g. `claude_opus_4_7`, `claude_sonnet_4_6`,
 yet exist, create it; otherwise resume into it. Confirm the tag
 with the user only if you cannot determine your model name.
 
-### Second action — activate the `vortex_v1` conda env
+### Second action — establish a working env (don't assume `vortex_v1`)
 
-Every python call in this workflow must run inside the
-**`vortex_v1`** conda env. Activate once at session start:
+Every python call must run in an env where `import vortex_torch` works — but
+don't assume `vortex_v1` exists (it may be a different conda env, uv/venv, or
+docker; GLM needs a transformers-5 env). Detect once and adopt the run prefix:
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate vortex_v1
-python -c "import sys; print(sys.executable)"   # must be .../envs/vortex_v1/...
+python algorithm_scientist/detect_env.py            # recommends a run prefix
+RUN="conda run -n vortex_v1 python"                 # ← the recommended prefix; substitute if different
+$RUN -c "import sys, vortex_torch; print(sys.executable)"
 ```
 
-If `conda activate` isn't usable in the current shell, prefix
-each python invocation with `conda run -n vortex_v1` instead.
-A wrong-env python will fail to import the framework's C
-extension and every pre-flight / benchmark call below will error.
+Prepend `$RUN` to every python call below. If no env works, build one — that's
+`/setup-env`. A wrong/missing env fails to import the framework's C extension and
+every pre-flight / benchmark call will error.
 
 ## Read these before writing code
 
@@ -174,7 +174,7 @@ do not launch.
    ```bash
    TAG=<your_tag>; BATCH=<x>
    for y in 0 1 2 3; do
-     python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')"
+     $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')"
    done
    ```
    Drop or fix any failing variant before step 5.
@@ -189,7 +189,7 @@ do not launch.
    TAG=<your_tag>; BATCH=<x>
    for y in 0 1 2 3; do
      CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
-       python algorithm_scientist/run_ruler.py \
+       $RUN algorithm_scientist/run_ruler.py \
          --config "submissions/${TAG}/batch_${BATCH}_id${y}.json"
    done
    ```
@@ -214,6 +214,7 @@ do not launch.
    [ "$PARALLEL" -gt "$BATCH_SIZE" ] && PARALLEL=$BATCH_SIZE
    LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"
    mkdir -p "$LOGDIR"
+   TIMEOUT_MIN=<your estimate, minutes>      # agent-decided per model+task
    for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
        end=$((start + PARALLEL))
        [ "$end" -gt "$BATCH_SIZE" ] && end=$BATCH_SIZE
@@ -221,8 +222,8 @@ do not launch.
            cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"
            gpu="${FREE_GPUS[$((y - start))]}"
            stem=$(basename "$cfg" .json)
-           CUDA_VISIBLE_DEVICES=$gpu \
-               python algorithm_scientist/run_submission_aime24.py --config "$cfg" \
+           CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
+               $RUN algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
                > "$LOGDIR/gpu${gpu}_${stem}.out" \
                2> "$LOGDIR/gpu${gpu}_${stem}.err" &
        done
@@ -230,15 +231,15 @@ do not launch.
    done
    ```
    When `N >= 4` this is one wave of 4 (fully parallel); when
-   `N < 4` it serialises into ⌈4/N⌉ waves. Add a row to
-   memory.md §1 with the batch tag and `$LOGDIR`. **Never run
-   `python algorithm_scientist/run_submission_aime24.py` on a
-   single config from this workflow** — that single-variant
-   form is debug-only.
-8. **While the 4 children run (20–60 min fully parallel; longer
-   when `N < 4` due to sequential waves)**, on every poll cycle
-   do ONE of (and **kill any child still running after 60 min** —
-   it has stalled; log in memory.md §4 and treat as failed):
+   `N < 4` it serialises into ⌈4/N⌉ waves. Use `--task <task>` (or
+   `--data <jsonl>` for a non-default model). Add a row to
+   memory.md §1 with the batch tag, `$LOGDIR`, and your `TIMEOUT_MIN`.
+   **Never run a single config through this workflow** — that
+   single-variant form is debug-only.
+8. **While the children run (runtime varies by model + task — you set
+   `TIMEOUT_MIN` and `timeout` enforces it)**, on every poll cycle
+   do ONE of (a child that exits 124 / leaves no `latest.json` timed
+   out — log in memory.md §4 and treat as failed):
    (a) **Read** the next file in priority order
    (`AI/tutorials/` → `AI/developer_guides/` → `papers/` →
    `vortex_torch/flow/algorithms.py` →

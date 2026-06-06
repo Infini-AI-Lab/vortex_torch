@@ -17,22 +17,25 @@ into `summary_submissions/`, so
 `submissions/<tag>/batch_3_id5.json` produces
 `summary_submissions/<tag>/batch_3_id5/`.
 
-Step 1 — pre-flight (CPU-only):
+Step 1 — establish the env + pre-flight (CPU-only):
 ```bash
+python algorithm_scientist/detect_env.py >/dev/null 2>&1   # don't assume vortex_v1
+RUN="conda run -n vortex_v1 python"        # ← detect_env.py's recommended prefix; substitute if different
 CFG=<resolved path to submissions/.../$1.json>
-python -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('$CFG')"
+$RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('$CFG')"
 ```
 Refuse to run the benchmark if pre-flight fails.
 
-Step 2 — launch directly. Pin to one GPU (default GPU 0; pick a
-free one if 0 is busy) and capture stdout/stderr to a log file:
+Step 2 — launch directly. **Detect a free GPU** (never hardcode 0) and pin to
+it; capture stdout/stderr to a log file:
 ```bash
+FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; exit 1; }
 STEM=$(basename "$CFG" .json)                             # filename stem only
 SUMMARY_REL="${CFG#submissions/}"; SUMMARY_REL="${SUMMARY_REL%.json}"   # tag/stem (or just stem for top-level configs)
 LOGDIR="logs/submission/single_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOGDIR"
-CUDA_VISIBLE_DEVICES=0 \
-    python algorithm_scientist/run_submission_aime24.py --config "$CFG" \
+CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
+    $RUN algorithm_scientist/run_submission.py --task aime24 --config "$CFG" \
     > "$LOGDIR/${STEM}.out" \
     2> "$LOGDIR/${STEM}.err"
 ```

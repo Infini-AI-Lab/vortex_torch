@@ -9,8 +9,6 @@ examples/debug_thinking.py
 third_party/sglang/v0.5.9/sglang/python/sglang/srt/debug_utils/__pycache__
 marks/
 slides/
-third_party/flash-attention
-third_party/flashinfer
 # Vendored sglang — track upstream content despite noise rules above and below.
 # Directory rules must be negated before their contents become re-includable.
 !third_party/sglang/**/tests/
@@ -296,6 +294,7 @@ Cargo.lock
 !examples/aime26.jsonl
 !examples/aime26_minimax.jsonl
 !examples/aime26_glm.jsonl
+!.claude/commands/debug.md
 RLG
 .codex
 .claude/.nfs*
@@ -304,20 +303,24 @@ RLG/
 scripts/
 vortex_torch/kernels/centroid_score
 
-# Local source-tree clones (flashinfer / flash-attention / cpu_kernels) used
-# for reference; not part of this repo. Anchored so only the root-level dirs
-# are ignored.
+# Local source-tree clone (cpu_kernels) used for reference; not part of this
+# repo. (flashinfer / flash-attention are now git submodules under third_party/.)
 /flashinfer/
 /flash-attention/
 /cpu_kernels/
+# Vortex paper sources (extracted locally; not part of this repo)
 vortex_paper.zip
 vortex_paper/
 Vortex_Arxiv.zip
 Vortex_Arxiv_overleaf.zip
 Vortex_Arxiv/
-algorithm_scientist/research/traces
+# Research toolkit: regenerable trace blobs + generated survey briefs
+/algorithm_scientist/research/traces/
+/algorithm_scientist/research/briefs/
 # Paper result-plotting scratch (matplotlib scripts + raw summary dumps)
 /plot.py
 /new_results/
 # Benchmark/summary output archive (moved summary* dirs live here)
 /result/
+# Twitter thread assets (local social-prep, not part of the repo)
+/twitter/

@@ -98,25 +98,52 @@ modifying the compiler itself, not when writing a submission.
   across requests with matching prompt prefixes, corrupting
   Save/Load values. `check_engine_config` rejects the violation.
 
-## Environment — activate the `vortex_v1` conda env first
+## Environment — resolve a working env FIRST (don't assume `vortex_v1`)
 
-Every python invocation in this project (`check_engine_config`,
-`run_submission_aime24.py`, the pre-flight loops in the slash
-commands, etc.) expects the **`vortex_v1`** conda environment.
-**Activate it once at session start** before running any of the
-bash snippets below:
+Every python call in this project needs an interpreter where `import
+vortex_torch` works (with sglang for serving). **Do not assume a specific env
+exists** — the host may have a different conda env, a uv/venv, or docker, and
+**GLM models need a newer transformers** (a separate env). The very first action
+of any session is to **establish a working env yourself**:
 
 ```bash
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate vortex_v1
-python -c "import sys; print(sys.executable)"   # expect a path under .../envs/vortex_v1/
+python algorithm_scientist/detect_env.py    # probes conda/uv/venv/docker, recommends a run prefix
 ```
 
-If `conda activate` isn't available in the current shell (e.g. a
-non-interactive sub-shell that didn't source the conda profile),
-fall back to `conda run -n vortex_v1 python ...` for every
-python call. Either form is acceptable; what matters is that the
-running interpreter is the one inside `vortex_v1`.
+Adopt the recommended **run prefix** and use it on every python call this session
+(robust in non-interactive subshells), e.g. `RUN="conda run -n vortex_v1 python"`
+— or `".venv/bin/python"`, `"uv run python"`, a docker invocation, etc.:
+
+```bash
+RUN="<recommended prefix>"
+$RUN -c "import sys, vortex_torch; print(sys.executable, vortex_torch.__version__)"
+```
+
+If no working env is found, **build one** — that's the **`/setup-env`** skill
+(creates/repairs a conda/uv/venv/docker env from the repo specs, and a separate
+`transformers>=5` env for GLM). The `conda activate vortex_v1` snippets in the
+command docs below are the **common default** — substitute your detected prefix
+when it differs. Confirm `import vortex_torch` succeeds before any GPU work.
+
+## GPU usage — detect dynamically, never hardcode
+
+The number of usable GPUs is **not fixed** — the host is shared and the free set
+changes constantly. **Before launching ANYTHING on a GPU** (a benchmark, RULER, a
+tensor capture, a model-support boot, an ablation, a server), detect the free
+GPUs *at that moment* and pin each process to one of them — never assume GPU 0,
+never assume a fixed count. The single primitive is `algorithm_scientist/free_gpus.sh`
+(prints the free indices, exit 1 if none = hard wait):
+
+```bash
+FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; exit 1; }
+N=${#FREE_GPUS[@]}
+# single-GPU launch: CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} python ...
+# K-way launch: scale parallelism to N, run the rest in waves (see below).
+```
+
+Re-detect right before each launch (the set shifts during preflight/RULER), and
+scale parallelism to N free GPUs (capped where a fixed width applies, e.g. the
+4-variant batch). One free GPU is enough to make progress; zero ⇒ wait.
 
 ## Running the benchmark — policy
 
@@ -191,12 +218,16 @@ debug-only. Each batch:
    each child pinned via `CUDA_VISIBLE_DEVICES`, with `wait`
    between waves so a wave's GPU is free before the next one
    reuses it:
+   You decide a per-run **timeout** (`TIMEOUT_MIN`, ~1.5× your model+task
+   estimate); the `timeout` wrapper enforces it. Use `--task <task>` (or
+   `--data <jsonl>` for a non-default model):
    ```bash
    LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"
    mkdir -p "$LOGDIR"
    BATCH_SIZE=4
    PARALLEL=$N
    [ "$PARALLEL" -gt "$BATCH_SIZE" ] && PARALLEL=$BATCH_SIZE
+   TIMEOUT_MIN=<your estimate, minutes>      # agent-decided per model+task
    for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
        end=$((start + PARALLEL))
        [ "$end" -gt "$BATCH_SIZE" ] && end=$BATCH_SIZE
@@ -204,8 +235,8 @@ debug-only. Each batch:
            cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"
            gpu="${FREE_GPUS[$((y - start))]}"
            stem=$(basename "$cfg" .json)
-           CUDA_VISIBLE_DEVICES=$gpu \
-               python algorithm_scientist/run_submission_aime24.py --config "$cfg" \
+           CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
+               python algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
                > "$LOGDIR/gpu${gpu}_${stem}.out" \
                2> "$LOGDIR/gpu${gpu}_${stem}.err" &
        done
@@ -234,7 +265,7 @@ debug-only. Each batch:
    summary_submissions/<tag>/*/latest.json`) to see how many
    children are still alive while you wait.
 
-## While you wait (20–60 min per batch; kill any child > 60 min)
+## While you wait (runtime varies by model+task; the `TIMEOUT_MIN` you set enforces the cap)
 
 Idle is not an option. Each polling cycle, do one of:
 
@@ -298,19 +329,82 @@ so any later session resumes cleanly from the same prompt.
 
 ## Slash commands available in this session
 
-- `/new-submission <name>` — scaffold a new submission pair.
-- `/preflight <name>`      — run the cheap local pre-flight.
-- `/batch-benchmark <n1> <n2> <n3> <n4>` — launch the 4-variant batch on the currently-free GPUs (parallel when `N >= 4`, otherwise waves of `N`; the only sanctioned benchmark command).
-- `/review <name>`         — audit a submission against AGENTS.md rules.
-- `/iterate <name>`        — kick off a full auto-iteration loop (4 variants per batch on the currently-free GPUs, one batch at a time, updates memory.md).
-- `/innovate <N> [theme]`  — *innovation-draft mode*: produce N genuinely-novel submissions in one shot, all required to compile, no benchmark loop, no memory.md mutation. See AGENTS.md §5f.
-- `/benchmark <name>`      — *debug only*: run a single variant directly. Do not use in normal workflow.
+**Seven top-level commands** (the user-facing interface):
+
+- `/innovate <N> [theme] [--model <hf-id>]` — draft N novel submissions in one
+  shot for a chosen model; all must compile; may call `/add-ops` for a missing op.
+- `/iterate [--model <hf-id>] [--task aime24|aime25|aime26|amc23|<file.jsonl>] [--max-iterations N]`
+  — the autonomous design→preflight→RULER→run→analyse loop; model + task are inputs.
+- `/add-ops [new|accelerate|fuse|investigate] <desc>` — full-stack op work
+  (Python op **and** kernel). The shared sub-skill other commands call when they
+  need an op vortex lacks or one that's too slow. Absorbs the old
+  `iterate_topk` / `iterate_centroids_score` kernel loops.
+- `/support-model <hf-id>` — check geometry→backend→boot→RULER; wire support if
+  unsupported, then re-verify.
+- `/debug <symptom>` — catch-all diagnostic for everything else.
+- `/write-paper [--scope onepager|full] [--tag <tag>]` — compile a LaTeX paper
+  from your results (tectonic `tex` env + `vortex_paper/` style).
+- `/reproduce-paper <arxiv-id|path.pdf|papers/<name>>` — compose a paper's
+  algorithm as a vortex submission; calls `/add-ops` when an op is missing.
+
+**Research toolkit** (discover algorithms like a human — see
+[AI/workflows/research_toolkit.md](../AI/workflows/research_toolkit.md)):
+
+- `/research <question> [--model] [--task]` — the full loop: survey → analyze
+  real attention → hypothesize → **offline recall screen** → RULER → iterate →
+  journal. Ties the tools below together.
+- `/research-ideas <topic> [--deep]` — web/literature survey → a brief that seeds
+  `/innovate` (uses `WebSearch`/`WebFetch` + the `deep-research` skill).
+- `/ablate <base.json> <knob> <v1,v2,…>` — controlled single-knob sweep →
+  quality/efficiency/throughput curve (the isolation `/iterate` doesn't do).
+- `/leaderboard [--task] [--tag]` — running Pareto frontier on
+  (throughput, mean@16) across all runs.
+- Offline tools under `algorithm_scientist/research/` (framework — write your own
+  methods; included ones are reference baselines): `capture_trace.py` (real
+  q/K/V via HF, no cudagraph, long-context on GPU), `analyze_attention.py`
+  (sink/local/retrieval-head profile), `eval_recall.py` + `methods/`
+  (**per-head top-k token recall@budget** vs centroid/quest/quest_hw/h2o/
+  streaming/random), `efficiency.py` (roofline: **end-to-end** decode
+  ceiling = (W + B·KV_full)/(W + B·(KV_sparse + KV_index)); separate weight vs KV
+  dtype, MoE-aware active params, per-algorithm index cost — `exact` top-k
+  collapses it; raise `--batch` to see KV dominate), `pareto.py` (frontier). Record in
+  `research/journal.md`.
+
+**Low-level helpers** (used standalone or called by the seven above):
+
+- `/setup-env [--model]` — **run first**: detect/build a working env
+  (conda/uv/venv/docker) where `import vortex_torch` works; returns the run
+  prefix; handles the GLM transformers-5 split. Helper: `detect_env.py`.
+- `/new-submission <name>` — scaffold a submission pair.
+- `/preflight <name>` — cheap local `check_engine_config`.
+- `/batch-benchmark <n1> <n2> <n3> <n4>` — the sanctioned 4-variant batch
+  (parallel when `N >= 4`, else waves of `N`); task via `TASK_ARG`.
+- `/review <name>` — audit a submission against AGENTS.md.
+- `/benchmark <name>` — *debug only*: single-variant run.
+
+Workflow guides live in [AI/workflows/](../AI/workflows/) (run_tasks, add_op,
+support_model, paper). The task `prompt` is **tokenizer-bound** — a non-default
+model needs its jsonl rebuilt with `examples/make_task.py` before running.
 
 ## Subagents available
 
 - `vortex-submission-writer` — drafts and iterates on a submission.
-- `vortex-submission-reviewer` — audits a submission pair for
-  rule violations without editing anything.
+- `vortex-submission-reviewer` — audits a submission pair (read-only).
+- `vortex-op-author` — full-stack op work (add/accelerate/fuse/investigate);
+  the mechanism behind `/add-ops`, also called from `/innovate`, `/iterate`,
+  `/reproduce-paper`.
+- `vortex-paper-writer` — writes/compiles the LaTeX paper, or reads a paper to
+  reproduce it.
+- `vortex-math-researcher` — derives/verifies the linear-algebra & bounds behind
+  a scoring rule or op; returns an implementable recipe.
+- `vortex-kernel-expert` — high-performance Triton/CUDA kernels, using the
+  **`third_party/flashinfer/`** and **`third_party/flash-attention/`** submodule
+  source + KernelWiki/ncu skills.
+- `vortex-research-critic` — adversarial rigor check (confounds, samples,
+  baselines, calibration, overclaiming) before you trust a number or write it up.
 
-Use `Task(subagent_type="vortex-submission-writer", ...)` from the main
-agent or invoke via slash command.
+Invoke via `Task(subagent_type="<name>", ...)` or the matching slash command.
+
+> Note: `.claude/` is now **hand-maintained** (edit the files directly).
+> `AI/generate_claude_folder.py` is the deprecated former generator — do not
+> re-run it; it would clobber the current commands.
