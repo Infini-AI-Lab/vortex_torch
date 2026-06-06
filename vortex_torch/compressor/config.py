@@ -1,0 +1,43 @@
+"""Configuration for the trainable per-head block compressor."""
+from __future__ import annotations
+
+from dataclasses import dataclass, asdict
+from typing import Optional
+import json
+
+
+@dataclass
+class CompressorConfig:
+    """Geometry + hyper-params for a :class:`BlockCompressor`.
+
+    The compressor learns, per (layer, head), a low-rank bilinear block scorer
+    that generalizes the centroid scorer. With ``pool="mean"`` the block score is
+
+        s[h, b] = scaling * (Wq[h]ᵀ q[h]) · (Wk[h]ᵀ centroid_b)
+
+    where ``centroid_b = mean_{t∈b} latent_t``. Setting ``proj_dim == latent_dim``
+    and ``Wk = Wq = I`` recovers exactly ``scaling * q[h] · centroid_b`` — the
+    ``centroid`` baseline. So training starts at (a truncation of) centroid and
+    learns to do better.
+
+    For MLA (GLM-4.7-Flash / DeepSeek) there is one shared latent KV "head", so
+    ``latent_dim = kv_lora_rank + qk_rope_head_dim`` (576 for GLM) and the heads
+    here are the *query* heads.
+    """
+    latent_dim: int                 # KV/descriptor input width (576 for GLM MLA)
+    num_q_heads: int                # number of query heads (per-head params)
+    proj_dim: int = 128             # r — descriptor rank (compression: r < latent_dim)
+    pool: str = "mean"              # within-block pooling: "mean" (linear) or "max"
+    per_layer: bool = True          # separate (Wk,Wq) per (layer,head) vs shared per head
+    num_layers: int = 0             # required when per_layer (number of trained layers)
+    tie_qk: bool = False            # share Wq = Wk
+    init: str = "identity"          # "identity" (truncated I → centroid warm start) or "orthogonal"
+
+    def to_json(self, path: str) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, indent=2)
+
+    @classmethod
+    def from_json(cls, path: str) -> "CompressorConfig":
+        with open(path, encoding="utf-8") as f:
+            return cls(**json.load(f))

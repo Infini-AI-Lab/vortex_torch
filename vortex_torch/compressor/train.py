@@ -1,0 +1,149 @@
+#!/usr/bin/env python
+"""Train the per-head block compressor on-the-fly against a frozen HF MLA model.
+
+No traces are written to disk: each step runs one HF forward, reconstructs the
+absorbed query + latent, builds the exact block-mass distillation target, and
+updates only the (tiny) compressor parameters. Only the trained compressor
+weights + config are saved at the end.
+
+    conda activate vortex_glm          # GLM needs transformers >= 5
+    export HF_HOME=/raid/catalyst/models/
+    CUDA_VISIBLE_DEVICES=0 python -m vortex_torch.compressor.train \
+        --model zai-org/GLM-4.7-Flash --num-prompts 32 --epochs 3 \
+        --proj-dim 128 --out result/compressor/glm.pt
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+
+import torch
+
+from .config import CompressorConfig
+from .model import BlockCompressor
+from .capture import MLASupervision
+from . import objective as O
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--model", default="zai-org/GLM-4.7-Flash")
+    p.add_argument("--data", default="examples/ruler/validation.jsonl",
+                   help="jsonl with prompts.")
+    p.add_argument("--field", default="input")
+    p.add_argument("--layers", default=None,
+                   help="comma list of layer indices to train (default: all MLA layers).")
+    p.add_argument("--num-prompts", type=int, default=32)
+    p.add_argument("--num-query-positions", type=int, default=1,
+                   help="supervise on the last N token positions per prompt.")
+    p.add_argument("--max-tokens", type=int, default=8192)
+    p.add_argument("--epochs", type=int, default=3)
+    p.add_argument("--lr", type=float, default=1e-3)
+    p.add_argument("--proj-dim", type=int, default=128)
+    p.add_argument("--block-size", type=int, default=32)
+    p.add_argument("--budget-blocks", type=int, default=64,
+                   help="blocks kept at eval (topk_val + reserved); for recall/coverage.")
+    p.add_argument("--recall-n", default="16,64,128")
+    p.add_argument("--tie-qk", action="store_true")
+    p.add_argument("--out", default="result/compressor/compressor.pt")
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--dtype", default="auto",
+                   help="teacher weight dtype: 'auto' keeps the checkpoint's native "
+                        "precision (e.g. bf16); or bfloat16/float16.")
+    p.add_argument("--no-grad-checkpointing", dest="grad_checkpointing",
+                   action="store_false",
+                   help="disable gradient checkpointing on the teacher (on by default).")
+    p.set_defaults(grad_checkpointing=True)
+    return p.parse_args()
+
+
+def load_prompts(path, field, n):
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            rows.append(json.loads(line))
+            if len(rows) >= n:
+                break
+    return [str(r[field]) for r in rows]
+
+
+def main():
+    args = parse_args()
+    recall_N = [int(x) for x in args.recall_n.split(",") if x]
+    layers = [int(x) for x in args.layers.split(",")] if args.layers else None
+
+    print(f"[train] loading {args.model} ...", flush=True)
+    dtype = "auto" if args.dtype == "auto" else getattr(torch, args.dtype)
+    sup = MLASupervision(args.model, layers=layers, device=args.device,
+                         dtype=dtype, num_query_positions=args.num_query_positions,
+                         gradient_checkpointing=args.grad_checkpointing)
+    lid2pos = {lid: i for i, lid in enumerate(sup.layer_ids)}
+    print(f"[train] MLA latent_dim={sup.latent_dim} heads={sup.num_q_heads} "
+          f"layers={sup.layer_ids}", flush=True)
+
+    cfg = CompressorConfig(
+        latent_dim=sup.latent_dim, num_q_heads=sup.num_q_heads,
+        proj_dim=args.proj_dim, per_layer=True, num_layers=len(sup.layer_ids),
+        tie_qk=args.tie_qk,
+    )
+    comp = BlockCompressor(cfg).to(args.device)
+    opt = torch.optim.Adam(comp.parameters(), lr=args.lr)
+
+    prompts = load_prompts(args.data, args.field, args.num_prompts)
+    print(f"[train] {len(prompts)} prompts × {args.epochs} epochs, "
+          f"proj_dim={args.proj_dim}, lr={args.lr}", flush=True)
+
+    bs = args.block_size
+    for epoch in range(args.epochs):
+        run_loss = n_steps = 0.0
+        cov = {f"recall@{N}": 0.0 for N in recall_N}; cov["p_coverage"] = 0.0
+        cov_p = dict(cov); n_eval = 0
+        for pi, sup_dict in enumerate(sup.stream(prompts, max_tokens=args.max_tokens)):
+            opt.zero_grad()
+            loss = 0.0
+            for lid, d in sup_dict.items():
+                latent = d["latent"].to(args.device)               # [T,dim] fp16
+                q_pos = d["q_abs"].to(args.device)                 # [W,H,dim] fp32
+                scal = d["scaling"]; layer_pos = lid2pos[lid]
+                T = latent.shape[0]; W = q_pos.shape[0]
+                for j in range(W):
+                    # query at absolute position (T-W+j) attends to its causal prefix
+                    Tj = T - W + 1 + j
+                    Lj = latent[:Tj].float()
+                    q = q_pos[j]                                    # [H,dim]
+                    with torch.no_grad():
+                        A = O.true_attention(q, Lj, scal)          # [H,Tj]
+                        tgt = O.block_mass_targets(A, bs)          # [H,nb]
+                        cent = O.block_centroids(Lj, bs)           # [nb,dim]
+                    logits = comp.block_logits(q, cent, layer_pos, scal)  # [H,nb]
+                    loss = loss + O.distill_loss(logits, tgt)
+                    if j == W - 1:  # eval on the full-context (decode) query
+                        m = O.coverage_recall(logits.detach(), A, bs,
+                                              args.budget_blocks, recall_N, pooled=False)
+                        mp = O.coverage_recall(logits.detach(), A, bs,
+                                               args.budget_blocks, recall_N, pooled=True)
+                        for k in cov: cov[k] += m[k]; cov_p[k] += mp[k]
+                        n_eval += 1
+            loss = loss / max(len(sup_dict), 1)
+            loss.backward()
+            opt.step()
+            run_loss += float(loss.detach()); n_steps += 1
+        msg = (f"[epoch {epoch}] loss={run_loss/max(n_steps,1):.4f} | "
+               f"per-head p-cov={cov['p_coverage']/max(n_eval,1):.3f} "
+               + " ".join(f"r@{N}={cov[f'recall@{N}']/max(n_eval,1):.3f}" for N in recall_N)
+               + f" | pooled p-cov={cov_p['p_coverage']/max(n_eval,1):.3f} "
+               + " ".join(f"r@{N}={cov_p[f'recall@{N}']/max(n_eval,1):.3f}" for N in recall_N))
+        print(msg, flush=True)
+
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    torch.save({"state_dict": comp.state_dict(),
+                "config": cfg.__dict__,
+                "layer_ids": sup.layer_ids}, args.out)
+    cfg.to_json(args.out + ".json")
+    print(f"[train] saved compressor → {args.out}", flush=True)
+
+
+if __name__ == "__main__":
+    main()
