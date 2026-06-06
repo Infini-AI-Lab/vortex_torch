@@ -1,4 +1,11 @@
 
+# Pin the CUDA arch for ALL of vortex's JIT (planner/prefill/custom-ops/top-k)
+# the moment vortex is imported, BEFORE any load_inline runs — single SASS
+# gencode instead of SASS+PTX, which roughly halves every cold compile. See
+# vortex_torch/_jit_setup.py. Best-effort; respects an explicit user setting.
+from ._jit_setup import configure_jit_env as _vx_configure_jit_env
+_vx_configure_jit_env()
+
 from . import indexer as indexer
 from . import cache as cache
 from . import flow as flow

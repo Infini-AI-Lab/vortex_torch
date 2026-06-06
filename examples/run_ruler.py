@@ -1,29 +1,11 @@
 import json
 import os
 import sys
-
-# --- Speed up the vortex/flashinfer JIT (get_decode_planner / prefill kernels) ---
-# Must run BEFORE torch is imported (transformers below pulls it in).
-# 1) Compile only for THIS GPU's compute capability. With TORCH_CUDA_ARCH_LIST
-#    unset, torch's load_inline builds a fat binary for the whole default arch
-#    list (+PTX) — the usual cause of 10-15 min nvcc compiles. Pinning the single
-#    arch cuts it to one gencode.
-# 2) Persist the build caches so only the FIRST run compiles; later runs reuse.
-if "TORCH_CUDA_ARCH_LIST" not in os.environ:
-    try:
-        import subprocess
-        _cap = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
-            text=True,
-        ).strip().splitlines()[0].strip()
-        if _cap:
-            os.environ["TORCH_CUDA_ARCH_LIST"] = _cap   # e.g. "10.0", "9.0", "8.0"
-    except Exception:
-        pass
-os.environ.setdefault("TORCH_EXTENSIONS_DIR",
-                      os.path.expanduser("~/.cache/torch_extensions"))
-
 from transformers import AutoTokenizer
+
+# NOTE: the CUDA-arch JIT speedup is now handled centrally for every vortex
+# entrypoint at `import vortex_torch` (see vortex_torch/_jit_setup.py), so it no
+# longer needs to be set per-script here.
 
 
 def _generate_server(url, prompts, sampling_params):
