@@ -913,7 +913,8 @@ def _generate_w_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> str:
 {kernel_str}
 
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
-{args_def}
+{args_def},
+    cur_layer=0,
 ):
 {fp8_rebind_str}
     {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_kernel[({ctx.num_sms * 4},)](

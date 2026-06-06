@@ -1664,7 +1664,8 @@ def _generate_w_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> str:
 
 
 def {impl_name}(
-{args_def}
+{args_def},
+{INDENT}cur_layer=0,
 ):
 {fp8_block}
     {mod_var}.{launcher_fn}(

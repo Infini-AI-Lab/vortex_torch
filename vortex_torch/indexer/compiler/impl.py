@@ -56,7 +56,8 @@ def _generate_non_w_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> s
 
     impl_str = f"""
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
-{args_def}
+{args_def},
+{INDENT}cur_layer=0,
 ):
 {op_impl_str}
 """

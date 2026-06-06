@@ -41,6 +41,7 @@ from .verify import (
 )
 from . import algorithms
 from . import algorithms_mla
+from . import algorithms_learned_mla
 __all__ = [
     "vFlow",
     "vFlowMLA",

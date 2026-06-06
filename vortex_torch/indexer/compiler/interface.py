@@ -68,11 +68,18 @@ def generate_subgraph_func(sub_graph: Graph, sub_graph_id: int, ctx: Context) ->
     # Append context argument
     arg_list.append("ctx")
 
+    # Explicit trailing per-layer argument (additive, backward compatible).
+    # A vFlow compiles ONCE but is invoked for every decode layer; ops that
+    # bake per-layer constants (LearnedQuery) select the active layer's slice
+    # from this value. Defaults to 0 so every existing flow keeps working.
+    args_with_layer = arg_list + ["cur_layer=0"]
+    call_with_layer = arg_list + ["cur_layer=cur_layer"]
+
     # For function definition (4-space indent)
-    args_def = ",\n    ".join(arg_list)
+    args_def = ",\n    ".join(args_with_layer)
 
     # For function call (8-space indent)
-    args_call = ",\n        ".join(arg_list)
+    args_call = ",\n        ".join(call_with_layer)
 
     func_str = f"""
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_interface(
@@ -102,6 +109,8 @@ def generate_subgraph_entry_point(sub_graph: Graph, sub_graph_id: int, ctx: Cont
         tensor_name = tensor_id_to_tensor_name_map[global_tensor_id]
         lines.append(f"    {tensor_name},  # global output tensor {global_tensor_id}")
     lines.append("    ctx,")
+    # Thread the explicit per-layer argument from forward() into each subgraph.
+    lines.append("    cur_layer=cur_layer,")
     lines.append(")")
     return "\n".join(lines)
 
@@ -151,7 +160,12 @@ def generate_entry_point(full_graph: Graph, sub_graphs: list[Graph], ctx: Contex
     # ("q_nope_out", "q_pe") for MLA flows. Driven by ctx so the generated
     # forward() signature matches the names the trace registered.
     query_arg_names = list(getattr(ctx, "query_arg_names", None) or ["q"])
-    entry_point_arg_list = query_arg_names + ["o", "cache", "ctx"]
+    # ``cur_layer`` is an EXPLICIT trailing forward() argument (default 0):
+    # the compiled indexer runs for every decode layer but is compiled once,
+    # so the backend passes the active global layer id here and per-layer
+    # ops (LearnedQuery) gather their layer slice. The default keeps every
+    # existing caller (which passes only q.../o/cache/ctx) working unchanged.
+    entry_point_arg_list = query_arg_names + ["o", "cache", "ctx", "cur_layer=0"]
     entry_point_arg_str = ",".join(entry_point_arg_list)
 
     for sub_graph_id, sub_graph in enumerate(sub_graphs):

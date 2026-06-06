@@ -385,9 +385,16 @@ class VortexCudaMLABackend(AttentionBackend):
 
         # 2) indexer fills the sparse block table (topk middle); plan_decode
         #    prefilled BOS/EOS + sparse_seqlens.
+        # The (once-compiled) indexer runs for every decode layer; pass the
+        # active global layer id as the EXPLICIT trailing ``cur_layer`` arg so
+        # per-layer-weight ops (e.g. LearnedQuery in learned_block_sparse_mla)
+        # select the active layer's baked weight slice at runtime. The arg
+        # defaults to 0 in the generated forward(), so every other flow that
+        # doesn't pass it is unaffected.
         cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
+            cur_layer=layer.layer_id,
         )
 
         # 3) block-sparse MLA decode in CUDA over the fused latent. The work queue

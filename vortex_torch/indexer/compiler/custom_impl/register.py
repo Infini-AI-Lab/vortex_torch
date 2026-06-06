@@ -18,6 +18,7 @@ from ...output_func import topK, approxTopK, Union
 from ...select import TopK
 from ...scan import Softmax, Normalize, Conv1d
 from ...reduce import Reduce
+from ...learned_query import LearnedQuery
 
 from .topk import (
     generate_topk_impl,
@@ -29,6 +30,7 @@ from .softmax import generate_softmax_impl
 from .normalize import generate_normalize_impl
 from .conv1d import generate_conv1d_impl
 from .reduce_dim0 import generate_reduce_dim0_impl
+from .learned_query import generate_learned_query_impl
 
 
 IMPL_REGISTRY = {
@@ -50,6 +52,8 @@ IMPL_REGISTRY = {
     # ``dim in {1, 2}`` form is Schedule.W and lives in the
     # corresponding backend's ``triton_impl`` / ``cuda_impl`` registry.
     (Reduce,     Schedule.S): generate_reduce_dim0_impl,
+    # Learned bilinear query transform with baked per-layer constant weights.
+    (LearnedQuery, Schedule.S): generate_learned_query_impl,
 }
 
 
