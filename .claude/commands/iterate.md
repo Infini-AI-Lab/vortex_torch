@@ -1,6 +1,6 @@
 ---
 description: Autonomous iterate loop over a model + task — design 4 variants, preflight, RULER, run the task, wait, analyse, repeat. Model and task are inputs.
-argument-hint: [--model <hf-id>] [--task aime24|aime25|aime26|amc23|<file.jsonl>] [--max-iterations N]
+argument-hint: [--model <hf-id>] [--task aime24|aime25|aime26|amc23|<file.jsonl>] [--max-iterations N] [--max-gpus N] [--tp K]
 ---
 
 You are running the **vortex_torch iterate loop** autonomously. Execute each
@@ -13,6 +13,32 @@ Parse `$ARGUMENTS`:
 - `--task <name|file>` (default: `aime24`). Built-in: aime24, aime25, aime26,
   amc23. A `*.jsonl` value is treated as a custom math dataset.
 - `--max-iterations N` (default: 3).
+- `--tp K` — **tensor-parallel degree = GPUs per single run** (default: `1`,
+  or what `/support-model` reports for the model). Large models need `K>1`
+  (e.g. MiniMax-M2.7 229B ⇒ `4`); the model simply won't fit on one GPU.
+- `--max-gpus N` — **the maximum number of GPUs THIS agent may use at the same
+  time** (default: as many as are free right now). This is *your* concurrency
+  budget, set by the user — **not** a count of all GPUs and **not** including
+  jobs other people (or other jobs under your own username) are running.
+
+**Shared-cluster rules — internalize these:**
+- The cluster is shared. Other users *and* other processes under your own
+  username may be using GPUs. `algorithm_scientist/free_gpus.sh` already
+  excludes any GPU with a running compute process or `memory.used ≥ 1024 MiB`,
+  so it returns only GPUs free for *anyone* right now.
+- `--max-gpus` caps how many of those free GPUs **you** occupy concurrently.
+  Never run more than `--max-gpus` GPUs' worth of work at once across all your
+  children. Each run consumes `--tp` GPUs, so **at most `floor(max_gpus / tp)`
+  runs in flight at a time**; the rest go in later waves.
+- Re-detect free GPUs at the start of **every** wave (the free set shifts as
+  others start/stop). If fewer than `tp` GPUs are usable, wait and retry — do
+  not shrink `tp`.
+
+Set these once for the session:
+```bash
+TP=<--tp value, default 1>          # GPUs per run
+MAX_GPUS=<--max-gpus value>         # your simultaneous-GPU budget (default: all free)
+```
 
 **Establish the env first** — don't assume `vortex_v1` (see `/setup-env`). Adopt
 the recommended **run prefix** as `$RUN` and use it for every python call below:
@@ -64,7 +90,9 @@ full survey→analyze→screen→iterate loop is `/research`.
 ## Step 4 — write 8 files + preflight (CPU)
 
 `submissions/$TAG/batch_${BATCH}_id{0..3}.{py,json}`, `@register` globally unique,
-`model_path` = the chosen model. `BATCH=$(ls submissions/$TAG/batch_*_id0.json 2>/dev/null | wc -l)`.
+`model_path` = the chosen model, **and `"tp_size": <TP>`** in each JSON (so RULER
+and the task runner both boot the model on the right number of GPUs).
+`BATCH=$(ls submissions/$TAG/batch_*_id0.json 2>/dev/null | wc -l)`.
 ```bash
 for y in 0 1 2 3; do
   $RUN -c "from vortex_torch.engine.sgl import check_engine_config; check_engine_config('submissions/${TAG}/batch_${BATCH}_id${y}.json')" && echo "ok id$y" || echo "FAIL id$y"
@@ -74,17 +102,38 @@ Fix every failure before continuing.
 
 ## Step 5 — RULER gate (≥0.85), then launch the task
 
-Detect free GPUs and **spread the 4 RULER runs across however many are free**
-(re-detect here; don't hardcode):
+Both RULER and the task allocate **`TP` GPUs per variant**, run at most
+**`floor(min(free, MAX_GPUS) / TP)` variants at once**, and **re-detect free
+GPUs at the start of every wave**. The reusable allocator (Bash):
+
 ```bash
-FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPUs — wait"; exit 1; }
-N=${#FREE_GPUS[@]}
-for y in 0 1 2 3; do
-  gpu=${FREE_GPUS[$((y % N))]}
-  CUDA_VISIBLE_DEVICES=$gpu $RUN algorithm_scientist/run_ruler.py \
-    --config "submissions/${TAG}/batch_${BATCH}_id${y}.json" &
-  (( (y+1) % N == 0 )) && wait
-done; wait
+# Launch the 4 variants, TP GPUs each, capped at MAX_GPUS concurrent, in waves.
+# $1 = a shell function name that takes "<id> <comma-separated-gpus>" and starts
+#      one backgrounded child pinned to those GPUs.
+run_batch_tp () {
+  local launch_one="$1" BATCH_SIZE=4 y=0
+  while [ "$y" -lt "$BATCH_SIZE" ]; do
+    local FREE USABLE NU PAR launched gpus
+    FREE=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; sleep 60; continue; }
+    USABLE=( "${FREE[@]:0:$MAX_GPUS}" ); NU=${#USABLE[@]}; PAR=$(( NU / TP ))
+    if [ "$PAR" -lt 1 ]; then echo "need $TP GPUs for one run; only $NU usable now — wait"; sleep 60; continue; fi
+    launched=0
+    while [ "$launched" -lt "$PAR" ] && [ "$y" -lt "$BATCH_SIZE" ]; do
+      gpus=$(IFS=,; echo "${USABLE[*]:$((launched*TP)):$TP}")   # TP indices for this variant
+      "$launch_one" "$y" "$gpus"
+      launched=$((launched+1)); y=$((y+1))
+    done
+    wait   # finish this wave before re-detecting for the next
+  done
+}
+```
+
+**RULER gate** — `run_ruler.py` reads `tp_size` from each variant's JSON:
+```bash
+ruler_one () { CUDA_VISIBLE_DEVICES="$2" $RUN algorithm_scientist/run_ruler.py \
+    --config "submissions/${TAG}/batch_${BATCH}_id${1}.json" \
+    > "logs/ruler_id${1}.out" 2>&1 & }
+run_batch_tp ruler_one
 ```
 Any variant < 0.85 has broken attention — fix, re-preflight, re-RULER.
 
@@ -96,27 +145,22 @@ gate's observed speed, or a 1-trial probe if unsure), then set `TIMEOUT_MIN` to
 small (≤2B) model on aime24 ≈ 60–90 min; larger models / aime25/26 / amc23 / MLA
 ≈ 2–4×. The `timeout` wrapper **enforces** it (you don't hand-kill).
 
-Re-detect free GPUs, then run the task in waves of `PARALLEL=min(N,4)`. Use
-`--task <task>` for the default model/built-in jsonl, or `--data $DATA` for a
-regenerated one:
+**Launch the task** — pass `--tp $TP` (overrides the JSON), `--task <task>` for
+the default model/built-in jsonl or `--data $DATA` for a regenerated one:
 ```bash
-FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "hard wait"; exit 1; }
-N=${#FREE_GPUS[@]}; BATCH_SIZE=4; PARALLEL=$N; [ "$PARALLEL" -gt 4 ] && PARALLEL=4
 TIMEOUT_MIN=<your estimate, minutes>        # agent-decided per model+task
+RUN_DATA_ARG="--task <task>"                 # or: RUN_DATA_ARG="--data $DATA"
 LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"; mkdir -p "$LOGDIR"
-RUN_DATA_ARG="--task <task>"        # or: RUN_DATA_ARG="--data $DATA"
-for start in $(seq 0 $PARALLEL $((BATCH_SIZE-1))); do
-  end=$((start+PARALLEL)); [ "$end" -gt "$BATCH_SIZE" ] && end=$BATCH_SIZE
-  for y in $(seq $start $((end-1))); do
-    cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"; gpu="${FREE_GPUS[$((y-start))]}"; stem=$(basename "$cfg" .json)
-    CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
-        $RUN algorithm_scientist/run_submission.py $RUN_DATA_ARG --config "$cfg" \
-        > "$LOGDIR/gpu${gpu}_${stem}.out" 2> "$LOGDIR/gpu${gpu}_${stem}.err" &
-  done
-  wait
-done
+task_one () {
+  local id="$1" gpus="$2" cfg="submissions/${TAG}/batch_${BATCH}_id${1}.json"
+  local stem; stem=$(basename "$cfg" .json)
+  CUDA_VISIBLE_DEVICES="$gpus" timeout ${TIMEOUT_MIN}m \
+      $RUN algorithm_scientist/run_submission.py --tp $TP $RUN_DATA_ARG --config "$cfg" \
+      > "$LOGDIR/gpu${gpus//,/_}_${stem}.out" 2> "$LOGDIR/gpu${gpus//,/_}_${stem}.err" &
+}
+run_batch_tp task_one
 ```
-Add a memory.md §1 RUNNING row (with your `TIMEOUT_MIN`) the moment you launch.
+Add a memory.md §1 RUNNING row (with your `TIMEOUT_MIN`, `TP`, `MAX_GPUS`) the moment you launch.
 A child that `timeout` killed exits **124** and writes no `latest.json` — treat
 it as a timed-out/failed variant (record in §4; consider a larger `TIMEOUT_MIN`,
 fewer trials, or a lighter flow next time).

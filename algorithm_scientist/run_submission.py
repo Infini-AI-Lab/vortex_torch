@@ -66,7 +66,11 @@ from lighteval.models.model_output import ModelResponse
 TRIALS                      = 16
 MAX_INPUT_LENGTH            = 4096
 GENERATION_MAX_NEW_TOKENS   = 32768
-TP_SIZE                     = 1
+# Tensor-parallel degree (GPUs per run). Resolved per-run from, in priority:
+#   --tp CLI arg  >  the submission JSON's "tp_size"  >  DEFAULT_TP_SIZE.
+# Big models (e.g. MiniMax-M2.7 229B) need tp_size > 1; the caller must make
+# exactly `tp_size` GPUs visible via CUDA_VISIBLE_DEVICES (comma-separated).
+DEFAULT_TP_SIZE             = 1
 
 # Built-in tasks: (dataset path, summary dir). All share the AIME/AMC math
 # schema and the extractive-match scorer below.
@@ -113,9 +117,27 @@ def _load_and_validate_config(config_path: Path) -> Dict[str, Any]:
     return config
 
 
-def _build_engine_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_tp_size(config: Dict[str, Any], tp_override: "int | None") -> int:
+    """CLI --tp wins; else the JSON's tp_size; else DEFAULT_TP_SIZE."""
+    if tp_override is not None:
+        tp = int(tp_override)
+    else:
+        tp = int(config.get("tp_size", DEFAULT_TP_SIZE) or DEFAULT_TP_SIZE)
+    if tp < 1:
+        raise SystemExit(f"tp_size must be >= 1, got {tp}")
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None:
+        n_visible = len([x for x in visible.split(",") if x.strip() != ""])
+        if n_visible and n_visible != tp:
+            print(f"[engine] WARNING: tp_size={tp} but CUDA_VISIBLE_DEVICES "
+                  f"exposes {n_visible} GPU(s) ({visible!r}); sglang expects "
+                  f"exactly tp_size GPUs visible.")
+    return tp
+
+
+def _build_engine_kwargs(config: Dict[str, Any], tp_size: int) -> Dict[str, Any]:
     kwargs = dict(config)
-    kwargs["tp_size"]              = TP_SIZE
+    kwargs["tp_size"]              = tp_size
     kwargs["vortex_max_seq_lens"]  = MAX_INPUT_LENGTH + GENERATION_MAX_NEW_TOKENS
     kwargs["context_length"]       = max(
         kwargs.get("context_length", 0),
@@ -203,9 +225,11 @@ def _summarize(results) -> Dict[str, Any]:
     }
 
 
-def run(config_path: Path, data_path: str) -> Dict[str, Any]:
+def run(config_path: Path, data_path: str, tp_size: "int | None" = None) -> Dict[str, Any]:
     config = _load_and_validate_config(config_path)
-    engine_kwargs = _build_engine_kwargs(config)
+    tp = _resolve_tp_size(config, tp_size)
+    engine_kwargs = _build_engine_kwargs(config, tp)
+    print(f"[engine] tp_size={tp}")
     llm = _boot_engine(engine_kwargs)
 
     requests = _load_requests(Path(data_path)) * TRIALS
@@ -234,7 +258,7 @@ def run(config_path: Path, data_path: str) -> Dict[str, Any]:
         "max_input_length":           MAX_INPUT_LENGTH,
         "generation_max_new_tokens":  GENERATION_MAX_NEW_TOKENS,
         "mem_fraction_static":        engine_kwargs.get("mem_fraction_static"),
-        "tp_size":                    TP_SIZE,
+        "tp_size":                    engine_kwargs.get("tp_size"),
         "data_path":                  data_path,
     }
     return summary
@@ -272,6 +296,14 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Override the summary output dir (default: per-task).",
+    )
+    parser.add_argument(
+        "--tp",
+        type=int,
+        default=None,
+        help="Tensor-parallel degree (GPUs per run). Overrides the JSON's "
+             "tp_size. The caller must expose exactly this many GPUs via "
+             "CUDA_VISIBLE_DEVICES. Default: JSON tp_size or 1.",
     )
     return parser.parse_args()
 
@@ -381,7 +413,7 @@ if __name__ == "__main__":
         raise SystemExit(f"dataset not found: {data_path}")
 
     print(f"[task] {task_label}  data={data_path}  summary_dir={summary_dir}")
-    summary = run(args.config, data_path)
+    summary = run(args.config, data_path, tp_size=args.tp)
     out_path = _write_summary(summary, args.config, summary_dir)
 
     print("[summary]")

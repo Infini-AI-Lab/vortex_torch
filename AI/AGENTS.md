@@ -468,9 +468,14 @@ python algorithm_scientist/run_submission_aime24.py --config submissions/<tag>/<
 ```
 
 Everything else is hard-coded inside the task runner
-`algorithm_scientist/run_submission.py` (16 trials, single GPU, 4096-token input
-cap, **32768** max new tokens; task + dataset via `--task`/`--data`; model via
-the JSON's `model_path`). The legacy `run_submission_aime24.py` /
+`algorithm_scientist/run_submission.py` (16 trials, 4096-token input cap,
+**32768** max new tokens; task + dataset via `--task`/`--data`; model via the
+JSON's `model_path`). **Tensor parallelism is configurable** — set
+`"tp_size": K` in the JSON (or pass `--tp K`) and expose exactly `K` GPUs via a
+comma-separated `CUDA_VISIBLE_DEVICES`; small models use `tp_size=1`, large ones
+(e.g. MiniMax-M2.7 229B) need `K>1`. The launch loop allocates `tp_size` GPUs
+per variant and caps concurrency to the agent's `--max-gpus` budget (see
+`.claude/CLAUDE.md` "GPU usage"). The legacy `run_submission_aime24.py` /
 `run_submission_amc23.py` are back-compat shims. The only thing you change
 between runs is your flow's JSON (and, for a non-default model, the
 tokenizer-bound task jsonl built with `examples/make_task.py`).

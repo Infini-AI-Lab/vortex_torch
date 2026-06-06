@@ -125,58 +125,78 @@ If no working env is found, **build one** — that's the **`/setup-env`** skill
 command docs below are the **common default** — substitute your detected prefix
 when it differs. Confirm `import vortex_torch` succeeds before any GPU work.
 
-## GPU usage — detect dynamically, never hardcode
+## GPU usage — shared cluster, your own budget, TP-aware
 
-The number of usable GPUs is **not fixed** — the host is shared and the free set
-changes constantly. **Before launching ANYTHING on a GPU** (a benchmark, RULER, a
-tensor capture, a model-support boot, an ablation, a server), detect the free
-GPUs *at that moment* and pin each process to one of them — never assume GPU 0,
-never assume a fixed count. The single primitive is `algorithm_scientist/free_gpus.sh`
-(prints the free indices, exit 1 if none = hard wait):
+Three facts govern every GPU launch:
+
+1. **The cluster is shared.** Other people — *and other processes under your own
+   username* — may be using GPUs at any time. Never assume GPU 0, never assume a
+   fixed count, never assume a GPU you used last wave is still free.
+2. **`free_gpus.sh` tells you what's free for anyone right now.**
+   `algorithm_scientist/free_gpus.sh` prints the indices of GPUs with **no
+   running compute process and `memory.used < 1024 MiB`** (override the MiB via
+   `free_gpus.sh <mib>`), exit 1 = none = hard wait. This already excludes
+   everyone else's jobs and your own other jobs.
+3. **`--max-gpus` is *your* budget.** The user tells you the **maximum number of
+   GPUs this agent may use at the same time** — across all your concurrent
+   children, *not* counting anyone else's work (including other jobs under your
+   username). Never exceed it. If unset, default to "all currently free".
+
+**TP-awareness.** A single run uses **`tp_size` GPUs** (tensor parallelism):
+`1` for small models, but large ones don't fit on one GPU (e.g. MiniMax-M2.7
+229B ⇒ `tp_size=4`). Put `"tp_size": K` in the submission JSON; the runners
+honour it, and pass `--tp K` to `run_submission.py`. Pin each run to **exactly
+`K`** free GPUs via a comma-separated `CUDA_VISIBLE_DEVICES`.
+
+The allocation rule, applied **fresh at the start of every wave** (the free set
+shifts during preflight/RULER/runs):
 
 ```bash
+TP=<tp_size>                 # GPUs per run
+MAX_GPUS=<your budget>       # max GPUs this agent uses concurrently (user-provided)
 FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; exit 1; }
-N=${#FREE_GPUS[@]}
-# single-GPU launch: CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} python ...
-# K-way launch: scale parallelism to N, run the rest in waves (see below).
+USABLE=( "${FREE_GPUS[@]:0:$MAX_GPUS}" )          # cap free GPUs to your budget
+PARALLEL=$(( ${#USABLE[@]} / TP ))                 # runs in flight at once
+# need < TP usable GPUs ⇒ wait; otherwise launch PARALLEL runs, TP GPUs each:
+#   gpus=$(IFS=,; echo "${USABLE[*]:$((slot*TP)):$TP}"); CUDA_VISIBLE_DEVICES=$gpus ...
 ```
 
-Re-detect right before each launch (the set shifts during preflight/RULER), and
-scale parallelism to N free GPUs (capped where a fixed width applies, e.g. the
-4-variant batch). One free GPU is enough to make progress; zero ⇒ wait.
+One free GPU is enough to make progress when `TP=1`; for `TP=K` you need at
+least `K` free (and within budget) or you wait.
 
 ## Running the benchmark — policy
 
 **Every batch is exactly 4 variants.** That fixed width is what
 makes orthogonal-knob sweeps and Pareto-frontier mapping work.
-Parallelism depends on how many GPUs are free *now* — the host
-may share GPUs with other users:
+Each variant uses **`TP` GPUs** (tensor parallelism), and you may
+run at most **`floor(min(free, MAX_GPUS) / TP)`** variants at once;
+the rest go in later waves:
 
-- `N >= 4` free GPUs → run all 4 variants in parallel, one per GPU.
-- `0 < N < 4` free GPUs → run the 4 variants in **waves of N**
-  on the available GPUs (sequential fallback). With `N = 1` this
-  is fully serial; `N = 2` runs `2 + 2`; `N = 3` runs `3 + 1`.
-  The batch still produces 4 results; it just takes longer.
-- `N == 0` (`free_gpus.sh` returns empty / exits 1) → **hard wait**,
-  do not launch.
+- `TP=1`, `min(free, MAX_GPUS) >= 4` → all 4 variants in parallel,
+  one GPU each.
+- Otherwise → **waves** of `floor(min(free, MAX_GPUS) / TP)`. E.g.
+  `TP=4`, budget 8, 8 free → 2 variants/wave → `2 + 2`. `TP=1`,
+  budget 2 → `2 + 2`. The batch still produces 4 results; it just
+  takes more waves.
+- Fewer than `TP` usable GPUs (free ∩ budget) → **hard wait**.
 
-Detect free GPUs at the start of every batch:
+Detect at the start of **every wave** (free set shifts; budget is yours):
 
 ```bash
+TP=<tp_size>; MAX_GPUS=<your budget>; BATCH_SIZE=4
 FREE_GPUS=($(algorithm_scientist/free_gpus.sh)) || {
     echo "no free GPUs — wait, do not launch" >&2; exit 1
 }
-N=${#FREE_GPUS[@]}
-BATCH_SIZE=4
-PARALLEL=$N
-[ "$PARALLEL" -gt "$BATCH_SIZE" ] && PARALLEL=$BATCH_SIZE
-echo "free GPUs: ${FREE_GPUS[*]}  (N=$N, parallel=$PARALLEL, batch=$BATCH_SIZE)"
+USABLE=( "${FREE_GPUS[@]:0:$MAX_GPUS}" )            # never exceed your budget
+PARALLEL=$(( ${#USABLE[@]} / TP ))                  # variants in flight; 0 ⇒ wait
+echo "free: ${FREE_GPUS[*]} | usable(≤$MAX_GPUS): ${USABLE[*]} | TP=$TP parallel=$PARALLEL"
 ```
 
 `free_gpus.sh` excludes GPUs that have a compute process running
 on them or memory.used ≥ 1024 MiB (override via
-`free_gpus.sh <mib>`). Empty result (exit 1) ⇒ hard wait. Any
-`N >= 1` is launchable; `N < 4` just serialises into multiple
+`free_gpus.sh <mib>`). Empty result (exit 1) ⇒ hard wait. You are
+launchable whenever `free ∩ budget >= TP`; smaller values just
+serialise into multiple
 waves on the available GPUs.
 
 **File layout.** All submissions you write live under
@@ -206,48 +226,51 @@ debug-only. Each batch:
    `examples/validation.jsonl` has structurally broken attention —
    fix it (widen `vortex_topk_val`/`vortex_topk_ratio` or revise the
    indexer scoring), re-pre-flight, and re-run RULER until all 4 pass.
+   Allocate `TP` GPUs per variant (RULER reads `tp_size` from the JSON), at
+   most `floor(min(free, MAX_GPUS) / TP)` at once, re-detecting each wave:
    ```bash
-   for y in 0 1 2 3; do
-     CUDA_VISIBLE_DEVICES=${FREE_GPUS[0]} \
-       python algorithm_scientist/run_ruler.py \
-         --config "submissions/${TAG}/batch_${BATCH}_id${y}.json"
+   TP=<tp_size>; MAX_GPUS=<your budget>; y=0
+   while [ "$y" -lt 4 ]; do
+     FREE=($(algorithm_scientist/free_gpus.sh)) || { echo wait; sleep 60; continue; }
+     USABLE=( "${FREE[@]:0:$MAX_GPUS}" ); PAR=$(( ${#USABLE[@]} / TP ))
+     [ "$PAR" -lt 1 ] && { echo "need $TP GPUs — wait"; sleep 60; continue; }
+     s=0; while [ "$s" -lt "$PAR" ] && [ "$y" -lt 4 ]; do
+       g=$(IFS=,; echo "${USABLE[*]:$((s*TP)):$TP}")
+       CUDA_VISIBLE_DEVICES=$g python algorithm_scientist/run_ruler.py \
+         --config "submissions/${TAG}/batch_${BATCH}_id${y}.json" &
+       s=$((s+1)); y=$((y+1)); done
+     wait
    done
    ```
    Results land in `summary_ruler_submissions/<tag>/<stem>/latest.json`.
-4. **Launch the 4 variants in waves of `PARALLEL = min(N, 4)`**,
-   each child pinned via `CUDA_VISIBLE_DEVICES`, with `wait`
-   between waves so a wave's GPU is free before the next one
-   reuses it:
+4. **Launch the 4 variants, `TP` GPUs each, ≤ `floor(min(free, MAX_GPUS)/TP)`
+   at once**, re-detecting free GPUs each wave and `wait`-ing between waves.
    You decide a per-run **timeout** (`TIMEOUT_MIN`, ~1.5× your model+task
-   estimate); the `timeout` wrapper enforces it. Use `--task <task>` (or
-   `--data <jsonl>` for a non-default model):
+   estimate); the `timeout` wrapper enforces it. Pass `--tp $TP` and
+   `--task <task>` (or `--data <jsonl>` for a non-default model):
    ```bash
-   LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"
-   mkdir -p "$LOGDIR"
-   BATCH_SIZE=4
-   PARALLEL=$N
-   [ "$PARALLEL" -gt "$BATCH_SIZE" ] && PARALLEL=$BATCH_SIZE
-   TIMEOUT_MIN=<your estimate, minutes>      # agent-decided per model+task
-   for start in $(seq 0 $PARALLEL $((BATCH_SIZE - 1))); do
-       end=$((start + PARALLEL))
-       [ "$end" -gt "$BATCH_SIZE" ] && end=$BATCH_SIZE
-       for y in $(seq $start $((end - 1))); do
-           cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"
-           gpu="${FREE_GPUS[$((y - start))]}"
-           stem=$(basename "$cfg" .json)
-           CUDA_VISIBLE_DEVICES=$gpu timeout ${TIMEOUT_MIN}m \
-               python algorithm_scientist/run_submission.py --task aime24 --config "$cfg" \
-               > "$LOGDIR/gpu${gpu}_${stem}.out" \
-               2> "$LOGDIR/gpu${gpu}_${stem}.err" &
+   LOGDIR="logs/submission/${TAG}_batch_${BATCH}_$(date +%Y%m%d_%H%M%S)"; mkdir -p "$LOGDIR"
+   TP=<tp_size>; MAX_GPUS=<your budget>; TIMEOUT_MIN=<your estimate>; y=0
+   while [ "$y" -lt 4 ]; do
+       FREE=($(algorithm_scientist/free_gpus.sh)) || { echo "no free GPU — wait"; sleep 60; continue; }
+       USABLE=( "${FREE[@]:0:$MAX_GPUS}" ); PAR=$(( ${#USABLE[@]} / TP ))
+       [ "$PAR" -lt 1 ] && { echo "need $TP GPUs — wait"; sleep 60; continue; }
+       s=0
+       while [ "$s" -lt "$PAR" ] && [ "$y" -lt 4 ]; do
+           cfg="submissions/${TAG}/batch_${BATCH}_id${y}.json"; stem=$(basename "$cfg" .json)
+           g=$(IFS=,; echo "${USABLE[*]:$((s*TP)):$TP}")
+           CUDA_VISIBLE_DEVICES=$g timeout ${TIMEOUT_MIN}m \
+               python algorithm_scientist/run_submission.py --tp $TP --task aime24 --config "$cfg" \
+               > "$LOGDIR/gpu${g//,/_}_${stem}.out" 2> "$LOGDIR/gpu${g//,/_}_${stem}.err" &
+           s=$((s+1)); y=$((y+1))
        done
        wait
    done
    ```
-   The id `<y>` is the variant slot (0…3), NOT a GPU index —
-   the actual GPU is `FREE_GPUS[$((y - start))]` within each wave.
-   When `N >= 4` there is exactly one wave of 4 (fully parallel,
-   identical to the old behaviour). When `N < 4` the loop runs
-   ⌈4/N⌉ waves; the wall-clock cost scales accordingly. Each
+   Each variant gets a contiguous slice of `TP` usable GPUs; `MAX_GPUS`
+   caps how many of the free GPUs you occupy at once (the rest belong to
+   others / your other jobs). With `TP=1` and budget ≥ 4 this is one wave
+   of 4; tighter `TP`/budget just means more waves. Each
    child writes its result into
    `summary_submissions/<tag>/<stem>/<timestamp>__<hash>.json`
    and updates `latest.json` on its own. The runner mirrors the
