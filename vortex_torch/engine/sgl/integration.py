@@ -93,6 +93,20 @@ def _create_cuda_mla_backend(runner):
     return VortexCudaMLABackend(runner)
 
 
+def _create_cuda_mla_profile_backend(runner):
+    # Profiling twin of cuda_mla: identical decode + per-token per-head
+    # p-coverage / recall@N stats. Importing the module self-registers its
+    # MHA-prefill dispatch handler. Not cuda-graph compatible (run eager).
+    sa = runner.server_args
+    if not runner.use_mla_backend or not sa.enable_vortex_sparsity:
+        raise ValueError(
+            "cuda_mla_profile backend requires an MLA model with "
+            "enable_vortex_sparsity=True."
+        )
+    from .attention_backend.cuda_mla_profile import VortexCudaMLAProfileBackend
+    return VortexCudaMLAProfileBackend(runner)
+
+
 def integrate() -> bool:
     """Register vortex attention backends into sglang's public registry.
 
@@ -117,6 +131,7 @@ def integrate() -> bool:
     if "triton" in B:
         B["triton"] = _make_triton_shim(B["triton"])
     B["cuda_mla"] = _create_cuda_mla_backend
+    B["cuda_mla_profile"] = _create_cuda_mla_profile_backend
 
     _INTEGRATED = True
     return True

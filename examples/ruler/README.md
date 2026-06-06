@@ -18,6 +18,7 @@ no matter what its throughput looks like.
 | `run_ruler.py` | **MHA** runner. Boots an in-process `sgl.Engine` with vortex sparsity and scores `validation.jsonl`. Knobs via env vars (below). |
 | `run_ruler_mla.py` | **MLA** runner (DeepSeek/GLM latent attention). CLI-driven; defaults reproduce the known-good GLM-4.7-Flash config. |
 | `sweep_flows.sh` | Sweeps every built-in flow through RULER and prints an accuracy table — 9 MHA flows × 2 indexer backends + 2 MLA flows. |
+| `run_profile_mla.py` | **MLA selection-quality profiler**: drives a short decode with `attention_backend=cuda_mla_profile` and reports per-layer/per-head **p-coverage** + **recall@N**. |
 | `ruler_output.jsonl` | Last run's raw generations (overwritten each `run_ruler.py` run; gitignored noise). |
 
 All paths are anchored to this directory, so the scripts run from any cwd.
@@ -101,6 +102,31 @@ lserve_centroid_mla                cuda_mla    99.0%
 
 Per-run logs land in `examples/ruler/sweep_results/logs/` (gitignored). Override
 `MODEL`, `MLA_MODEL`, `MHA_PY`, `MLA_PY`, `BACKENDS`, `HF_HOME`, `OUT` via env.
+
+## Profiling selection quality — `run_profile_mla.py`
+
+RULER accuracy tells you *whether* a flow works; the profiler tells you *how
+much attention mass it's leaving on the table*. The `cuda_mla_profile` backend
+executes exactly like `cuda_mla` but, for every decoded token, recomputes the
+dense attention and accumulates, per layer and per head:
+
+- **p-coverage** — fraction of the full softmax mass landing on the selected KV
+  (`Σ_{t∈S} softmax(q·k_t)`); 1.0 = the selection caught all the mass.
+- **recall@N** — of the exact top-`N` tokens by score, how many were selected
+  (`|topN ∩ S| / N`); `N` is user-specified (comma list).
+
+```bash
+conda activate vortex_glm          # GLM needs transformers >= 5
+export HF_HOME=/raid/catalyst/models/
+CUDA_VISIBLE_DEVICES=0 python examples/ruler/run_profile_mla.py \
+    --module rope_aware_block_sparse_mla --n 4 --recall-n 16,64,128
+```
+
+It prints a per-layer table (p-cov, recall@N) + overall means and dumps full
+per-head detail to `--out` (default `mla_profile.json`). Profiling recomputes
+dense attention in PyTorch per layer/token, so it's much slower than `cuda_mla`
+and runs **eager** (cuda graph disabled) — keep `--n` small. A math-workload
+twin lives at `examples/math/run_profile_mla.py`.
 
 ## Interpreting results
 
