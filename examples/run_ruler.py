@@ -1,6 +1,28 @@
 import json
 import os
 import sys
+
+# --- Speed up the vortex/flashinfer JIT (get_decode_planner / prefill kernels) ---
+# Must run BEFORE torch is imported (transformers below pulls it in).
+# 1) Compile only for THIS GPU's compute capability. With TORCH_CUDA_ARCH_LIST
+#    unset, torch's load_inline builds a fat binary for the whole default arch
+#    list (+PTX) — the usual cause of 10-15 min nvcc compiles. Pinning the single
+#    arch cuts it to one gencode.
+# 2) Persist the build caches so only the FIRST run compiles; later runs reuse.
+if "TORCH_CUDA_ARCH_LIST" not in os.environ:
+    try:
+        import subprocess
+        _cap = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            text=True,
+        ).strip().splitlines()[0].strip()
+        if _cap:
+            os.environ["TORCH_CUDA_ARCH_LIST"] = _cap   # e.g. "10.0", "9.0", "8.0"
+    except Exception:
+        pass
+os.environ.setdefault("TORCH_EXTENSIONS_DIR",
+                      os.path.expanduser("~/.cache/torch_extensions"))
+
 from transformers import AutoTokenizer
 
 
@@ -73,7 +95,7 @@ return max(static_kv_budget, dynamic_kv_budget);
                     vortex_max_seq_lens=8192,
                     mem_fraction_static=0.9,
                     vortex_workload_chunk_size=32,
-                    vortex_compilation_cache_dir="~/.vortex_compilation_cache",
+                    vortex_compilation_cache_dir=os.path.expanduser("~/.vortex_compilation_cache"),
                     tp_size=1,
                     )
     
