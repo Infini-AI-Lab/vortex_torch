@@ -245,6 +245,29 @@ def _read_hf_model_shapes(model_path: str) -> Dict[str, int]:
             f"multiple of num_key_value_heads={nkv}"
         )
 
+    # MLA geometry (DeepSeek-V2/V3, GLM glm4_moe*): a single fused latent KV head
+    # replaces per-head k/v, so there is no scalar ``head_dim = hidden/heads``.
+    # The fused latent is [ kv_c (kv_lora_rank) | k_pe (qk_rope_head_dim) ] and the
+    # absorbed query has matching inner dim. Detect it by the LoRA-rank field and
+    # hand the verify sweep the latent dims instead of a GQA head_dim.
+    if cfg.get("kv_lora_rank"):
+        kv_lora_rank = _coerce_int(cfg["kv_lora_rank"], "config.kv_lora_rank")
+        try:
+            qk_rope_head_dim = _coerce_int(
+                cfg["qk_rope_head_dim"], "config.qk_rope_head_dim"
+            )
+        except KeyError as e:
+            raise EngineConfigError(
+                f"{cfg_path} has kv_lora_rank (MLA) but missing {e.args[0]!r}"
+            ) from e
+        return {
+            "mla": True,
+            "kv_lora_rank": kv_lora_rank,
+            "qk_rope_head_dim": qk_rope_head_dim,
+            "num_q_heads": nq,
+            "latent_dim": kv_lora_rank + qk_rope_head_dim,
+        }
+
     if "head_dim" in cfg:
         D = _coerce_int(cfg["head_dim"], "config.head_dim")
     else:
@@ -297,7 +320,6 @@ def _check_compilable(
         ) from e
 
     shapes = _read_hf_model_shapes(model_path)
-    G, num_kv_heads, D = shapes["G"], shapes["num_kv_heads"], shapes["head_dim"]
 
     # Honour the JSON-declared attention backend so trtllm-only ops
     # (e.g. ``TopK(k)``) survive verify's profile() asserts.
@@ -315,12 +337,29 @@ def _check_compilable(
             "vortex_use_tensor_core is only supported with "
             f"vortex_impl_backend='triton'; got '{vortex_impl_backend}'."
         )
+    if shapes.get("mla"):
+        # MLA: a single fused latent head. Synthesize q as [B, H, latent_dim]
+        # (G = num q heads so the flow's head-average over dim=1 is exercised),
+        # num_kv_heads=1, D = latent_dim. ``mla_dims`` switches verify to the MLA
+        # ``initialize(block, kv_lora_rank, qk_rope_head_dim, ...)`` signature.
+        G = shapes["num_q_heads"]
+        num_kv_heads = 1
+        D = shapes["latent_dim"]
+        mla_dims = (shapes["kv_lora_rank"], shapes["qk_rope_head_dim"])
+        # block sizes must divide the smallest sub-block granularity an MLA flow
+        # might use (e.g. LServe/Quest sub-blocks of 16); sweep 16 and 32.
+        block_sizes = (16, 32)
+    else:
+        G, num_kv_heads, D = shapes["G"], shapes["num_kv_heads"], shapes["head_dim"]
+        mla_dims = None
+        block_sizes = (16,)
+
     with tempfile.TemporaryDirectory(prefix="vortex_check_") as cache_dir:
         report = verify_flow_compilable(
             flow,
             B=2, num_kv_heads=num_kv_heads,
             G_values=(G,), D_values=(D,),
-            block_sizes=(16,), page_block_ratios=(1,),
+            block_sizes=block_sizes, page_block_ratios=(1,),
             pages_per_workload_values=(16, 32),
             max_num_pages_per_request=64,
             max_new_tokens_per_batch=64,
@@ -329,6 +368,7 @@ def _check_compilable(
             vortex_attention_backend=vortex_attention_backend,
             vortex_impl_backend=vortex_impl_backend,
             vortex_use_tensor_core=vortex_use_tensor_core,
+            mla_dims=mla_dims,
         )
         if not report.ok:
             first = report.failed[0]

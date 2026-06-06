@@ -415,6 +415,7 @@ def verify_flow_compilable(
     vortex_attention_backend: str = "flashinfer",
     vortex_impl_backend: str = "triton",
     vortex_use_tensor_core: bool = False,
+    mla_dims: Optional[Tuple[int, int]] = None,
 ) -> VerifyReport:
     """Run compile-only verification over a configuration sweep.
 
@@ -482,13 +483,26 @@ def verify_flow_compilable(
 
                         # --- initialize flow (may itself fail for a config) ---
                         try:
-                            flow.initialize(
-                                block_size=block_size,
-                                head_dim=D,
-                                kv_cache_dtype=kv_cache_dtype,
-                                q_data_type=q_data_type,
-                                intermediate_dtype=intermediate_dtype,
-                            )
+                            if mla_dims is not None:
+                                # MLA flows take (kv_lora_rank, qk_rope_head_dim)
+                                # instead of a scalar head_dim; D is the fused
+                                # latent dim used to synthesize q / cache tensors.
+                                flow.initialize(
+                                    block_size=block_size,
+                                    kv_lora_rank=mla_dims[0],
+                                    qk_rope_head_dim=mla_dims[1],
+                                    kv_cache_dtype=kv_cache_dtype,
+                                    q_data_type=q_data_type,
+                                    intermediate_dtype=intermediate_dtype,
+                                )
+                            else:
+                                flow.initialize(
+                                    block_size=block_size,
+                                    head_dim=D,
+                                    kv_cache_dtype=kv_cache_dtype,
+                                    q_data_type=q_data_type,
+                                    intermediate_dtype=intermediate_dtype,
+                                )
                             cache_meta = flow.get_cache_meta_info()
                         except Exception:
                             tb = traceback.format_exc()
