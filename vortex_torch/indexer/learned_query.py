@@ -110,7 +110,7 @@ class LearnedQuery(vOp):
 
         self.output_format: Optional[FORMAT] = None
         self.output_buffer: Optional[vTensor] = None
-        # Set in profile(): fp32 weights live on the compile device and a plain
+        # Set in profile(): bf16 weights live on the compile device and a plain
         # CPU python list for host-side layer lookup (so compute_V does NO
         # host↔device copy or .item() sync — required for cuda-graph capture).
         self._lookup_cpu: Optional[list] = None
@@ -159,11 +159,12 @@ class LearnedQuery(vOp):
             )
 
         # Move the baked constants onto the compile device ONCE here (this runs
-        # at compile time, BEFORE any cuda-graph capture) and pre-cast to fp32,
-        # plus snapshot the layer lookup as a host python list. compute_V then
-        # does no .to(device) / .item() — both illegal during graph capture.
-        self.Wq = self.Wq.to(device=q.device, dtype=torch.float32).contiguous()
-        self.Wk = self.Wk.to(device=q.device, dtype=torch.float32).contiguous()
+        # at compile time, BEFORE any cuda-graph capture) and store them in
+        # bf16 (weight + compute are bf16, matching the query), plus snapshot the
+        # layer lookup as a host python list. compute_V then does no .to(device)
+        # / .item() — both illegal during graph capture.
+        self.Wq = self.Wq.to(device=q.device, dtype=torch.bfloat16).contiguous()
+        self.Wk = self.Wk.to(device=q.device, dtype=torch.bfloat16).contiguous()
         self._lookup_cpu = self.layer_lookup.to("cpu", torch.long).tolist()
 
         self.output_format = FORMAT.BATCHED
@@ -194,11 +195,14 @@ class LearnedQuery(vOp):
 
         .. math:: V = \text{scaling}\cdot \sum_h W_k[\ell,h]\,(W_q[\ell,h]^\top q_h).
 
-        Computed in fp32 for stability, cast back to ``q.dtype``.
+        Computed in bf16 (weight + compute), matching the bf16 query.
         """
-        # Weights are already fp32 on the right device (moved in profile()); the
-        # lookup is a host python list. No .to(device)/.item() here → capturable.
-        qf = q.to(torch.float32)                                   # [B, H, d]
+        # Weights are bf16 on the right device (moved in profile()); the lookup
+        # is a host python list. No .to(device)/.item() here → capturable.
+        assert q.dtype == torch.bfloat16, (
+            f"{self._prefix()}compute_V expects a bf16 query, got {q.dtype}"
+        )
+        qf = q                                                     # [B, H, d] bf16
 
         lid = int(cur_layer)
         row = self._lookup_cpu[lid] if (self._lookup_cpu is not None
@@ -208,8 +212,8 @@ class LearnedQuery(vOp):
             # Identity fallback: V = Σ_h q_h  (== plain head-summed centroid scorer)
             V = qf.sum(dim=1, keepdim=True)                        # [B, 1, d]
         else:
-            Wq = self.Wq[row]                                      # [H, d, r] (fp32 view)
-            Wk = self.Wk[row]                                      # [H, d, r] (fp32 view)
+            Wq = self.Wq[row]                                      # [H, d, r] (bf16 view)
+            Wk = self.Wk[row]                                      # [H, d, r] (bf16 view)
             # u[b,h,r] = Σ_d q[b,h,d] Wq[h,d,r]
             u = torch.einsum("bhd,hdr->bhr", qf, Wq)              # [B, H, r]
             # v[b,h,d] = Σ_r Wk[h,d,r] u[b,h,r]
