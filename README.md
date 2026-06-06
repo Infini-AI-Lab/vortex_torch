@@ -453,20 +453,20 @@ llm = sgl.Engine(
 ```
 
 A runnable, single-GPU MLA demo (RULER scoring, dense-vs-sparse) lives in
-[`examples/run_ruler_mla.py`](examples/run_ruler_mla.py).
+[`examples/ruler/run_ruler_mla.py`](examples/ruler/run_ruler_mla.py).
 
 ---
 
 ## 🌐 Server Mode (OpenAI-compatible endpoint)
 
 To serve vortex sparse attention over HTTP instead of driving the engine
-in-process, use [`examples/server_launch.sh`](examples/server_launch.sh).
+in-process, use [`examples/misc/server_launch.sh`](examples/misc/server_launch.sh).
 It boots an sglang server with an **OpenAI-compatible API** on
 `127.0.0.1:30000`:
 
 ```bash
 # ./server_launch.sh <MODEL_NAME> <TP_SIZE>
-examples/server_launch.sh Qwen/Qwen3-4B 1
+examples/misc/server_launch.sh Qwen/Qwen3-4B 1
 ```
 
 Two details make server mode work:

@@ -183,16 +183,16 @@ llm = sgl.Engine(
 )
 ```
 
-A runnable single-GPU MLA demo lives in `examples/run_ruler_mla.py`.
+A runnable single-GPU MLA demo lives in `examples/ruler/run_ruler_mla.py`.
 
 ## Server mode (OpenAI-compatible endpoint)
 
-To serve Vortex over HTTP, use `examples/server_launch.sh`, which boots an SGLang
+To serve Vortex over HTTP, use `examples/misc/server_launch.sh`, which boots an SGLang
 server with an OpenAI-compatible API on `127.0.0.1:30000`:
 
 ```bash
 # ./server_launch.sh <MODEL_NAME> <TP_SIZE>
-examples/server_launch.sh Qwen/Qwen3-4B 1
+examples/misc/server_launch.sh Qwen/Qwen3-4B 1
 ```
 
 Two details make server mode work:

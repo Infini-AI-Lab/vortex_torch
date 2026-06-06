@@ -478,7 +478,7 @@ per variant and caps concurrency to the agent's `--max-gpus` budget (see
 `.claude/CLAUDE.md` "GPU usage"). The legacy `run_submission_aime24.py` /
 `run_submission_amc23.py` are back-compat shims. The only thing you change
 between runs is your flow's JSON (and, for a non-default model, the
-tokenizer-bound task jsonl built with `examples/make_task.py`).
+tokenizer-bound task jsonl built with `examples/misc/make_task.py`).
 
 The script prints a summary to stdout and writes it into a
 **per-submission subfolder** under `summary_submissions/`:
@@ -642,7 +642,7 @@ variant (see "Novelty budget" below).
 
 Before spending 20–60 minutes on AIME24, run the fast RULER filter on
 each variant using `algorithm_scientist/run_ruler.py`. Any variant
-that scores below **0.85 accuracy** on `examples/validation.jsonl`
+that scores below **0.85 accuracy** on `examples/ruler/validation.jsonl`
 has structurally broken attention — the scoring function is dropping
 so many critical tokens that AIME24 would yield no useful signal.
 Fix or replace it before launching AIME24.

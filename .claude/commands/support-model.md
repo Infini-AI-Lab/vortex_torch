@@ -35,9 +35,9 @@ A RULER ≥ 0.85 means the attention path is structurally sound for this model.
 ## Step 2 — tiny end-to-end generation
 
 Run a handful of trials via `algorithm_scientist/run_submission.py --task aime24`
-(regenerate the task jsonl for this model first with `examples/make_task.py
+(regenerate the task jsonl for this model first with `examples/misc/make_task.py
 --model $1` — the eval prompt is tokenizer-bound), or launch
-`examples/server_launch.sh $1 1` and send one chat completion. Confirm coherent
+`examples/misc/server_launch.sh $1 1` and send one chat completion. Confirm coherent
 decode. If all three pass → **report SUPPORTED** with the backend + env, and stop.
 
 ## Step 3 — wire a new (unsupported) model

@@ -19,7 +19,7 @@ single-variant runs are debug-only.
 declares. To target another task set `TASK_ARG` before the launch loop:
 `TASK_ARG="--task aime25"` (built-ins: aime24/25/26, amc23) or
 `TASK_ARG="--data examples/<task>__<modelslug>.jsonl"` for a non-default model
-(regenerate the tokenizer-bound jsonl first with `examples/make_task.py --task
+(regenerate the tokenizer-bound jsonl first with `examples/misc/make_task.py --task
 <t> --model <m>` — see [AI/workflows/run_tasks.md](../../AI/workflows/run_tasks.md)).
 
 The user passes **4 submission names** (not JSON paths); this
@@ -79,7 +79,7 @@ failing variant first.
 Step 3 — RULER pre-filter (quick quality gate, ≥ 0.85). Run
 `algorithm_scientist/run_ruler.py` on each variant sequentially on
 one free GPU. Any variant scoring below **0.85 accuracy** on
-`examples/validation.jsonl` has structurally broken attention — fix
+`examples/ruler/validation.jsonl` has structurally broken attention — fix
 it (widen `vortex_topk_val`/`vortex_topk_ratio` or revise the
 indexer), re-pre-flight, and re-run RULER until all 4 pass before
 launching AIME24.

@@ -64,7 +64,7 @@ Common culprits (with this repo's precedents):
   thread-block scheduling (the workload planner exists for this).
 
 Procedure:
-1. Measure end-to-end (`run_submission.py` / RULER / `examples/server_launch.sh`)
+1. Measure end-to-end (`run_submission.py` / RULER / `examples/misc/server_launch.sh`)
    and confirm the *expected* speedup is missing.
 2. Localize: time each phase; isolate the kernel. For GPU kernel detail use
    Nsight Compute (the `ncu-report-skill`) — memory vs compute bound, occupancy,
@@ -106,7 +106,7 @@ Use real measurements — never guess. Pick the right tool for the layer:
   drive these through a vortex flow to measure end-to-end decode with sparsity on.
 - **Repo end-to-end:** `algorithm_scientist/run_submission.py` (task `mean@16`/
   `throughput`), `algorithm_scientist/run_ruler.py` (quality gate),
-  `examples/server_launch.sh` (a live server). Blackwell/Hopper kernel
+  `examples/misc/server_launch.sh` (a live server). Blackwell/Hopper kernel
   techniques: the **`KernelWiki`** skill.
 
 Report the tool + the number behind every claim.

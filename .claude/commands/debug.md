@@ -36,7 +36,7 @@ error — rule it out first. If no env works or the build is broken, that's
   **124** / leaves no `latest.json` timed out. `kill %<job>` any straggler,
   record as failed in `memory.md §4`, and check the `.out` for a deadlock/compile
   hang — or just a too-tight `TIMEOUT_MIN` for this model+task (raise it).
-- **Server-launch issue:** check `examples/server_launch.sh` — the vortex knobs
+- **Server-launch issue:** check `examples/misc/server_launch.sh` — the vortex knobs
   go through a single `--vortex-config '<json>'` (folded into a `VortexConfig`
   in the parent only if `vortex_torch` is imported before `ServerArgs` is built),
   `page_size % vortex_block_size == 0`, and the port/GPU are free.

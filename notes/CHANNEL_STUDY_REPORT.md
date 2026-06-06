@@ -8,7 +8,7 @@ for three routing families.
 
 **Model / setup.** `Qwen/Qwen3-4B` (GQA: 32 q-heads, 8 kv-heads, head_dim 128),
 `attention_backend=flashinfer`, vortex planner `flashinfer`, `block=page=16`,
-greedy (temp 0), **RULER** `examples/validation.jsonl` (100 examples, substring
+greedy (temp 0), **RULER** `examples/ruler/validation.jsonl` (100 examples, substring
 match). To expose channel effects we route at a **tight budget `topk=8`** (128
 attended tokens) — at a loose budget every variant saturates and the channels
 are indistinguishable. All results below are with **CUDA graph ON** (the full
@@ -30,7 +30,7 @@ So masking a channel group = **zeroing those query channels** removes their term
 from the sum, uniformly across families. We realise it with a per-channel query
 mask: a sum of disjoint per-group `MaskSlice`s (1.0 on active groups, 0.0
 elsewhere) multiplied into `q` before scoring. Implemented in
-`examples/channel_study_flows.py` (compiles + passes `check_engine_config`
+`examples/misc/channel_study_flows.py` (compiles + passes `check_engine_config`
 preflight for all variants); driven via `marks/mla/test_config_refactor.py`.
 
 ## 2. E1 — per-group importance (leave-one-out, gqa_block)
@@ -99,22 +99,22 @@ sparsification must be importance-aware.
 
 RULER filters the space sharply: **even-half is eliminated** (collapse); the
 survivor to validate on reasoning is **keep-odd (4 groups) vs full (8)** for each
-family. The harness is ready (`examples/verify_algo.py` now takes
-`--vortex-module-path` + `--disable-cuda-graph`; `examples/aime24.jsonl` is
+family. The harness is ready (`examples/math/verify_algo.py` now takes
+`--vortex-module-path` + `--disable-cuda-graph`; `examples/math/aime24.jsonl` is
 Qwen-formatted with thinking enabled). Pending command (one per family, mean@16):
 
 ```bash
 # full baseline (built-in) — repeat with vortex_module_name in
 #   {block_sparse_attention, gqa_block_sparse_attention, gqa_quest_sparse_attention}
-python examples/verify_algo.py --trials 16 --model-name Qwen/Qwen3-4B \
-  --data-path examples/aime24.jsonl --page-size 16 --block-size 16 \
+python examples/math/verify_algo.py --trials 16 --model-name Qwen/Qwen3-4B \
+  --data-path examples/math/aime24.jsonl --page-size 16 --block-size 16 \
   --workload-chunk-size 64 --topk-val 32 --topk-ratio 0 --mem 0.9 \
   --generation-max-new-tokens 32768 --attention-backend flashinfer \
   --vortex-attention-backend flashinfer --vortex-impl-backend triton \
   --vortex-layers-skip --disable-cuda-graph --summary-dir summary-chanstudy-aime24 \
   --vortex-module-name gqa_block_sparse_attention
 # keep-odd — add: --vortex-module-name chan_<fam>_odd \
-#                  --vortex-module-path examples/channel_study_flows.py
+#                  --vortex-module-path examples/misc/channel_study_flows.py
 ```
 
 > Not yet run: at report time only GPU 0 was free, which is excluded (hardware
@@ -149,11 +149,11 @@ python examples/verify_algo.py --trials 16 --model-name Qwen/Qwen3-4B \
 
 ## 7. Files
 
-- `examples/channel_study_flows.py` — channel-mask flows (3 families × single /
+- `examples/misc/channel_study_flows.py` — channel-mask flows (3 families × single /
   subset / leave-one-out / cumulative variants), explicit idempotent `@register`.
 - `marks/mla/test_config_refactor.py` — RULER driver (env: MODULE, MODULE_PATH,
   ATTN, VORTEX_ATTN, BLOCK, TOPK, N, DISABLE_CG).
-- `examples/verify_algo.py` — AIME mean@k harness (+`--vortex-module-path`,
+- `examples/math/verify_algo.py` — AIME mean@k harness (+`--vortex-module-path`,
   `--disable-cuda-graph`).
 - Raw logs under `marks/mla/chan{E1,LOO,KEEP,XMOD}_*/`.
 

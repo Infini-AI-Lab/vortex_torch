@@ -8,9 +8,9 @@ this script:
      flow compiles on a small grid).
   2. Boots an sglang engine with the submission's ``vortex_*`` settings
      plus the fixed AIME24 protocol constants below.
-  3. Runs :file:`examples/aime24.jsonl` with 16 trials.
+  3. Runs :file:`examples/math/aime24.jsonl` with 16 trials.
   4. Scores with lighteval's ``MultilingualExtractiveMatchMetric``
-     (same setup as ``examples/verify_algo.py``).
+     (same setup as ``examples/math/verify_algo.py``).
   5. Writes a per-run summary JSON to ``summary_submissions/``.
 
 All benchmark-protocol settings are fixed — the **only** CLI argument
@@ -20,7 +20,7 @@ Usage
 -----
 ::
 
-    python examples/run_submission_aime24.py \\
+    python examples/math/run_submission_aime24.py \\
         --config submissions/example_block_sparse_attention.json
 """
 
@@ -53,7 +53,7 @@ TRIALS                      = 16
 MAX_INPUT_LENGTH            = 4096
 GENERATION_MAX_NEW_TOKENS   = 32768
 TP_SIZE                     = 1
-DATA_PATH                   = "examples/aime24.jsonl"
+DATA_PATH                   = "examples/math/aime24.jsonl"
 SUMMARY_DIR                 = "summary_submissions"
 
 

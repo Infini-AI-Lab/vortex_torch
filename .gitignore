@@ -324,3 +324,6 @@ Vortex_Arxiv/
 /result/
 # Twitter thread assets (local social-prep, not part of the repo)
 /twitter/
+
+# RULER flow-sweep outputs
+examples/ruler/sweep_results/

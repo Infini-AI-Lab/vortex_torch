@@ -65,7 +65,7 @@ $RUN -c "import sys, vortex_torch; print(sys.executable)"
    model + a built-in task, `examples/<task>.jsonl` already exists. For any
    other model, regenerate it:
    ```bash
-   $RUN examples/make_task.py --task <task> --model <model> \
+   $RUN examples/misc/make_task.py --task <task> --model <model> \
        --output examples/<task>__<modelslug>.jsonl
    ```
    Remember `DATA=examples/<task>__<modelslug>.jsonl` (or the built-in path);

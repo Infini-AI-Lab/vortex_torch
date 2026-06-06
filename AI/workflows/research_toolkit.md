@@ -40,11 +40,11 @@ Ground-truth attention is recomputed exactly from (q, K) downstream.
 **You choose `--data` — it matters.** Attention is workload-dependent, so the
 trace must match what you're optimizing for or the recall screen mispredicts:
 - a **task** (e.g. aime24) → capture on that task's prompts (`--data
-  examples/aime24.jsonl`, or the `make_task.py` jsonl for a non-default model)
+  examples/math/aime24.jsonl`, or the `make_task.py` jsonl for a non-default model)
   and `--generate <N>` so the captured query is a real **mid-generation** decode
   step (reasoning tasks emit long outputs; the throughput-relevant attention is
   late in generation, not the prompt's last token);
-- **long-context retrieval heads** → `--data examples/validation.jsonl`
+- **long-context retrieval heads** → `--data examples/ruler/validation.jsonl`
   (RULER/NIAH), large `--max-ctx`.
 The trace records `calibration_data`/`generate` so results stay interpretable.
 

@@ -9,7 +9,7 @@ masked, for three routing families.
 geometry to 4B*, 36 layers, hidden 4096), `attention_backend=flashinfer`, vortex
 planner flashinfer, block=page=16, greedy, **RULER** 100 examples, tight
 **topk=8** (to discriminate channels), **CUDA graph ON**, N=100. Mechanism =
-per-channel query mask (see 4B report §1); same `examples/channel_study_flows.py`.
+per-channel query mask (see 4B report §1); same `examples/misc/channel_study_flows.py`.
 
 Full baselines: **block 95%, gqa_block 94%, quest 99%** (quest is a near-perfect
 retriever on 8B, vs 86% on 4B).
@@ -131,11 +131,11 @@ unchanged.
 
 - **CUDA graph ON** for every run (the channel flows are graph-compatible; see
   4B report §6). N=100, topk=8, block=16, greedy.
-- All variants are the same `examples/channel_study_flows.py` used for 4B
+- All variants are the same `examples/misc/channel_study_flows.py` used for 4B
   (model-agnostic); only `MODEL=Qwen/Qwen3-8B` differs.
 - **AIME24** reasoning validation (full vs keep-odd) remains the open follow-up,
   as for 4B.
 
 ## 9. Files
-- Flows: `examples/channel_study_flows.py`; driver: `marks/mla/test_config_refactor.py`.
+- Flows: `examples/misc/channel_study_flows.py`; driver: `marks/mla/test_config_refactor.py`.
 - Raw logs: `marks/mla/q8b_loo_*/`, `marks/mla/q8b_p2a_*/`, `marks/mla/q8b_p2b_*/`.

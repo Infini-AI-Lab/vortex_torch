@@ -32,7 +32,7 @@ reports which.
    (`algorithm_scientist/run_ruler.py`, see [[feedback_ruler_tp1]] for the tp=1
    setup). A passing RULER (≥0.85) = the attention path is structurally sound.
 3. **Tiny generation:** one math prompt through `run_submission.py --task aime24`
-   on a handful of trials (or the server in `examples/server_launch.sh`) to
+   on a handful of trials (or the server in `examples/misc/server_launch.sh`) to
    confirm end-to-end decode.
 
 ## Wiring a new (unsupported) model

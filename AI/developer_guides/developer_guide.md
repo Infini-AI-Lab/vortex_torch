@@ -1538,7 +1538,7 @@ for cfg in submissions/_flow_algorithms_test/*.json; do
              check_engine_config('$cfg')"
 done
 
-# 2. RULER on examples/validation.jsonl. Wave size ≤ 4 — 5+ sglang
+# 2. RULER on examples/ruler/validation.jsonl. Wave size ≤ 4 — 5+ sglang
 #    engines booting on the same host hit startup contention that
 #    inflates the per-run e2e and skews throughput. A 5 s stagger
 #    between launches inside a wave further reduces the spike.

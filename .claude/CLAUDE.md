@@ -223,7 +223,7 @@ debug-only. Each batch:
 3. **RULER pre-filter — quick quality gate (≥ 0.85).** Before
    spending 20–60 minutes on AIME24, run `algorithm_scientist/run_ruler.py`
    on each variant. Any variant scoring below **0.85 accuracy** on
-   `examples/validation.jsonl` has structurally broken attention —
+   `examples/ruler/validation.jsonl` has structurally broken attention —
    fix it (widen `vortex_topk_val`/`vortex_topk_ratio` or revise the
    indexer scoring), re-pre-flight, and re-run RULER until all 4 pass.
    Allocate `TP` GPUs per variant (RULER reads `tp_size` from the JSON), at
@@ -407,7 +407,7 @@ so any later session resumes cleanly from the same prompt.
 
 Workflow guides live in [AI/workflows/](../AI/workflows/) (run_tasks, add_op,
 support_model, paper). The task `prompt` is **tokenizer-bound** — a non-default
-model needs its jsonl rebuilt with `examples/make_task.py` before running.
+model needs its jsonl rebuilt with `examples/misc/make_task.py` before running.
 
 ## Subagents available
 

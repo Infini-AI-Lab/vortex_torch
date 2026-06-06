@@ -10,7 +10,7 @@ Given a submission's engine JSON it:
   1. Validates the config via :func:`check_engine_config`.
   2. Boots an sglang engine with the submission's ``vortex_*`` settings plus
      the fixed protocol constants below.
-  3. Runs the selected task's ``examples/<task>.jsonl`` with 16 trials.
+  3. Runs the selected task's ``examples/math/<task>.jsonl`` with 16 trials.
   4. Scores with lighteval's ``MultilingualExtractiveMatchMetric`` (identical
      to the per-task runners — every supported task is math, same schema:
      ``{prompt, question, answer}``).
@@ -22,7 +22,7 @@ Tasks
 -----
 ``aime24``, ``aime25``, ``aime26``, ``amc23`` are built-in. Any other math
 benchmark with the same ``{prompt, question, answer}`` schema can be run via
-``--data examples/<file>.jsonl`` (summary dir defaults to ``summary_submissions``
+``--data examples/math/<file>.jsonl`` (summary dir defaults to ``summary_submissions``
 or ``--summary-dir``). LiveCodeBench (``lcbv5``) is *not* supported here — it
 needs code-execution scoring, not extractive math matching.
 
@@ -34,7 +34,7 @@ Usage
         --config submissions/<tag>/batch_0_id0.json
 
     python algorithm_scientist/run_submission.py \\
-        --data examples/my_math.jsonl --summary-dir summary_my_math \\
+        --data examples/math/my_math.jsonl --summary-dir summary_my_math \\
         --config submissions/<tag>/foo.json
 """
 
@@ -75,10 +75,10 @@ DEFAULT_TP_SIZE             = 1
 # Built-in tasks: (dataset path, summary dir). All share the AIME/AMC math
 # schema and the extractive-match scorer below.
 TASKS: Dict[str, Tuple[str, str]] = {
-    "aime24": ("examples/aime24.jsonl", "summary_submissions"),
-    "aime25": ("examples/aime25.jsonl", "summary_aime25_submissions"),
-    "aime26": ("examples/aime26.jsonl", "summary_aime26_submissions"),
-    "amc23":  ("examples/amc23.jsonl",  "summary_amc23_submissions"),
+    "aime24": ("examples/math/aime24.jsonl", "summary_submissions"),
+    "aime25": ("examples/math/aime25.jsonl", "summary_aime25_submissions"),
+    "aime26": ("examples/math/aime26.jsonl", "summary_aime26_submissions"),
+    "amc23":  ("examples/math/amc23.jsonl",  "summary_amc23_submissions"),
 }
 
 

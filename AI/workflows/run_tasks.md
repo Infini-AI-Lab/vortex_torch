@@ -1,6 +1,6 @@
 # Running submissions on a task with any model
 
-The eval `prompt` field in `examples/<task>.jsonl` is **tokenizer/chat-template
+The eval `prompt` field in `examples/math/<task>.jsonl` is **tokenizer/chat-template
 bound** — a different model needs a regenerated jsonl (that is why
 `aime26.jsonl`, `aime26_glm.jsonl`, `aime26_minimax.jsonl` all exist). So the
 model in a submission's JSON (`model_path`) and the model used to build the eval
@@ -8,7 +8,7 @@ jsonl **must match**.
 
 ## Two executables (prepared for this workflow)
 
-- `examples/make_task.py` — build a task jsonl for a model's tokenizer.
+- `examples/misc/make_task.py` — build a task jsonl for a model's tokenizer.
 - `algorithm_scientist/run_submission.py` — task-generalized runner
   (`--task` or `--data`); supersedes `run_submission_aime24.py` / `_amc23.py`
   (kept as back-compat shims).
@@ -35,10 +35,10 @@ python algorithm_scientist/run_submission.py --task aime25 \
 # 2. A different model — regenerate the jsonl for ITS tokenizer first, then
 #    point the runner at it with --data:
 MODEL=Qwen/Qwen3-4B
-python examples/make_task.py --task aime26 --model "$MODEL" \
-    --output examples/aime26__qwen3_4b.jsonl
+python examples/misc/make_task.py --task aime26 --model "$MODEL" \
+    --output examples/math/aime26__qwen3_4b.jsonl
 python algorithm_scientist/run_submission.py \
-    --data examples/aime26__qwen3_4b.jsonl \
+    --data examples/math/aime26__qwen3_4b.jsonl \
     --config submissions/<tag>/batch_0_id0.json   # this JSON's model_path == $MODEL
 ```
 

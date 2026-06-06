@@ -1,6 +1,6 @@
 # `flow/algorithms.py` — RULER results
 
-RULER on **`examples/validation.jsonl`** (100 prompts, 64 new tokens each)
+RULER on **`examples/ruler/validation.jsonl`** (100 prompts, 64 new tokens each)
 using **Qwen/Qwen3-1.7B** on **NVIDIA B200**. All runs at identical settings
 to isolate per-algorithm behaviour (knobs match the existing
 `submissions/_flow_algorithms_test/` baselines).

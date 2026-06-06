@@ -8,9 +8,9 @@ this script:
      flow compiles on a small grid).
   2. Boots an sglang engine with the submission's ``vortex_*`` settings
      plus the fixed AMC23 protocol constants below.
-  3. Runs :file:`examples/amc23.jsonl` with 16 trials.
+  3. Runs :file:`examples/math/amc23.jsonl` with 16 trials.
   4. Scores with lighteval's ``MultilingualExtractiveMatchMetric``
-     (same setup as ``examples/verify_algo.py``).
+     (same setup as ``examples/math/verify_algo.py``).
   5. Writes a per-run summary JSON to ``summary_amc23_submissions/``.
 
 All benchmark-protocol settings are fixed — the **only** CLI argument
@@ -53,7 +53,7 @@ TRIALS                      = 16
 MAX_INPUT_LENGTH            = 4096
 GENERATION_MAX_NEW_TOKENS   = 32768
 TP_SIZE                     = 1
-DATA_PATH                   = "examples/amc23.jsonl"
+DATA_PATH                   = "examples/math/amc23.jsonl"
 SUMMARY_DIR                 = "summary_amc23_submissions"
 
 
