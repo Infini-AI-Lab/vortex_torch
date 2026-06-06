@@ -5,7 +5,7 @@ __pycache__/
 debug/
 debug*~
 debug.py
-examples/debug_thinking.py
+examples/misc/debug_thinking.py
 third_party/sglang/v0.5.9/sglang/python/sglang/srt/debug_utils/__pycache__
 marks/
 slides/
