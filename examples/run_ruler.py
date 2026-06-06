@@ -40,6 +40,11 @@ def main():
     # sparse path) to confirm the reference accuracy; default (1) is sparse.
     # (Offline-engine mode only — server mode inherits the server's config.)
     enable_vortex_sparsity = os.environ.get("ENABLE_VORTEX_SPARSITY", "1") == "1"
+    # Which registered flow to run (default gqa_block_sparse_attention), and
+    # whether to disable sglang's prefix-radix cache — REQUIRED (=1) for flows
+    # whose forward_indexer uses Save(...) (e.g. running_avg_block_sparse).
+    vortex_module = os.environ.get("VORTEX_MODULE", "gqa_block_sparse_attention")
+    disable_radix_cache = os.environ.get("DISABLE_RADIX_CACHE", "0") == "1"
     if server_url:
         print(f"[run_ruler] SERVER mode via {server_url}", flush=True)
     else:
@@ -70,7 +75,7 @@ return max(static_kv_budget, dynamic_kv_budget);
                     vortex_block_reserved_bos=1,
                     vortex_block_reserved_eos=2,
                     vortex_layers_skip=list(range(1)),
-                    vortex_module_name="gqa_block_sparse_attention",
+                    vortex_module_name=vortex_module,
                     vortex_attention_backend="trtllm",
                     trust_remote_code=True,
                     #vortex_module_path="submissions/example_block_sparse_attention.py",
@@ -78,6 +83,7 @@ return max(static_kv_budget, dynamic_kv_budget);
                     mem_fraction_static=0.9,
                     vortex_workload_chunk_size=32,
                     vortex_compilation_cache_dir=os.path.expanduser("~/.vortex_compilation_cache"),
+                    disable_radix_cache=disable_radix_cache,
                     tp_size=1,
                     )
     
@@ -115,7 +121,8 @@ return max(static_kv_budget, dynamic_kv_budget);
                     f.write("\n")
                     if answer in res["text"]:
                         accuracy += 1.0
-    print(f"Ruler Accuracy: {accuracy / len(ruler_outputs) * 100:.2f}%")
+    _tag = "server" if server_url else (vortex_module if enable_vortex_sparsity else "dense")
+    print(f"Ruler Accuracy [{_tag}]: {accuracy / len(ruler_outputs) * 100:.2f}%")
 
 if __name__ == "__main__":
     main()
