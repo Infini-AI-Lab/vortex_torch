@@ -327,3 +327,12 @@ Vortex_Arxiv/
 
 # RULER flow-sweep outputs
 examples/ruler/sweep_results/
+
+# Internal submission test/sweep trees (kept local, untracked)
+submissions/_flow_sweep18/
+submissions/_qwen3_14b_test/
+submissions/_flow_algorithms_test_variants_pagesize/
+submissions/_flow_algorithms_test_variants/
+submissions/_flow_algorithms_test_tc/
+submissions/_flow_algorithms_test/
+submissions/_block_table_test/
