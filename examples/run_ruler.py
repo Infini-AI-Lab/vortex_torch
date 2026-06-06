@@ -45,6 +45,9 @@ def main():
     # whose forward_indexer uses Save(...) (e.g. running_avg_block_sparse).
     vortex_module = os.environ.get("VORTEX_MODULE", "gqa_block_sparse_attention")
     disable_radix_cache = os.environ.get("DISABLE_RADIX_CACHE", "0") == "1"
+    # Indexer backend: flashinfer (default) or trtllm. (TopK/Union ops are
+    # trtllm-only; topK/approxTopK flows run under either.)
+    vortex_attention_backend = os.environ.get("VORTEX_ATTENTION_BACKEND", "flashinfer")
     if server_url:
         print(f"[run_ruler] SERVER mode via {server_url}", flush=True)
     else:
@@ -76,7 +79,7 @@ return max(static_kv_budget, dynamic_kv_budget);
                     vortex_block_reserved_eos=2,
                     vortex_layers_skip=list(range(1)),
                     vortex_module_name=vortex_module,
-                    vortex_attention_backend="trtllm",
+                    vortex_attention_backend=vortex_attention_backend,
                     trust_remote_code=True,
                     #vortex_module_path="submissions/example_block_sparse_attention.py",
                     vortex_max_seq_lens=8192,
