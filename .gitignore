@@ -289,11 +289,9 @@ Cargo.lock
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 *.jsonl
-!examples/lcbv5.jsonl
-!examples/aime25.jsonl
-!examples/aime26.jsonl
-!examples/aime26_minimax.jsonl
-!examples/aime26_glm.jsonl
+!examples/ruler/validation.jsonl
+!examples/math/*.jsonl
+!examples/code/*.jsonl
 !.claude/commands/debug.md
 RLG
 .codex
