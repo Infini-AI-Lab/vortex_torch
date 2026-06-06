@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 
 import torch
 
@@ -55,6 +56,13 @@ def parse_args():
                         "excluded from supervision and loss).")
     p.add_argument("--max-tokens", type=int, default=8192)
     p.add_argument("--epochs", type=int, default=3)
+    p.add_argument("--max-minutes", type=float, default=0.0,
+                   help="wall-clock training budget; loops over the prompt pool until "
+                        "reached (overrides --epochs when > 0).")
+    p.add_argument("--log-every", type=int, default=16,
+                   help="progress-log cadence in prompts (windowed averages).")
+    p.add_argument("--save-every", type=int, default=0,
+                   help="checkpoint cadence in prompts (0 = only per-pass + final).")
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--proj-dim", type=int, default=128)
     p.add_argument("--block-size", type=int, default=32)
@@ -140,55 +148,82 @@ def main():
           f"source={'HF:'+args.hf_dataset if args.hf_dataset else args.data}", flush=True)
 
     bs = args.block_size
-    for epoch in range(args.epochs):
-        run_loss = n_steps = 0.0
-        cov = {f"recall@{N}": 0.0 for N in recall_N}; cov["p_coverage"] = 0.0
-        cov_p = dict(cov); n_eval = 0
-        for pi, sup_dict in enumerate(sup.stream(
-                prompts, render=do_render, max_tokens=args.max_tokens,
-                batch_size=args.batch_size)):
-            opt.zero_grad()
-            loss = 0.0
-            for lid, d in sup_dict.items():
-                latent = d["latent"].to(args.device)               # [T,dim] fp16
-                q_pos = d["q_abs"].to(args.device)                 # [W,H,dim] fp32
-                scal = d["scaling"]; layer_pos = lid2pos[lid]
-                T = latent.shape[0]; W = q_pos.shape[0]
-                for j in range(W):
-                    # query at absolute position (T-W+j) attends to its causal prefix
-                    Tj = T - W + 1 + j
-                    Lj = latent[:Tj].float()
-                    q = q_pos[j]                                    # [H,dim]
-                    with torch.no_grad():
-                        A = O.true_attention(q, Lj, scal)          # [H,Tj]
-                        tgt = O.block_mass_targets(A, bs)          # [H,nb]
-                        cent = O.block_centroids(Lj, bs)           # [nb,dim]
-                    logits = comp.block_logits(q, cent, layer_pos, scal)  # [H,nb]
-                    loss = loss + O.distill_loss(logits, tgt)
-                    if j == W - 1:  # eval on the full-context (decode) query
-                        m = O.coverage_recall(logits.detach(), A, bs,
-                                              args.budget_blocks, recall_N, pooled=False)
-                        mp = O.coverage_recall(logits.detach(), A, bs,
-                                               args.budget_blocks, recall_N, pooled=True)
-                        for k in cov: cov[k] += m[k]; cov_p[k] += mp[k]
-                        n_eval += 1
-            loss = loss / max(len(sup_dict), 1)
-            loss.backward()
-            opt.step()
-            run_loss += float(loss.detach()); n_steps += 1
-        msg = (f"[epoch {epoch}] loss={run_loss/max(n_steps,1):.4f} | "
-               f"per-head p-cov={cov['p_coverage']/max(n_eval,1):.3f} "
-               + " ".join(f"r@{N}={cov[f'recall@{N}']/max(n_eval,1):.3f}" for N in recall_N)
-               + f" | pooled p-cov={cov_p['p_coverage']/max(n_eval,1):.3f} "
-               + " ".join(f"r@{N}={cov_p[f'recall@{N}']/max(n_eval,1):.3f}" for N in recall_N))
-        print(msg, flush=True)
+    keys = ["p_coverage"] + [f"recall@{N}" for N in recall_N]
 
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    torch.save({"state_dict": comp.state_dict(),
-                "config": cfg.__dict__,
-                "layer_ids": sup.layer_ids}, args.out)
-    cfg.to_json(args.out + ".json")
-    print(f"[train] saved compressor → {args.out}", flush=True)
+    def save_ckpt():
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+        torch.save({"state_dict": comp.state_dict(), "config": cfg.__dict__,
+                    "layer_ids": sup.layer_ids}, args.out)
+        cfg.to_json(args.out + ".json")
+
+    def run_one(sup_dict):
+        """One optimizer step over a sequence's layers; returns (loss, eval, pooled-eval)."""
+        opt.zero_grad()
+        loss = 0.0; ev = evp = None
+        for lid, d in sup_dict.items():
+            latent = d["latent"].to(args.device)                   # [T,dim] fp16
+            q_pos = d["q_abs"].to(args.device)                     # [W,H,dim] fp32
+            scal = d["scaling"]; layer_pos = lid2pos[lid]
+            T = latent.shape[0]; W = q_pos.shape[0]
+            for j in range(W):
+                Tj = T - W + 1 + j                                  # causal prefix length
+                Lj = latent[:Tj].float()
+                q = q_pos[j]                                        # [H,dim]
+                with torch.no_grad():
+                    A = O.true_attention(q, Lj, scal)
+                    tgt = O.block_mass_targets(A, bs)
+                    cent = O.block_centroids(Lj, bs)
+                logits = comp.block_logits(q, cent, layer_pos, scal)
+                loss = loss + O.distill_loss(logits, tgt)
+                if j == W - 1:                                      # eval on decode query
+                    ev = O.coverage_recall(logits.detach(), A, bs,
+                                           args.budget_blocks, recall_N, pooled=False)
+                    evp = O.coverage_recall(logits.detach(), A, bs,
+                                            args.budget_blocks, recall_N, pooled=True)
+        loss = loss / max(len(sup_dict), 1)
+        loss.backward(); opt.step()
+        return float(loss.detach()), ev, evp
+
+    budget_s = args.max_minutes * 60.0
+    t0 = time.time()
+    seen = passes = 0
+    win = {"loss": 0.0, "n": 0, "nev": 0}
+    cov = {k: 0.0 for k in keys}; cov_p = {k: 0.0 for k in keys}
+    print(f"[train] start: budget={args.max_minutes}m (0=use {args.epochs} epochs)", flush=True)
+
+    stop = False
+    while not stop:
+        for sup_dict in sup.stream(prompts, render=do_render, max_tokens=args.max_tokens,
+                                   batch_size=args.batch_size):
+            l, ev, evp = run_one(sup_dict)
+            seen += 1; win["loss"] += l; win["n"] += 1
+            if ev is not None:
+                for k in keys: cov[k] += ev[k]; cov_p[k] += evp[k]
+                win["nev"] += 1
+            if args.log_every and seen % args.log_every == 0:
+                el = (time.time() - t0) / 60.0
+                ne = max(win["nev"], 1)
+                print(f"[t{el:5.1f}m p{seen}] loss={win['loss']/max(win['n'],1):.4f} | "
+                      f"ph p-cov={cov['p_coverage']/ne:.3f} "
+                      + " ".join(f"r@{N}={cov[f'recall@{N}']/ne:.3f}" for N in recall_N)
+                      + f" | pooled p-cov={cov_p['p_coverage']/ne:.3f} "
+                      + " ".join(f"r@{N}={cov_p[f'recall@{N}']/ne:.3f}" for N in recall_N),
+                      flush=True)
+                win = {"loss": 0.0, "n": 0, "nev": 0}
+                cov = {k: 0.0 for k in keys}; cov_p = {k: 0.0 for k in keys}
+            if args.save_every and seen % args.save_every == 0:
+                save_ckpt()
+                print(f"[t{(time.time()-t0)/60:.1f}m] checkpoint saved ({seen} prompts)", flush=True)
+            if budget_s and (time.time() - t0) >= budget_s:
+                stop = True; break
+        passes += 1
+        print(f"[pass {passes} complete] seen={seen} elapsed={(time.time()-t0)/60:.1f}m", flush=True)
+        if not budget_s and passes >= args.epochs:
+            stop = True
+
+    save_ckpt()
+    print(f"[train] saved compressor → {args.out} "
+          f"(prompts={seen}, passes={passes}, elapsed={(time.time()-t0)/60:.1f}m)", flush=True)
 
 
 if __name__ == "__main__":
