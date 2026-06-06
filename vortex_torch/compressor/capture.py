@@ -140,15 +140,15 @@ class MLASupervision:
         # latent = [ kv_c | k_pe ]  (k_pe shared across heads)
         latent = torch.cat([kv_c, k_rot[:, 0]], dim=-1)            # [b,s,d]
 
-        # absorbed query nope part: q_nope · W_UK  (W_UK = kv_b_proj k-rows)
+        # W_UK = kv_b_proj k-rows; absorb the query nope part: q_nope · W_UK.
         W = attn.kv_b_proj.weight.view(H, nope + attn.v_head_dim, lora)
-        W_UK = W[:, :nope, :]                                       # [H,nope,lora]
-        q_nope_abs = torch.einsum("bhsd,hdc->bhsc", q_pass.to(W_UK.dtype), W_UK)  # [b,H,s,lora]
-        q_abs = torch.cat([q_nope_abs, q_rot.to(W_UK.dtype)], dim=-1)             # [b,H,s,d]
+        W_UK = W[:, :nope, :].to(q_pass.dtype)                      # [H,nope,lora]
 
         # Exclude padding: keep only real (non-pad) token positions per sequence,
         # and take the query from the last real position(s). Padded positions never
-        # enter the latent, the blocks, the query, or the loss.
+        # enter the latent, the blocks, the query, or the loss. The absorption
+        # einsum is applied AFTER slicing to the query position(s) so it stays
+        # cheap even at 32K context.
         scal = float(attn.scaling)
         mask = self._attn_mask                                     # [b,s] bool or None
         entries = []
@@ -161,9 +161,13 @@ class MLASupervision:
                 continue
             w = min(self.Wq_pos, Ti)
             qpos = idx[-w:]                                        # last real positions
+            qp = q_pass[i].index_select(1, qpos)                   # [H,w,nope]
+            qr = q_rot[i].index_select(1, qpos)                    # [H,w,rope]
+            q_nope_abs = torch.einsum("hwd,hdc->hwc", qp, W_UK)    # [H,w,lora]
+            q_abs_i = torch.cat([q_nope_abs, qr.to(W_UK.dtype)], dim=-1)  # [H,w,d]
             entries.append({
-                "latent": latent[i].index_select(0, idx).to(torch.float16),          # [Ti,d]
-                "q_abs": q_abs[i].index_select(1, qpos).transpose(0, 1).contiguous().float(),  # [w,H,d]
+                "latent": latent[i].index_select(0, idx).to(torch.float16),     # [Ti,d]
+                "q_abs": q_abs_i.transpose(0, 1).contiguous().float(),          # [w,H,d]
                 "scaling": scal,
             })
         self._store[layer_idx] = entries

@@ -24,6 +24,13 @@ def block_centroids(latent: torch.Tensor, block_size: int) -> torch.Tensor:
     return sums / counts.unsqueeze(1)
 
 
+def centroid_block_logits(q: torch.Tensor, centroids: torch.Tensor,
+                          scaling: float) -> torch.Tensor:
+    """The (untrained) centroid baseline scorer: scaling · q_h · centroid_b → [H, B].
+    Used at eval to report the learned compressor's gain over plain centroids."""
+    return scaling * (q.float() @ centroids.float().transpose(0, 1))
+
+
 def true_attention(q: torch.Tensor, latent: torch.Tensor, scaling: float) -> torch.Tensor:
     """Dense per-head attention A [H, T] = softmax_t(scaling · q_h · latent_t).
 

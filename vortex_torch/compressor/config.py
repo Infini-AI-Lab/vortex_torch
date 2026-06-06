@@ -27,8 +27,11 @@ class CompressorConfig:
     latent_dim: int                 # KV/descriptor input width (576 for GLM MLA)
     num_q_heads: int                # number of query heads (per-head params)
     proj_dim: int = 128             # r — descriptor rank (compression: r < latent_dim)
+    arch: str = "bilinear"          # block-scorer architecture (see model.ARCH_REGISTRY)
     pool: str = "mean"              # within-block pooling: "mean" (linear) or "max"
-    per_layer: bool = True          # separate (Wk,Wq) per (layer,head) vs shared per head
+    num_landmarks: int = 1          # arch="landmark": sub-descriptors per block (max-scored)
+    hidden_dim: int = 0             # arch="mlp": hidden width of the per-head MLP heads
+    per_layer: bool = True          # separate params per (layer,head) vs shared per head
     num_layers: int = 0             # required when per_layer (number of trained layers)
     tie_qk: bool = False            # share Wq = Wk
     init: str = "identity"          # "identity" (truncated I → centroid warm start) or "orthogonal"
