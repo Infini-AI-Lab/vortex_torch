@@ -54,9 +54,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--disable-cuda-graph", action="store_true",
                    help="Run eager (no cuda graph capture).")
     p.add_argument("--dense", action="store_true",
-                   help="Disable vortex sparsity: run plain dense trtllm_mla.")
+                   help="Disable vortex sparsity: run dense MLA on --attn-backend.")
     p.add_argument("--kv-cache-dtype", default="auto",
                    help="sglang kv_cache_dtype (auto|fp8_e4m3|bfloat16).")
+    p.add_argument("--attn-backend", default="cuda_mla",
+                   help="sglang attention_backend. Sparse vortex MLA uses 'cuda_mla' "
+                        "(default); dense baselines can use 'trtllm_mla' or 'triton'. "
+                        "Note: flashinfer MLA does not work for GLM.")
     p.add_argument("--online", action="store_true",
                    help="Allow HF hub access (default: HF_HUB_OFFLINE=1).")
     p.add_argument("--dump", action="store_true",
@@ -85,7 +89,7 @@ def main() -> None:
         trust_remote_code=True,
         tp_size=args.tp,
         page_size=args.block,                       # page == block (one block per page)
-        attention_backend="trtllm_mla",               # vortex CUDA MLA decode kernel
+        attention_backend=args.attn_backend,        # sparse vortex MLA: cuda_mla
         kv_cache_dtype=args.kv_cache_dtype,
         mem_fraction_static=args.mem_fraction,
         disable_cuda_graph=args.disable_cuda_graph,
@@ -135,7 +139,7 @@ def main() -> None:
             print(f"GEN: {outs[i]['text'][:400]!r}", flush=True)
 
     acc = sum(hits)
-    tag = "dense trtllm_mla" if args.dense else f"sparse {args.module}"
+    tag = f"dense {args.attn_backend}" if args.dense else f"sparse {args.module}"
     print(f"\n>>> RULER {args.model.split('/')[-1]} | {tag} | kv={args.kv_cache_dtype}: "
           f"{acc}/{len(rows)} = {acc / len(rows) * 100:.1f}%", flush=True)
     llm.shutdown()
