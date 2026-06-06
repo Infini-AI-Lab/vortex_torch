@@ -115,6 +115,46 @@ class LandmarkScorer(BlockScorer):
         return s.amax(dim=-1)                                          # [H, B]
 
 
+@register_arch("factorized")
+class FactorizedScorer(BlockScorer):
+    r"""Learn BOTH compressions: a token-mixing ``Wt`` [block_size, m] collapses
+    the block's tokens (block_size → m descriptors, instead of fixed mean pooling)
+    and ``Wk`` [d, r] compresses channels. Per block, descriptor
+
+        g[m, r] = (Wtᵀ · L_block) · Wk          L_block ∈ R^{block_size × d}
+
+    and block score = max_m scaling·(Wqᵀ q)·g[m]. ``Wt = 1/block_size, m=1, Wk=I``
+    recovers the centroid scorer; ``m>1`` learns multiple within-block landmarks
+    with learned (not uniform) token weights.
+    """
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        H, d, r = cfg.num_q_heads, cfg.latent_dim, cfg.proj_dim
+        self.m = max(1, cfg.num_landmarks)
+        self.block_size = cfg.block_size
+        lead = (cfg.num_layers,) if cfg.per_layer else ()
+        # token-mixing: init to uniform mean (warm start = centroid for every landmark)
+        Wt = torch.full(lead + (H, cfg.block_size, self.m), 1.0 / cfg.block_size)
+        Wt = Wt + 0.01 * torch.randn_like(Wt)
+        self.Wt = nn.Parameter(Wt)
+        self.Wk = nn.Parameter(self._proj_init(lead + (H,), d, r))
+        self.Wq = self.Wk if cfg.tie_qk else nn.Parameter(self._proj_init(lead + (H,), d, r))
+
+    def block_logits(self, q, latent, block_size, layer_id, scaling):
+        T, d = latent.shape
+        nb = (T + block_size - 1) // block_size
+        pad = nb * block_size - T
+        Lb = F.pad(latent, (0, 0, 0, pad)).view(nb, block_size, d)      # [nb, bs, d]
+        Wt = self._slice(self.Wt, layer_id); Wk = self._slice(self.Wk, layer_id)
+        Wq = self._slice(self.Wq, layer_id)
+        tok = torch.einsum("nsd,hsm->hnmd", Lb.to(Wt.dtype), Wt)        # [H, nb, m, d]
+        g = torch.einsum("hnmd,hdr->hnmr", tok, Wk)                     # [H, nb, m, r]
+        u = torch.einsum("hd,hdr->hr", q.to(Wq.dtype), Wq)             # [H, r]
+        s = scaling * torch.einsum("hr,hnmr->hnm", u, g)              # [H, nb, m]
+        return s.amax(dim=-1)                                          # [H, nb]
+
+
 @register_arch("mlp")
 class MLPScorer(BlockScorer):
     r"""Nonlinear per-head heads: score = MLPq(q)·MLPk(centroid). Mean pool."""

@@ -29,8 +29,10 @@ class CompressorConfig:
     proj_dim: int = 128             # r — descriptor rank (compression: r < latent_dim)
     arch: str = "bilinear"          # block-scorer architecture (see model.ARCH_REGISTRY)
     pool: str = "mean"              # within-block pooling: "mean" (linear) or "max"
-    num_landmarks: int = 1          # arch="landmark": sub-descriptors per block (max-scored)
+    num_landmarks: int = 1          # arch="landmark"/"factorized": descriptors per block (max-scored)
     hidden_dim: int = 0             # arch="mlp": hidden width of the per-head MLP heads
+    block_size: int = 16            # tokens per block — sizes the learned token-mixing
+                                    # (arch="factorized", which compresses block_size→m too)
     per_layer: bool = True          # separate params per (layer,head) vs shared per head
     num_layers: int = 0             # required when per_layer (number of trained layers)
     tie_qk: bool = False            # share Wq = Wk

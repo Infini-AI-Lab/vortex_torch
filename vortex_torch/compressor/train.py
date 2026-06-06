@@ -214,8 +214,8 @@ def main():
     cfg = CompressorConfig(
         latent_dim=sup.latent_dim, num_q_heads=sup.num_q_heads,
         proj_dim=args.proj_dim, arch=args.arch, num_landmarks=args.num_landmarks,
-        hidden_dim=args.hidden_dim, per_layer=True, num_layers=len(sup.layer_ids),
-        tie_qk=args.tie_qk,
+        hidden_dim=args.hidden_dim, block_size=args.block_size,
+        per_layer=True, num_layers=len(sup.layer_ids), tie_qk=args.tie_qk,
     )
     comp = BlockCompressor(cfg).to(args.device)
     opt = torch.optim.Adam(comp.parameters(), lr=args.lr)
