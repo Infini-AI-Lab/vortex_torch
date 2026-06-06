@@ -31,13 +31,28 @@ def parse_args():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model", default="zai-org/GLM-4.7-Flash")
     p.add_argument("--data", default="examples/ruler/validation.jsonl",
-                   help="jsonl with prompts.")
-    p.add_argument("--field", default="input")
+                   help="local jsonl with prompts (ignored if --hf-dataset is set).")
+    p.add_argument("--field", default="input", help="prompt field in the local jsonl.")
+    p.add_argument("--hf-dataset", default=None,
+                   help="HF dataset id to stream prompts from (e.g. "
+                        "Jackrong/GLM-5.1-Reasoning-1M-Cleaned). Overrides --data.")
+    p.add_argument("--hf-split", default="train")
+    p.add_argument("--hf-user-field", default="input",
+                   help="dataset field for the user turn.")
+    p.add_argument("--hf-assistant-field", default="output",
+                   help="dataset field for the assistant turn (included to build a long "
+                        "context; '' to use the user turn only).")
+    p.add_argument("--min-tokens", type=int, default=0,
+                   help="skip dataset rows whose meta input+output tokens is below this "
+                        "(bias toward long contexts; uses row['meta'] when present).")
     p.add_argument("--layers", default=None,
                    help="comma list of layer indices to train (default: all MLA layers).")
     p.add_argument("--num-prompts", type=int, default=32)
     p.add_argument("--num-query-positions", type=int, default=1,
-                   help="supervise on the last N token positions per prompt.")
+                   help="supervise on the last N real token positions per prompt.")
+    p.add_argument("--batch-size", type=int, default=1,
+                   help="prompts per HF forward (>1 pads to the longest; pads are "
+                        "excluded from supervision and loss).")
     p.add_argument("--max-tokens", type=int, default=8192)
     p.add_argument("--epochs", type=int, default=3)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -59,14 +74,42 @@ def parse_args():
     return p.parse_args()
 
 
-def load_prompts(path, field, n):
-    rows = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            rows.append(json.loads(line))
-            if len(rows) >= n:
-                break
-    return [str(r[field]) for r in rows]
+def load_prompts(args, tokenizer):
+    """Return (texts, pre_rendered). For a local jsonl the texts are raw user
+    strings (the capture renders the chat template). For an HF dataset we build
+    the full user+assistant turn here (a long context) and mark it pre-rendered."""
+    n = args.num_prompts
+    if not args.hf_dataset:
+        rows = []
+        with open(args.data, encoding="utf-8") as f:
+            for line in f:
+                rows.append(json.loads(line))
+                if len(rows) >= n:
+                    break
+        return [str(r[args.field]) for r in rows], False
+
+    from datasets import load_dataset
+    ds = load_dataset(args.hf_dataset, split=args.hf_split, streaming=True)
+    texts = []
+    for row in ds:
+        meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+        tok = int(meta.get("input_tokens", 0) or 0) + int(meta.get("output_tokens", 0) or 0)
+        if args.min_tokens and tok and tok < args.min_tokens:
+            continue
+        user = str(row.get(args.hf_user_field, "") or "")
+        msgs = [{"role": "user", "content": user}]
+        if args.hf_assistant_field:
+            asst = str(row.get(args.hf_assistant_field, "") or "")
+            if asst:
+                msgs.append({"role": "assistant", "content": asst})
+        try:
+            text = tokenizer.apply_chat_template(msgs, tokenize=False)
+        except Exception:
+            text = user + ("\n" + asst if args.hf_assistant_field and asst else "")
+        texts.append(text)
+        if len(texts) >= n:
+            break
+    return texts, True
 
 
 def main():
@@ -91,16 +134,19 @@ def main():
     comp = BlockCompressor(cfg).to(args.device)
     opt = torch.optim.Adam(comp.parameters(), lr=args.lr)
 
-    prompts = load_prompts(args.data, args.field, args.num_prompts)
+    prompts, do_render = load_prompts(args, sup.tokenizer)
     print(f"[train] {len(prompts)} prompts × {args.epochs} epochs, "
-          f"proj_dim={args.proj_dim}, lr={args.lr}", flush=True)
+          f"proj_dim={args.proj_dim}, lr={args.lr}, batch_size={args.batch_size}, "
+          f"source={'HF:'+args.hf_dataset if args.hf_dataset else args.data}", flush=True)
 
     bs = args.block_size
     for epoch in range(args.epochs):
         run_loss = n_steps = 0.0
         cov = {f"recall@{N}": 0.0 for N in recall_N}; cov["p_coverage"] = 0.0
         cov_p = dict(cov); n_eval = 0
-        for pi, sup_dict in enumerate(sup.stream(prompts, max_tokens=args.max_tokens)):
+        for pi, sup_dict in enumerate(sup.stream(
+                prompts, render=do_render, max_tokens=args.max_tokens,
+                batch_size=args.batch_size)):
             opt.zero_grad()
             loss = 0.0
             for lid, d in sup_dict.items():

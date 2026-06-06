@@ -42,6 +42,12 @@ class MLASupervision:
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        # Right-padding keeps real tokens at absolute positions 0..T-1 so the
+        # model's default RoPE position_ids stay correct; pads (excluded below)
+        # then sit at the tail. Ensure a pad token exists for batched/padded input.
+        self.tokenizer.padding_side = "right"
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         # Keep the teacher's weights in their native precision (dtype="auto" → the
         # checkpoint's saved dtype, e.g. bf16 for GLM) — no upcast to fp32.
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -88,6 +94,7 @@ class MLASupervision:
         self._rope_il = getattr(mod, "apply_rotary_pos_emb_interleave", None)
 
         self._store: dict = {}
+        self._attn_mask = None
         self._install_wrappers()
 
     # ------------------------------------------------------------------ #
@@ -139,23 +146,49 @@ class MLASupervision:
         q_nope_abs = torch.einsum("bhsd,hdc->bhsc", q_pass.to(W_UK.dtype), W_UK)  # [b,H,s,lora]
         q_abs = torch.cat([q_nope_abs, q_rot.to(W_UK.dtype)], dim=-1)             # [b,H,s,d]
 
-        w = min(self.Wq_pos, s)
-        self._store[layer_idx] = {
-            "latent": latent[0].to(torch.float16),                  # [s,d]
-            "q_abs": q_abs[0, :, -w:, :].transpose(0, 1).contiguous().float(),  # [w,H,d]
-            "scaling": float(attn.scaling),
-        }
+        # Exclude padding: keep only real (non-pad) token positions per sequence,
+        # and take the query from the last real position(s). Padded positions never
+        # enter the latent, the blocks, the query, or the loss.
+        scal = float(attn.scaling)
+        mask = self._attn_mask                                     # [b,s] bool or None
+        entries = []
+        for i in range(b):
+            idx = (mask[i].nonzero(as_tuple=False).flatten() if mask is not None
+                   else torch.arange(s, device=latent.device))     # real positions
+            Ti = int(idx.numel())
+            if Ti == 0:
+                entries.append(None)
+                continue
+            w = min(self.Wq_pos, Ti)
+            qpos = idx[-w:]                                        # last real positions
+            entries.append({
+                "latent": latent[i].index_select(0, idx).to(torch.float16),          # [Ti,d]
+                "q_abs": q_abs[i].index_select(1, qpos).transpose(0, 1).contiguous().float(),  # [w,H,d]
+                "scaling": scal,
+            })
+        self._store[layer_idx] = entries
 
     # ------------------------------------------------------------------ #
     @torch.no_grad()
-    def supervise(self, prompt: str, max_tokens: int = 8192) -> dict:
-        """Run one forward over ``prompt`` and return {layer_idx: {latent,q_abs,scaling}}."""
-        ids = self.tokenizer(prompt, return_tensors="pt", truncation=True,
-                             max_length=max_tokens).input_ids.to(self.device)
+    def supervise(self, prompts, render: bool = False, max_tokens: int = 8192) -> list:
+        """Run ONE forward over a prompt (or list) and return a list of per-sequence
+        dicts ``{layer_idx: {latent, q_abs, scaling}}`` with padding removed."""
+        if isinstance(prompts, str):
+            prompts = [prompts]
+        texts = [self.render(p) if render else p for p in prompts]
+        enc = self.tokenizer(texts, return_tensors="pt", truncation=True,
+                             max_length=max_tokens, padding=len(texts) > 1)
+        ids = enc.input_ids.to(self.device)
+        amask = enc.attention_mask.to(self.device)
+        self._attn_mask = amask.bool()
         self._store = {}
-        self.model(ids, use_cache=False)
-        out = self._store
-        self._store = {}
+        self.model(ids, attention_mask=amask, use_cache=False)
+        store, self._store, self._attn_mask = self._store, {}, None
+
+        out = []
+        for i in range(ids.shape[0]):
+            seq = {lid: ent[i] for lid, ent in store.items() if ent[i] is not None}
+            out.append(seq)
         return out
 
     def render(self, text: str, thinking: bool = False) -> str:
@@ -168,6 +201,9 @@ class MLASupervision:
                 msg, tokenize=False, add_generation_prompt=True)
 
     def stream(self, prompts: Iterable[str], render: bool = True,
-               max_tokens: int = 8192) -> Iterator[dict]:
-        for p in prompts:
-            yield self.supervise(self.render(p) if render else p, max_tokens=max_tokens)
+               max_tokens: int = 8192, batch_size: int = 1) -> Iterator[dict]:
+        prompts = list(prompts)
+        for s0 in range(0, len(prompts), batch_size):
+            chunk = prompts[s0:s0 + batch_size]
+            for seq in self.supervise(chunk, render=render, max_tokens=max_tokens):
+                yield seq
