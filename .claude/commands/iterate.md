@@ -1,6 +1,6 @@
 ---
 description: Autonomous iterate loop over a model + task — design 4 variants, preflight, RULER, run the task, wait, analyse, repeat. Model and task are inputs.
-argument-hint: [--model <hf-id>] [--task aime24|aime25|aime26|amc23|<file.jsonl>] [--max-iterations N] [--max-gpus N] [--tp K]
+argument-hint: [--model <hf-id>] [--task aime24|aime25|aime26|amc23|<file.jsonl>] [--max-iterations N] [--max-gpus N] [--tp K] [--hint "free-form steer"]
 ---
 
 You are running the **vortex_torch iterate loop** autonomously. Execute each
@@ -20,6 +20,13 @@ Parse `$ARGUMENTS`:
   time** (default: as many as are free right now). This is *your* concurrency
   budget, set by the user — **not** a count of all GPUs and **not** including
   jobs other people (or other jobs under your own username) are running.
+- `--hint "..."` (optional) — **free-form steer for the variant design**. Anything
+  after `--hint` (quote it) biases what the batch explores: a direction
+  (`"channel sparsity, g3/g7 heavy heads"`), a knob to push (`"fp8 KV + tighter
+  topk for throughput"`), an op/paper to try (`"LServe sub-block centroids"`), or
+  a constraint (`"stay ≥ full-attn accuracy"`). It shapes Step 3 only; it does
+  **not** relax the contract (still 4 variants, ≥1 genuinely novel, RULER ≥0.85,
+  every JSON valid). If omitted, design as usual from memory.md + papers/guide.md.
 
 **Shared-cluster rules — internalize these:**
 - The cluster is shared. Other users *and* other processes under your own
@@ -80,6 +87,13 @@ Every batch is exactly 4 ORTHOGONAL variants. **≥1 (aim 2) genuinely novel**
 (papers/guide.md §16.2/§16.3/§16.4 or an op-set idea — not §16.1 combos, not a
 sweep). id2–id3 may be §16.5 sweeps. Each `.json` must set
 `"model_path": "<model>"`. Pre-register novelty hypotheses in memory.md §3.
+
+**If `--hint` was given, let it drive this design** — center the batch on the
+hinted direction/knob/op/constraint (e.g. spend the novel slot(s) on the hinted
+idea and the sweep slots mapping the Pareto curve *around* it). The hint sets the
+theme; it does not waive the rules above (still 4 orthogonal variants, ≥1
+genuinely novel, valid JSON, RULER ≥0.85). Note in memory.md §3 that the batch
+was hint-steered and how.
 
 For variants whose idea is a new *scoring/selection* rule, consider an **offline
 recall screen first** (cheap, no GPU) — capture a trace and test the rule against
