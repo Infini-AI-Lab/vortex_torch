@@ -169,11 +169,13 @@ class GeMM(vOp):
     # ------------------------------------------------------------------ #
     def _profile_param(self, x: vTensor, y, ctx: Context) -> vTensor:
         r"""``y`` is a :class:`Parameter` ``[L, N_y, K]`` (batch-shared constant).
-        Standard ``GeMM`` contraction over ``K`` (matching ``x``'s last dim):
-        output ``O[b, a, nx] = Σ_k W[ℓ, a, k] x[b, nx, k]`` → ``[B, N_y, N_x]``
-        (BATCHED), computed by :meth:`compute_param` (gather row ``cur_layer``,
-        torch.matmul). The big weight is baked on the op (reached via
-        ``ctx.op_list``) and never enters the fused kernel."""
+        The contraction is the **standard GeMM** one over the last dim ``K``
+        (``x.shape[2] == K``): ``O[b, a, nx] = Σ_k W[ℓ, a, k] x[b, nx, k]`` →
+        ``[B, N_y, N_x]`` (BATCHED), computed by :meth:`compute_param` (gather row
+        ``cur_layer``, torch.matmul). Same definition as fused ``GeMM`` — only the
+        ``y`` operand is a baked constant and the launch is ``Schedule.S`` so the
+        big weight never enters the tiled kernel. Reshape the activation around
+        this op for any flatten/transpose (GeMM stays self-contained)."""
         prefix = self._prefix()
         assert x._format == FORMAT.BATCHED, (
             f"{prefix}a Parameter operand requires a BATCHED activation (per-request); "
@@ -181,7 +183,7 @@ class GeMM(vOp):
         )
         assert int(x.shape[2]) == int(y.shape[2]), (
             f"{prefix}K mismatch: x.shape[2]={x.shape[2]} vs Parameter K={y.shape[2]} "
-            f"(reshape/flatten the activation to match the Parameter's K)"
+            f"(Reshape the activation so its last dim matches the Parameter's K)"
         )
         self.schedule = Schedule.S
         self._param = y
@@ -205,10 +207,10 @@ class GeMM(vOp):
 
     @torch.no_grad()
     def compute_param(self, x: torch.Tensor, cur_layer: int) -> torch.Tensor:
-        r"""Runtime (Schedule.S launcher): ``O[b,a,nx] = Σ_k W[a,k] x[b,nx,k]`` with
-        ``W = self._param.gather(cur_layer)`` ``[N_y, K]`` (bf16, on device).
-        ``x`` ``[B, N_x, K]`` (bf16) → ``[B, N_y, N_x]``. No ``.to(device)`` /
-        ``.item()`` — cuda-graph-safe."""
+        r"""Runtime (Schedule.S launcher): the standard GeMM contraction
+        ``O[b,a,nx] = Σ_k W[a,k] x[b,nx,k]`` with ``W = self._param.gather(
+        cur_layer)`` ``[N_y, K]`` (bf16, on device). ``x`` ``[B, N_x, K]`` (bf16) →
+        ``[B, N_y, N_x]``. No ``.to(device)`` / ``.item()`` — cuda-graph-safe."""
         assert x.dtype == torch.bfloat16, (
             f"{self._prefix()}compute_param expects a bf16 activation, got {x.dtype}"
         )

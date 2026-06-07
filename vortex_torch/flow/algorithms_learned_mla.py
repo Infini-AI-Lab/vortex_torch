@@ -130,8 +130,10 @@ class LearnedBlockSparseMLA(vFlowMLA):
             lookup = None
 
         # All ops + the Parameter are defined here (no lazy creation in forward).
+        # GeMM stays self-contained (standard K-contract); the flatten/transpose
+        # are explicit Reshape ops around it.
         self.W = Parameter(W, lookup)                       # batch-shared learned constant
-        self.rq = Reshape(-1, 1, H * d)                     # q [B,H,d] -> [B,1,H*d]
+        self.rq = Reshape(-1, 1, H * d)                     # q [B,H,d] -> [B,1,H*d] (K=H*d)
         self.gV = GeMM()                                    # q_flat × W -> [B,d,1] (Schedule.S)
         self.rv = Reshape(-1, 1, d)                         # V [B,d,1] -> [B,1,d]
         self.gemm = GeMM()                                  # V × centroids -> per-block score
@@ -145,7 +147,8 @@ class LearnedBlockSparseMLA(vFlowMLA):
         cache: Dict[str, torch.Tensor],
         ctx: ContextBase,
     ):
-        # Composable, all existing ops + the Vortex.Parameter:
+        # Composable, all existing ops + the Vortex.Parameter; GeMM is a plain
+        # K-contract, Reshape handles the flatten (K=H*d) and the output transpose.
         q_flat = self.rq(q, ctx=ctx)                        # [B, 1, H*d]
         V = self.gV(q_flat, self.W, ctx=ctx)                # [B, d, 1]  (param -> Schedule.S)
         V = self.rv(V, ctx=ctx)                             # [B, 1, d]
