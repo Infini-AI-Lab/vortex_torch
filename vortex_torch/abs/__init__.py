@@ -1,6 +1,7 @@
 from .context_base import ContextBase
 from .op import vOp
 from .tensor import vTensor, as_vtensor, FORMAT
+from .parameter import Parameter
 
 
 __all__ = [
@@ -8,5 +9,6 @@ __all__ = [
     "vOp",
     "vTensor",
     "as_vtensor",
-    "FORMAT"
+    "FORMAT",
+    "Parameter",
 ]

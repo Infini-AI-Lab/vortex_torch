@@ -11,7 +11,7 @@ _vx_configure_jit_env()
 from . import indexer as indexer
 from . import cache as cache
 from . import flow as flow
-from .indexer import Parameter as Parameter
+from .abs import Parameter as Parameter
 from . import abs as abs
 from .utils import is_hopper_or_newer, is_hopper
 from .version import __version__

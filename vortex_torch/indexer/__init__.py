@@ -67,7 +67,7 @@ from .save_load import Save, Load
 from .mask import MaskSlice
 from .kron import Kron
 from .reshape import Reshape
-from .parameter import Parameter
+from ..abs import Parameter   # re-exported for convenience; defined in vortex_torch.abs
 from . import utils_sglang, compiler
 from .context import Context, get_ctx
 from .metadata import MetaData

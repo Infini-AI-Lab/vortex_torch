@@ -21,7 +21,7 @@ from typing import Optional
 
 import torch
 
-from ..abs import vTensor, FORMAT
+from .tensor import vTensor, FORMAT
 
 
 class Parameter(vTensor):
