@@ -71,8 +71,16 @@ def generate_subgraph_func(sub_graph: Graph, sub_graph_id: int, ctx: Context) ->
     arg_list.append("loc")
     arg_list.append("ctx")
 
-    args_def = ",\n    ".join(arg_list)
-    args_call = ",\n        ".join(arg_list)
+    # Explicit trailing per-layer argument (additive, backward compatible).
+    # The cache pipeline compiles ONCE but is invoked for every decode layer's
+    # aux refresh; ops that bake per-layer constants (e.g. LearnedDescriptor)
+    # select the active layer's slice via this value. Defaults to 0 so every
+    # existing centroid flow keeps working unchanged. Mirrors the indexer side.
+    args_with_layer = arg_list + ["cur_layer=0"]
+    call_with_layer = arg_list + ["cur_layer=cur_layer"]
+
+    args_def = ",\n    ".join(args_with_layer)
+    args_call = ",\n        ".join(call_with_layer)
 
     func_str = f"""
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_interface(
@@ -103,6 +111,8 @@ def generate_subgraph_entry_point(
         lines.append(f"    {tensor_name},  # global output tensor {global_tensor_id}")
     lines.append("    loc,")
     lines.append("    ctx,")
+    # Thread the explicit per-layer argument from forward() into each subgraph.
+    lines.append("    cur_layer=cur_layer,")
     lines.append(")")
     return "\n".join(lines)
 
@@ -142,7 +152,12 @@ def generate_entry_point(full_graph: Graph, sub_graphs: List[Graph], ctx: Contex
     if not memory_initiazation_lines:
         memory_initiazation_lines = ["pass"]
     memory_initiazation_str = indent_block("\n".join(memory_initiazation_lines), 2)
-    entry_point_arg_str = "cache, loc, ctx"
+    # ``cur_layer`` is an EXPLICIT trailing forward() argument (default 0): the
+    # compiled cache pipeline runs for every decode layer's aux refresh but is
+    # compiled once, so the caller (memory_pool_mla) passes the active global
+    # layer id here and per-layer ops gather their layer slice. The default
+    # keeps every existing caller (which passes only cache/loc/ctx) working.
+    entry_point_arg_str = "cache, loc, ctx, cur_layer=0"
 
     for sub_graph_id, sub_graph in enumerate(sub_graphs):
         entry_point_impl_lines.append(

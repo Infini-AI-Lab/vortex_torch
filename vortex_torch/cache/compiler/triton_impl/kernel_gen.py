@@ -385,7 +385,8 @@ def generate_triton_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> s
 {kernel_str}
 
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
-{args_def}
+{args_def},
+{INDENT}cur_layer=0,
 ):
 {fp8_rebind_str}
     {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_kernel[(loc.shape[0], ctx.head_num)](
@@ -394,7 +395,11 @@ def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
 """
         return impl_str.strip()
 
-    # Schedule.S: standalone op — defer entirely to the op's codegen.
+    # Schedule.S: standalone op — defer entirely to the op's Schedule.S codegen
+    # (cache-side custom_impl registry). The emitted impl takes the explicit
+    # trailing ``cur_layer`` arg so per-layer-weight ops can gather their slice.
+    from .. import custom_impl
+
     arg_list = []
     for local_tensor_id in sub_graph.input_tensor_ids:
         arg_list.append(f"tensor_{local_tensor_id}")
@@ -407,12 +412,14 @@ def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
     assert len(sub_graph.op_list) == 1, (
         "Expected exactly one operation in non-workload-scheduled cache subgraph."
     )
-    op_impl_func = get_impl_func(sub_graph.op_list[0])
+    custom_impl.register_headers(ctx)
+    op_impl_func = custom_impl.get_impl_func(sub_graph.op_list[0])
     op_impl_str = indent_block(op_impl_func(sub_graph, 0, ctx), 1)
 
     impl_str = f"""
 def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_impl(
-{args_def}
+{args_def},
+{INDENT}cur_layer=0,
 ):
 {op_impl_str}
 """

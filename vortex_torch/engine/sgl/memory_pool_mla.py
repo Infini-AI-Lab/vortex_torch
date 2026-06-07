@@ -155,8 +155,15 @@ class VortexMLACachePool(MLATokenToKVPool):
         """Recompute per-page aux (centroids) from the just-written latent."""
         if layer.layer_id in self.layers_skip:
             return
+        # The (once-compiled) cache pipeline runs for every decode layer's aux
+        # refresh; pass the active global layer id as the EXPLICIT trailing
+        # ``cur_layer`` arg so per-layer-weight cache ops (e.g. the
+        # LearnedDescriptor Parameters) select the active layer's baked slice.
+        # The arg defaults to 0 in the generated forward(), so centroid flows
+        # that don't read it are unaffected.
         self.compiled_cache.forward(
-            self._layer_cache(layer.layer_id), loc.to(torch.int64), ctx=self.ctx
+            self._layer_cache(layer.layer_id), loc.to(torch.int64), ctx=self.ctx,
+            cur_layer=layer.layer_id,
         )
 
     def set_mla_kv_buffer(
@@ -208,4 +215,6 @@ class VortexMLACachePool(MLATokenToKVPool):
         for layer_id in range(self.start_layer, self.start_layer + self.layer_num):
             if layer_id in self.layers_skip:
                 continue
-            self.compiled_cache.forward(self._layer_cache(layer_id), loc, ctx=self.ctx)
+            self.compiled_cache.forward(
+                self._layer_cache(layer_id), loc, ctx=self.ctx, cur_layer=layer_id,
+            )

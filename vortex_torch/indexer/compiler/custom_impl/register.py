@@ -20,6 +20,7 @@ from ...scan import Softmax, Normalize, Conv1d
 from ...reduce import Reduce
 from ...matmul import GeMM
 from ...reshape import Reshape
+from ...factor_score import FactorScore
 
 from .topk import (
     generate_topk_impl,
@@ -33,6 +34,7 @@ from .conv1d import generate_conv1d_impl
 from .reduce_dim0 import generate_reduce_dim0_impl
 from .gemm_param import generate_gemm_param_impl
 from .reshape_s import generate_reshape_s_impl
+from .factor_score import generate_factor_score_impl
 
 
 IMPL_REGISTRY = {
@@ -58,6 +60,8 @@ IMPL_REGISTRY = {
     (GeMM,         Schedule.S): generate_gemm_param_impl,
     # Reshape under padded (non-pow2) inner dims → standalone torch reshape.
     (Reshape,      Schedule.S): generate_reshape_s_impl,
+    # FactorScore — learned factorized block scorer (torch launcher).
+    (FactorScore,  Schedule.S): generate_factor_score_impl,
 }
 
 

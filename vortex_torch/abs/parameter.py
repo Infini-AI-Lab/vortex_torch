@@ -44,10 +44,14 @@ class Parameter(vTensor):
         )
         if value.dim() == 2:
             value = value.unsqueeze(0)                         # [N,K] -> [1,N,K]
-        assert value.dim() == 3, (
-            f"Parameter: value must be [L,N,K] or [N,K], got {tuple(value.shape)}"
+        assert value.dim() >= 3, (
+            f"Parameter: value must be [L, ...] (>=3D) or [N,K], got {tuple(value.shape)}"
         )
-        L, N, K = value.shape
+        # Leading axis is the per-layer axis; the trailing two are the (N, K)
+        # contract dims that existing ops' rank/K checks read. Higher-rank
+        # values (e.g. per-(layer,head) [L,H,d,r]) keep their full shape on
+        # ``self.value``; only the metadata view is collapsed to (0, N, K).
+        N, K = value.shape[-2], value.shape[-1]
         # 3D metadata view [0, N, K] so existing ops' rank/K checks pass; the
         # leading 0 marks "no per-request axis" (shared across batch).
         super().__init__(shape=(0, N, K), dtype=value.dtype, device=value.device,

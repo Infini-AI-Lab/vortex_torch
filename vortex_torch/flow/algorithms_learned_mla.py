@@ -41,8 +41,8 @@ import torch
 
 from .flow_mla import vFlowMLA
 from .registry import register
-from ..indexer import topK, GeMM, Reshape, Parameter
-from ..cache import Mean as CMean
+from ..indexer import topK, GeMM, Reshape, Parameter, FactorScore
+from ..cache import Mean as CMean, LearnedDescriptor
 from ..abs import ContextBase
 
 
@@ -165,3 +165,151 @@ class LearnedBlockSparseMLA(vFlowMLA):
 
     def create_cache(self, block_size: int, kv_lora_rank: int, qk_rope_head_dim: int):
         return {"centroids": (1, kv_lora_rank + qk_rope_head_dim)}
+
+
+# --------------------------------------------------------------------------- #
+# Factorized learned block compressor (cache-side LearnedDescriptor +
+# indexer-side FactorScore).
+# --------------------------------------------------------------------------- #
+def _load_factorized_weights():
+    r"""Resolve the factorized per-layer weights for the learned flow.
+
+    Reads ``VORTEX_COMPRESSOR_CKPT`` (a ``factorized`` per-layer compressor:
+    ``scorer.Wt [L,H,bs,m]``, ``scorer.Wk [L,H,d,r]``, ``scorer.Wq [L,H,d,r]``,
+    ``layer_ids``) and scatters the trained rows into ``[Lfull, ...]`` buffers
+    indexed by global layer id (row == layer id). Returns
+    ``(Wt, Wk, Wq, layer_lookup, H, m, r)`` or ``None`` when the env var is
+    unset → the flow builds an identity fallback (== head-summed centroid scorer).
+    """
+    ckpt_path = os.environ.get("VORTEX_COMPRESSOR_CKPT", "").strip()
+    if not ckpt_path:
+        return None
+
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    sd = ckpt["state_dict"]
+    cfg = ckpt.get("config", {})
+    layer_ids = [int(x) for x in ckpt.get("layer_ids", [])]
+    if cfg.get("arch") not in (None, "factorized"):
+        raise ValueError(
+            "learned_factorized_block_sparse_mla expects a factorized compressor "
+            f"checkpoint; got arch={cfg.get('arch')}."
+        )
+    if not bool(cfg.get("per_layer", True)):
+        raise ValueError("learned_factorized_block_sparse_mla expects per_layer=True.")
+
+    def _get(name: str) -> torch.Tensor:
+        for key in (f"scorer.{name}", name):
+            if key in sd:
+                return sd[key].float()
+        raise KeyError(f"checkpoint missing 'scorer.{name}'")
+
+    Wt = _get("Wt")                       # [L, H, bs, m]
+    Wk = _get("Wk")                       # [L, H, d, r]
+    Wq = _get("Wq")                       # [L, H, d, r]
+    L, H, bs, m = Wt.shape
+    _, _, d, r = Wk.shape
+    Lfull = (max(layer_ids) + 1) if layer_ids else L
+
+    # Identity defaults for untrained layers: Wt = 1/bs (uniform mean over the
+    # first landmark, zeros elsewhere), Wk/Wq = truncated identity (the centroid
+    # warm-start the trainer itself uses, init="identity").
+    Wt_full = torch.zeros(Lfull, H, bs, m)
+    Wt_full[..., 0] = 1.0 / bs
+    eye = torch.zeros(d, r)
+    eye[:min(d, r), :min(d, r)] = torch.eye(min(d, r))
+    Wk_full = eye.view(1, 1, d, r).repeat(Lfull, H, 1, 1).contiguous()
+    Wq_full = Wk_full.clone()
+
+    rows = layer_ids if layer_ids else list(range(L))
+    for row, lid in enumerate(rows):
+        if row < L and 0 <= lid < Lfull:
+            Wt_full[lid] = Wt[row]
+            Wk_full[lid] = Wk[row]
+            Wq_full[lid] = Wq[row]
+
+    layer_lookup = torch.arange(Lfull, dtype=torch.long)
+    return Wt_full, Wk_full, Wq_full, layer_lookup, H, m, r
+
+
+@register("learned_factorized_block_sparse_mla")
+class LearnedFactorizedBlockSparseMLA(vFlowMLA):
+    r"""Per-layer **learned factorized** block-sparse routing on the MLA latent.
+
+    Both the within-block token mixing (``Wt``) and the channel compression
+    (``Wk``) are learned (cache side, :class:`LearnedDescriptor`), producing
+    ``m`` landmark descriptors ``g[H*m, r]`` per block; the indexer
+    (:class:`FactorScore`) scores each block by ``Σ_h max_m ⟨W_q[h]^T q_h,
+    g[h,m]⟩``. Identity weights (no checkpoint) reduce to the head-summed
+    centroid scorer.
+
+    Requires ``vortex_attention_backend='trtllm'`` (block-table score layout).
+    """
+
+    # GLM-4.7-Flash geometry (hardcoded; matches the bilinear flow's TODO until
+    # num_q_heads / block_size are threaded through vFlowMLA.initialize). _BS is
+    # the cuda_mla block_size (== page_size); the LearnedDescriptor profile
+    # asserts the baked Wt block-size axis matches the runtime block_size.
+    _H = 20
+    _D = 576
+    _BS = 32
+
+    def __init__(self) -> None:
+        super().__init__()
+        loaded = _load_factorized_weights()
+        if loaded is not None:
+            Wt, Wk, Wq, lookup, H, m, r = loaded
+        else:
+            # Identity fallback (no checkpoint): m=1, r=d, Wt=1/bs, Wk=Wq=I
+            # → reduces to the head-summed centroid scorer.
+            H, d = self._H, self._D
+            m, r = 1, d
+            bs = self._BS
+            Wt = torch.zeros(1, H, bs, m); Wt[..., 0] = 1.0 / bs
+            eye = torch.eye(d).view(1, 1, d, r).repeat(1, H, 1, 1).contiguous()
+            Wk = eye.clone(); Wq = eye.clone()
+            lookup = None
+
+        self._m = int(m)
+        self._r = int(r)
+        # Cache-side Parameters (Wt [L,H,bs,m], Wk [L,H,d,r]) for LearnedDescriptor.
+        self.Wt = Parameter(Wt, lookup)
+        self.Wk = Parameter(Wk, lookup)
+        # Indexer-side Parameter (Wq) consumed by FactorScore.
+        self.Wq = Parameter(Wq, lookup)
+
+        self.descriptor = LearnedDescriptor(self.Wt, self.Wk, H, self._m, self._r)
+        self.score = FactorScore(self.Wq, H, self._m, self._r)
+        self.output_func = topK()
+        self._H_eff = H
+        self._lookup = lookup
+
+    def initialize(self, block_size, kv_lora_rank, qk_rope_head_dim, *args, **kwargs):
+        r"""Standard MLA initialize, plus rebuild the cache-side token-mixing
+        ``Wt`` to the configured ``block_size`` when it differs from the trained
+        block axis. The trained ``Wt`` is learned for one block size (32 for the
+        shipped checkpoint); for any other block size (e.g. the compile-check
+        sweep's 16) it falls back to uniform mean-pool ``1/block_size`` in the
+        first landmark so the flow still compiles/runs (trained ``Wk``/``Wq``
+        are kept). At the deployment block size matching the checkpoint, the
+        trained ``Wt`` is used unchanged."""
+        trained_bs = int(self.Wt.value.shape[-2])
+        if int(block_size) != trained_bs:
+            H = self._H_eff
+            Wt = torch.zeros(self.Wt.value.shape[0], H, int(block_size), self._m)
+            Wt[..., 0] = 1.0 / float(block_size)
+            self.Wt = Parameter(Wt, self._lookup)
+            self.descriptor = LearnedDescriptor(
+                self.Wt, self.Wk, H, self._m, self._r
+            )
+        return super().initialize(block_size, kv_lora_rank, qk_rope_head_dim,
+                                  *args, **kwargs)
+
+    def forward_indexer(self, q, o, cache, ctx: ContextBase):
+        score = self.score(q, cache["descriptors"], ctx=ctx)   # [S, 1, 1] RAGGED
+        self.output_func(score, o, ctx=ctx)
+
+    def forward_cache(self, cache, loc, ctx: ContextBase):
+        self.descriptor(cache["latent"], cache["descriptors"], loc=loc, ctx=ctx)
+
+    def create_cache(self, block_size: int, kv_lora_rank: int, qk_rope_head_dim: int):
+        return {"descriptors": (self._H * self._m, self._r)}
