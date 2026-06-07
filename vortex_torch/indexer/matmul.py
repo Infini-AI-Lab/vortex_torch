@@ -168,14 +168,18 @@ class GeMM(vOp):
     # Parameter (batch-shared constant) path: Schedule.S + torch.matmul
     # ------------------------------------------------------------------ #
     def _profile_param(self, x: vTensor, y, ctx: Context) -> vTensor:
-        r"""``y`` is a :class:`Parameter` ``[L, N_y, K]`` (batch-shared constant).
-        The contraction is the **standard GeMM** one over the last dim ``K``
-        (``x.shape[2] == K``): ``O[b, a, nx] = Σ_k W[ℓ, a, k] x[b, nx, k]`` →
-        ``[B, N_y, N_x]`` (BATCHED), computed by :meth:`compute_param` (gather row
-        ``cur_layer``, torch.matmul). Same definition as fused ``GeMM`` — only the
-        ``y`` operand is a baked constant and the launch is ``Schedule.S`` so the
-        big weight never enters the tiled kernel. Reshape the activation around
-        this op for any flatten/transpose (GeMM stays self-contained)."""
+        r"""``y`` is a :class:`Parameter`, baked constant, contracting the last dim
+        ``K`` (``x.shape[2] == K``); computed by :meth:`compute_param`
+        (``Schedule.S`` ``torch.matmul``, so the big weight never enters the tiled
+        kernel). Two shapes, both producing a 3D BATCHED output:
+
+        * **plain** (value ``[L, N_y, K]``): ``O[b,a,nx] = Σ_k W[a,k] x[b,nx,k]`` →
+          ``[B, N_y, N_x]`` — the standard GeMM contraction.
+        * **per-head / batched** (value ``[L, H, N_y, K]``): ``x`` is per-head with
+          the head folded into ``N_x`` (``x.shape[1] = H*N_x``); the op does a
+          batched matmul ``O[b,h,a,c] = Σ_k W[h,a,k] x[b,h,c,k]`` and folds the head
+          back into the row axis → 3D ``[B, H*N_y, N_x]`` (the 4D form only ever
+          exists inside the launcher; all graph tensors stay 3D)."""
         prefix = self._prefix()
         assert x._format == FORMAT.BATCHED, (
             f"{prefix}a Parameter operand requires a BATCHED activation (per-request); "
@@ -191,10 +195,22 @@ class GeMM(vOp):
         # cuda-graph-capture) and snapshot the host layer lookup.
         y.materialize(device=x.device, dtype=torch.bfloat16)
 
-        Ny, Nx = int(y.shape[1]), int(x.shape[1])
+        Ny = int(y.shape[1])
+        if y.value.dim() == 4:                       # per-head [L, H, N_y, K]
+            H = int(y.value.shape[1])
+            assert int(x.shape[1]) % H == 0, (
+                f"{prefix}per-head Parameter (H={H}) needs x.shape[1] divisible by H, "
+                f"got x.shape[1]={x.shape[1]}"
+            )
+            Nx = int(x.shape[1]) // H
+            out_N = H * Ny
+        else:                                        # plain [L, N_y, K]
+            Nx = int(x.shape[1])
+            out_N = Ny
+
         self.output_format = FORMAT.BATCHED
         self.output_buffer = vTensor(
-            shape=(0, Ny, Nx), dtype=ctx.vortex_dtype, device=x.device,
+            shape=(0, out_N, Nx), dtype=ctx.vortex_dtype, device=x.device,
             _format=FORMAT.BATCHED, tensor_id=len(ctx.tensor_list),
         )
         ctx.tensor_list.append(self.output_buffer)
@@ -207,12 +223,21 @@ class GeMM(vOp):
 
     @torch.no_grad()
     def compute_param(self, x: torch.Tensor, cur_layer: int) -> torch.Tensor:
-        r"""Runtime (Schedule.S launcher): the standard GeMM contraction
-        ``O[b,a,nx] = Σ_k W[a,k] x[b,nx,k]`` with ``W = self._param.gather(
-        cur_layer)`` ``[N_y, K]`` (bf16, on device). ``x`` ``[B, N_x, K]`` (bf16) →
-        ``[B, N_y, N_x]``. No ``.to(device)`` / ``.item()`` — cuda-graph-safe."""
+        r"""Runtime (Schedule.S launcher), ``W = self._param.gather(cur_layer)``
+        (bf16, on device). Plain ``W`` ``[N_y, K]``: ``O = Σ_k W[a,k] x[b,nx,k]`` →
+        ``[B, N_y, N_x]``. Per-head ``W`` ``[H, N_y, K]``: ``x`` ``[B, H*N_x, K]`` →
+        reshape ``[B, H, N_x, K]``, batched ``O[b,h,a,c]=Σ_k W[h,a,k] x[b,h,c,k]`` →
+        fold to 3D ``[B, H*N_y, N_x]``. No ``.to(device)`` / ``.item()`` —
+        cuda-graph-safe; the 4D form is launcher-internal only."""
         assert x.dtype == torch.bfloat16, (
             f"{self._prefix()}compute_param expects a bf16 activation, got {x.dtype}"
         )
-        W = self._param.gather(cur_layer)                      # [Ny, K] bf16
-        return torch.einsum("nk,bxk->bnx", W, x)             # [B, Ny, Nx]
+        W = self._param.gather(cur_layer)                      # [Ny,K] or [H,Ny,K] bf16
+        if W.dim() == 2:                                        # plain
+            return torch.einsum("nk,bxk->bnx", W, x)          # [B, Ny, Nx]
+        # per-head batched: x [B, H*Nx, K] -> [B, H, Nx, K]; fold head back into rows.
+        H, Ny, _ = W.shape
+        B, NxH, K = x.shape
+        x4 = x.reshape(B, H, NxH // H, K)                       # [B, H, Nx, K]
+        O = torch.einsum("hak,bhck->bhac", W, x4)             # [B, H, Ny, Nx]
+        return O.reshape(B, H * Ny, NxH // H)                  # [B, H*Ny, Nx]
