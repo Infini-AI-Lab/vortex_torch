@@ -70,7 +70,7 @@ def generate_subgraph_func(sub_graph: Graph, sub_graph_id: int, ctx: Context) ->
 
     # Explicit trailing per-layer argument (additive, backward compatible).
     # A vFlow compiles ONCE but is invoked for every decode layer; ops that
-    # bake per-layer constants (LearnedQuery) select the active layer's slice
+    # bake per-layer constants select the active layer's slice
     # from this value. Defaults to 0 so every existing flow keeps working.
     args_with_layer = arg_list + ["cur_layer=0"]
     call_with_layer = arg_list + ["cur_layer=cur_layer"]
@@ -163,7 +163,7 @@ def generate_entry_point(full_graph: Graph, sub_graphs: list[Graph], ctx: Contex
     # ``cur_layer`` is an EXPLICIT trailing forward() argument (default 0):
     # the compiled indexer runs for every decode layer but is compiled once,
     # so the backend passes the active global layer id here and per-layer
-    # ops (LearnedQuery) gather their layer slice. The default keeps every
+    # ops gather their layer slice. The default keeps every
     # existing caller (which passes only q.../o/cache/ctx) working unchanged.
     entry_point_arg_list = query_arg_names + ["o", "cache", "ctx", "cur_layer=0"]
     entry_point_arg_str = ",".join(entry_point_arg_list)

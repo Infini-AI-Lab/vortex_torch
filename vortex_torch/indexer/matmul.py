@@ -102,12 +102,18 @@ class GeMM(vOp):
         self.output_format: Optional[FORMAT] = None
         self.output_buffer: Optional[torch.Tensor] = None
         self.schedule = Schedule.W
+        self._param = None        # set when the y operand is a Vortex.Parameter
 
     # ---------------- profile ----------------
     def profile(self, x: vTensor, y: vTensor, ctx: Context) -> vTensor:
         r"""Trace-time: validate ``x`` ``[B|S, N_x, K]`` / ``y`` ``[S, N_y, K]``
         (matching ``K``), register the op, and return a ``vTensor`` view of the
-        ``[S, N_y, N_x]`` output (see the class docstring)."""
+        ``[S, N_y, N_x]`` output (see the class docstring).
+
+        If ``y`` is a :class:`~vortex_torch.indexer.Parameter` (``FORMAT.PARAMETER``,
+        a batch-shared learned constant) the op runs as a standalone
+        ``Schedule.S`` ``torch.matmul`` over the per-layer slice instead of the
+        fused per-workload kernel (see :meth:`_profile_param`)."""
         prefix = self._prefix()
 
         # Type checks
@@ -118,7 +124,14 @@ class GeMM(vOp):
         assert x.dim() == 3 and y.dim() == 3, (
             f"{prefix}expected 3D inputs; got x.ndim={x.dim()}, y.ndim={y.dim()}"
         )
-        # K must match
+
+        # Batch-shared learned constant operand → Schedule.S torch.matmul path.
+        # Checked BEFORE the K-match: a Parameter contracts the FLATTENED
+        # activation (H·d), not x's last dim, so the normal K rule doesn't apply.
+        if y._format == FORMAT.PARAMETER:
+            return self._profile_param(x, y, ctx)
+
+        # K must match (normal fused path)
         assert x.shape[2] == y.shape[2], (
             f"{prefix}last dimension mismatch: x.shape[2]={x.shape[2]} vs y.shape[2]={y.shape[2]}"
         )
@@ -150,3 +163,54 @@ class GeMM(vOp):
         ctx.op_to_output_tensor_list.append([self.output_buffer.tensor_id])  # Map this op to its output tensor
 
         return self.output_buffer
+
+    # ------------------------------------------------------------------ #
+    # Parameter (batch-shared constant) path: Schedule.S + torch.matmul
+    # ------------------------------------------------------------------ #
+    def _profile_param(self, x: vTensor, y, ctx: Context) -> vTensor:
+        r"""``y`` is a :class:`Parameter` ``[L, N_y, K]`` (batch-shared constant).
+        Standard ``GeMM`` contraction over ``K`` (matching ``x``'s last dim):
+        output ``O[b, a, nx] = Σ_k W[ℓ, a, k] x[b, nx, k]`` → ``[B, N_y, N_x]``
+        (BATCHED), computed by :meth:`compute_param` (gather row ``cur_layer``,
+        torch.matmul). The big weight is baked on the op (reached via
+        ``ctx.op_list``) and never enters the fused kernel."""
+        prefix = self._prefix()
+        assert x._format == FORMAT.BATCHED, (
+            f"{prefix}a Parameter operand requires a BATCHED activation (per-request); "
+            f"got x._format={x._format}"
+        )
+        assert int(x.shape[2]) == int(y.shape[2]), (
+            f"{prefix}K mismatch: x.shape[2]={x.shape[2]} vs Parameter K={y.shape[2]} "
+            f"(reshape/flatten the activation to match the Parameter's K)"
+        )
+        self.schedule = Schedule.S
+        self._param = y
+        # Bake the weight onto device + bf16 ONCE here (compile time, pre
+        # cuda-graph-capture) and snapshot the host layer lookup.
+        y.materialize(device=x.device, dtype=torch.bfloat16)
+
+        Ny, Nx = int(y.shape[1]), int(x.shape[1])
+        self.output_format = FORMAT.BATCHED
+        self.output_buffer = vTensor(
+            shape=(0, Ny, Nx), dtype=ctx.vortex_dtype, device=x.device,
+            _format=FORMAT.BATCHED, tensor_id=len(ctx.tensor_list),
+        )
+        ctx.tensor_list.append(self.output_buffer)
+        ctx.output_tensor_to_op_list.append(len(ctx.op_list))
+        ctx.op_list.append(self)
+        # The Parameter is NOT a graph input (it is baked on the op); only x is.
+        ctx.op_to_input_tensor_list.append([x.tensor_id])
+        ctx.op_to_output_tensor_list.append([self.output_buffer.tensor_id])
+        return self.output_buffer
+
+    @torch.no_grad()
+    def compute_param(self, x: torch.Tensor, cur_layer: int) -> torch.Tensor:
+        r"""Runtime (Schedule.S launcher): ``O[b,a,nx] = Σ_k W[a,k] x[b,nx,k]`` with
+        ``W = self._param.gather(cur_layer)`` ``[N_y, K]`` (bf16, on device).
+        ``x`` ``[B, N_x, K]`` (bf16) → ``[B, N_y, N_x]``. No ``.to(device)`` /
+        ``.item()`` — cuda-graph-safe."""
+        assert x.dtype == torch.bfloat16, (
+            f"{self._prefix()}compute_param expects a bf16 activation, got {x.dtype}"
+        )
+        W = self._param.gather(cur_layer)                      # [Ny, K] bf16
+        return torch.einsum("nk,bxk->bnx", W, x)             # [B, Ny, Nx]

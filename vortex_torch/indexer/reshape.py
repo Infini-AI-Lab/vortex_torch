@@ -87,6 +87,18 @@ class Reshape(vOp):
             tensor_id=len(ctx.tensor_list),
         )
 
+        # The fused ``tl.reshape`` (Schedule.W) needs pow2 inner dims AND an
+        # unpadded tile — under padding it would mix padding into real positions.
+        # When either side's real inner dims aren't pow2 (padded), fall back to a
+        # standalone ``Schedule.S`` torch reshape over the REAL ``[:, :x1, :y1] ->
+        # [:, :x2, :y2]`` region (slicing the real data avoids any padding mixup;
+        # format-agnostic, any dims). Otherwise keep the fast fused path.
+        self.schedule = (
+            Schedule.S
+            if (x.needs_padding() or self.output_buffer.needs_padding())
+            else Schedule.W
+        )
+
         # Register in the indexer graph.
         ctx.tensor_list.append(self.output_buffer)
         ctx.output_tensor_to_op_list.append(len(ctx.op_list))

@@ -49,11 +49,18 @@ class FORMAT(Enum):
         BATCHED: Standard dense batched tensors (e.g., ``[B, N, D]``).
         RAGGED: Ragged tensors with variable-length sequences or elements per batch.
         PAGED: Paged tensors used for large or streaming data split into pages/chunks.
+        PARAMETER: A learned constant **shared across the batch** (a
+            :class:`~vortex_torch.indexer.Parameter`). Carries no per-request /
+            per-page axis; its value is baked into the compiled function. An op
+            that receives a PARAMETER operand (e.g. ``GeMM``) runs as a
+            standalone ``Schedule.S`` ``torch.matmul`` instead of the fused
+            per-workload kernel (so a large weight never enters the tiled kernel).
     """
 
     BATCHED = 0
     RAGGED = 1
     PAGED = 2
+    PARAMETER = 3
 
 
 def _next_pow2(n: int) -> int:

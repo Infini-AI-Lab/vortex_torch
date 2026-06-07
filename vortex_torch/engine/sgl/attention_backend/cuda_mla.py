@@ -387,7 +387,7 @@ class VortexCudaMLABackend(AttentionBackend):
         #    prefilled BOS/EOS + sparse_seqlens.
         # The (once-compiled) indexer runs for every decode layer; pass the
         # active global layer id as the EXPLICIT trailing ``cur_layer`` arg so
-        # per-layer-weight ops (e.g. LearnedQuery in learned_block_sparse_mla)
+        # per-layer-weight ops (e.g. the Parameter in learned_block_sparse_mla)
         # select the active layer's baked weight slice at runtime. The arg
         # defaults to 0 in the generated forward(), so every other flow that
         # doesn't pass it is unaffected.

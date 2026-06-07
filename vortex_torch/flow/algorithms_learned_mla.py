@@ -1,33 +1,36 @@
 r"""Learned per-layer bilinear block-sparse routing for MLA decode.
 
-This module deploys the trained per-layer "block compressor"
-(:mod:`vortex_torch.compressor`) as a runnable vortex flow. It reads almost
-exactly like :class:`RopeAwareBlockSparseMLA` — one centroid per block
-(``CMean``), score by a single dot ``⟨V, centroid⟩``, top-k — except the
-query side is replaced by the learned :class:`LearnedQuery` transform that
-bakes the trained per-layer weights as compiled-in constants and selects
-the active layer's slice at runtime.
+Deploys the trained per-layer "block compressor" (:mod:`vortex_torch.compressor`)
+as a runnable vortex flow, built **entirely from existing ops + a
+``Vortex.Parameter``** (no bespoke op). It reads almost like
+:class:`RopeAwareBlockSparseMLA` — one centroid per block (``CMean``), score by a
+single dot ``⟨V, centroid⟩``, top-k — except the head-mean query is replaced by a
+learned per-request transform ``V = W·q_flat``.
 
-**Why a learned query suffices.** The trained bilinear scorer is
+**The folding.** The trained bilinear scorer is
 
 .. math::
 
     \operatorname{score}(b) = \sum_h (W_q[\ell,h]^\top q_h)^\top (W_k[\ell,h]^\top c_b)
-        = \Big\langle \sum_h W_k[\ell,h]\,(W_q[\ell,h]^\top q_h),\; c_b \Big\rangle
-        = \langle V,\, c_b\rangle ,
+        = \Big\langle \underbrace{\sum_h W_k[\ell,h]\,W_q[\ell,h]^\top q_h}_{V},\; c_b \Big\rangle .
 
-so the cache side (centroid via ``CMean``) is identical to the centroid
-baseline and only the query becomes ``V``.
+The per-head sum folds into a single matrix ``W[ℓ] ∈ R^{d×(H·d)}`` with
+``W[ℓ][:, h·d:(h+1)·d] = W_k[ℓ,h] W_q[ℓ,h]^\top``, so ``V = W[ℓ] · q_flat`` where
+``q_flat`` is the head-flattened query. The cache side (centroid via ``CMean``)
+is identical to the centroid baseline.
 
-**Weight loading.** ``__init__`` loads a checkpoint from the
-``VORTEX_COMPRESSOR_CKPT`` env var — a ``torch.save`` dict
-``{"state_dict", "config", "layer_ids"}`` produced by
-``vortex_torch/compressor/train.py`` (with ``per_layer=True`` the scorer's
-``Wq``/``Wk`` have shape ``[L, H, d, r]`` and ``layer_ids`` lists the
-trained global layer indices). A ``global layer_id -> row`` lookup is built
-from ``layer_ids``. With the env var unset (or a layer absent from the
-checkpoint) the op falls back to identity (``V = Σ_h q_h``), so the flow
-still compiles and reproduces the plain head-summed centroid scorer.
+**Mechanism.** ``W`` is a :class:`~vortex_torch.indexer.Parameter`
+(``FORMAT.PARAMETER`` — a batch-shared constant) declared in ``__init__``. The
+``GeMM`` that multiplies ``q_flat`` by it sees the PARAMETER operand and runs as
+a standalone ``Schedule.S`` ``torch.matmul`` over the per-layer slice (gathered
+by the explicit ``cur_layer`` arg) — so the large weight never enters the fused
+kernel. ``Reshape`` flattens/​unflattens the inner dims.
+
+**Weights.** ``__init__`` loads ``VORTEX_COMPRESSOR_CKPT`` (a per-layer
+``{state_dict, config, layer_ids}`` from ``vortex_torch/compressor/train.py``),
+folds ``Wk·Wqᵀ`` into ``W[Lfull, d, H·d]`` (untrained layers → identity, so they
+reduce to the centroid scorer). Env unset ⇒ all-identity ⇒ flow == plain
+head-summed centroid scorer.
 """
 from __future__ import annotations
 
@@ -38,21 +41,20 @@ import torch
 
 from .flow_mla import vFlowMLA
 from .registry import register
-from ..indexer import topK, GeMM, LearnedQuery
+from ..indexer import topK, GeMM, Reshape, Parameter
 from ..cache import Mean as CMean
 from ..abs import ContextBase
 
 
-def _load_compressor_weights() -> Optional[
-    Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]
-]:
-    """Resolve ``(Wq, Wk, layer_lookup, scaling)`` for :class:`LearnedQuery`.
+def _load_folded_W() -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
+    """Resolve the folded per-layer weight for the learned flow.
 
-    Reads ``VORTEX_COMPRESSOR_CKPT`` if set and returns the per-layer weights
-    ``[L, H, d, r]`` plus a 1-D long ``layer_lookup`` of length
-    ``max(global_layer_id)+1`` mapping ``global layer_id -> row`` (``-1`` =
-    identity fallback). Returns ``None`` when the env var is unset, so the
-    op uses its lazy-identity default (``V = Σ_h q_h``, == centroid scorer).
+    Reads ``VORTEX_COMPRESSOR_CKPT`` (per-layer bilinear scorer) and returns
+    ``(W, layer_lookup)`` where ``W`` is ``[Lfull, d, H·d]`` with
+    ``W[ℓ][:, h·d:(h+1)·d] = Wk[ℓ,h] Wq[ℓ,h]^\\top`` (untrained rows = the
+    ``H``-fold identity, so they reduce to ``V = Σ_h q_h`` = centroid scorer) and
+    ``layer_lookup = arange(Lfull)`` (row == global layer id). Returns ``None``
+    when the env var is unset → the flow builds an identity Parameter lazily.
     """
     ckpt_path = os.environ.get("VORTEX_COMPRESSOR_CKPT", "").strip()
     if not ckpt_path:
@@ -61,74 +63,80 @@ def _load_compressor_weights() -> Optional[
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     sd = ckpt["state_dict"]
     cfg = ckpt.get("config", {})
-    layer_ids = list(ckpt.get("layer_ids", []))
-
+    layer_ids = [int(x) for x in ckpt.get("layer_ids", [])]
     if not bool(cfg.get("per_layer", True)):
         raise ValueError(
-            "learned_block_sparse_mla requires a per_layer=True compressor "
+            "learned_block_sparse_mla expects a per_layer=True compressor "
             f"checkpoint; got per_layer={cfg.get('per_layer')}."
         )
 
-    # BilinearScorer params are stored under scorer.Wq / scorer.Wk.
     def _get(name: str) -> torch.Tensor:
         for key in (f"scorer.{name}", name):
             if key in sd:
                 return sd[key].float()
-        raise KeyError(
-            f"compressor checkpoint missing '{name}' (looked for "
-            f"'scorer.{name}'); keys: {sorted(sd.keys())[:8]}..."
-        )
+        raise KeyError(f"checkpoint missing 'scorer.{name}'; keys: "
+                       f"{sorted(sd.keys())[:8]}...")
 
-    Wq = _get("Wq")  # tie_qk -> Wq is Wk; still present after state_dict()
+    Wq = _get("Wq")                                    # [L, H, d, r]
     Wk = _get("Wk") if any(k.endswith("Wk") for k in sd) else Wq
     assert Wq.dim() == 4, f"expected per-layer Wq [L,H,d,r], got {tuple(Wq.shape)}"
     L, H, d, r = Wq.shape
 
-    # Build global layer_id -> row lookup. layer_ids[i] is the global layer
-    # index trained into row i; unknown layers map to -1 (identity fallback).
+    # Fold per head: M[l,h] = Wk[l,h] @ Wq[l,h]^T  ([d,d]); W[l][:, h*d:(h+1)*d] = M[l,h].
+    M = torch.einsum("lhdr,lher->lhde", Wk, Wq)        # [L, H, d, d]
+    W_trained = M.permute(0, 2, 1, 3).reshape(L, d, H * d).contiguous()  # [L, d, H*d]
+
+    # Build Lfull rows (indexed directly by global layer id); untrained = identity.
+    Lfull = (max(layer_ids) + 1) if layer_ids else L
+    eye_fold = torch.eye(d).repeat(1, H)               # [d, H*d]  (H identity blocks)
+    W = eye_fold.unsqueeze(0).repeat(Lfull, 1, 1).contiguous()           # [Lfull, d, H*d]
     if layer_ids:
-        max_lid = max(layer_ids)
-        layer_lookup = torch.full((max_lid + 1,), -1, dtype=torch.long)
         for row, lid in enumerate(layer_ids):
             if row < L:
-                layer_lookup[int(lid)] = row
+                W[lid] = W_trained[row]
     else:
-        # No layer_ids recorded: assume row == global layer id.
-        layer_lookup = torch.arange(L, dtype=torch.long)
-
-    return Wq.contiguous(), Wk.contiguous(), layer_lookup, 1.0
+        W[:L] = W_trained
+    layer_lookup = torch.arange(Lfull, dtype=torch.long)
+    return W, layer_lookup
 
 
 @register("learned_block_sparse_mla")
 class LearnedBlockSparseMLA(vFlowMLA):
-    r"""
-    Per-layer **learned** bilinear block-sparse routing on the fused MLA latent.
+    r"""Per-layer **learned** bilinear block-sparse routing on the fused MLA latent.
 
-    Twin of :class:`RopeAwareBlockSparseMLA`: one centroid per block, score by
-    a single dot, top-k — but the head-mean query is replaced by the trained
-    per-layer transform :math:`V = \sum_h W_k[\ell,h](W_q[\ell,h]^\top q_h)`,
-    giving the request-level bilinear score :math:`\langle V, c_b\rangle`.
+    Twin of :class:`RopeAwareBlockSparseMLA`, but the head-mean query is replaced
+    by ``V = W[ℓ]·q_flat`` (a ``Vortex.Parameter`` consumed by ``GeMM`` on its
+    ``Schedule.S`` torch.matmul path), giving the request-level bilinear score
+    ``⟨V, c_b⟩``.
     """
+
+    # NOTE: query-head count H and latent dim d are hardcoded to GLM-4.7-Flash
+    # geometry so every op/Parameter can be built in __init__ (vFlowMLA.initialize
+    # currently passes d via kv_lora_rank+qk_rope_head_dim but NOT H). TODO: thread
+    # num_q_heads through initialize() and derive these instead of hardcoding.
+    _H = 20
+    _D = 576
 
     def __init__(self) -> None:
         super().__init__()
-        # Trained per-layer weights from VORTEX_COMPRESSOR_CKPT, or None for the
-        # lazy-identity default (V = Σ_h q_h == head-summed centroid scorer).
-        loaded = _load_compressor_weights()
-        if loaded is None:
-            Wq = Wk = lookup = None
-            scaling = 1.0
+        loaded = _load_folded_W()
+        if loaded is not None:
+            W, lookup = loaded
+            d = int(W.shape[1]); H = int(W.shape[2]) // d
         else:
-            Wq, Wk, lookup, scaling = loaded
+            # identity fallback (no checkpoint): V = Σ_h q_h == centroid scorer.
+            H, d = self._H, self._D
+            W = torch.eye(d).repeat(1, H)                   # [d, H*d] (-> Parameter [1,d,H*d])
+            lookup = None
 
-        # Indexer-side ops (run every decode step). One op instance per call site.
-        self.learned_query = LearnedQuery(Wq, Wk, lookup, scaling=scaling)
-        self.gemm = GeMM()             # GeMM(x, y) = y @ xᵀ → per-block score
-        self.output_func = topK()      # terminal: write selected block ids to o
-
-        # Cache-side op (run once per finished block): block-mean latent centroid
-        # — identical to RopeAwareBlockSparseMLA.
-        self.reduction = CMean(dim=1)
+        # All ops + the Parameter are defined here (no lazy creation in forward).
+        self.W = Parameter(W, lookup)                       # batch-shared learned constant
+        self.rq = Reshape(-1, 1, H * d)                     # q [B,H,d] -> [B,1,H*d]
+        self.gV = GeMM()                                    # q_flat × W -> [B,d,1] (Schedule.S)
+        self.rv = Reshape(-1, 1, d)                         # V [B,d,1] -> [B,1,d]
+        self.gemm = GeMM()                                  # V × centroids -> per-block score
+        self.output_func = topK()                          # terminal: block ids -> o
+        self.reduction = CMean(dim=1)                      # cache: block-mean latent centroid
 
     def forward_indexer(
         self,
@@ -137,8 +145,11 @@ class LearnedBlockSparseMLA(vFlowMLA):
         cache: Dict[str, torch.Tensor],
         ctx: ContextBase,
     ):
-        V = self.learned_query(q, ctx=ctx)                          # [B, 1, latent_dim]
-        score = self.gemm(V, cache["centroids"], ctx=ctx)          # [S, 1, 1]
+        # Composable, all existing ops + the Vortex.Parameter:
+        q_flat = self.rq(q, ctx=ctx)                        # [B, 1, H*d]
+        V = self.gV(q_flat, self.W, ctx=ctx)                # [B, d, 1]  (param -> Schedule.S)
+        V = self.rv(V, ctx=ctx)                             # [B, 1, d]
+        score = self.gemm(V, cache["centroids"], ctx=ctx)  # [S, 1, 1]
         self.output_func(score, o, ctx=ctx)
 
     def forward_cache(
@@ -150,7 +161,4 @@ class LearnedBlockSparseMLA(vFlowMLA):
         self.reduction(cache["latent"], cache["centroids"], loc=loc, ctx=ctx)
 
     def create_cache(self, block_size: int, kv_lora_rank: int, qk_rope_head_dim: int):
-        # "latent" is auto-provided — declare only the aux centroid (full width).
-        return {
-            "centroids": (1, kv_lora_rank + qk_rope_head_dim),
-        }
+        return {"centroids": (1, kv_lora_rank + qk_rope_head_dim)}

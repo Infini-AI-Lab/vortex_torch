@@ -52,7 +52,6 @@ attention indexers in vFlow-compatible systems.
 
 
 from .matmul import GeMM, GeMV
-from .learned_query import LearnedQuery
 from .output_func import topK, approxTopK, Union
 from .select import TopK
 from .reduce import Max, Mean, Min, L2Norm, Sum
@@ -68,12 +67,12 @@ from .save_load import Save, Load
 from .mask import MaskSlice
 from .kron import Kron
 from .reshape import Reshape
+from .parameter import Parameter
 from . import utils_sglang, compiler
 from .context import Context, get_ctx
 from .metadata import MetaData
 __all__ = [
     "GeMM", "GeMV",
-    "LearnedQuery",
     "topK", "approxTopK", "TopK", "Union",
     "Max", "Mean", "Min", "L2Norm", "Sum",
     "Softmax", "Normalize", "Conv1d",
@@ -86,6 +85,7 @@ __all__ = [
     "MaskSlice",
     "Kron",
     "Reshape",
+    "Parameter",
     "utils_sglang",
     "Context",
     "MetaData",
