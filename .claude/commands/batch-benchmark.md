@@ -79,7 +79,7 @@ failing variant first.
 Step 3 — RULER pre-filter (quick quality gate, ≥ 0.85). Run
 `algorithm_scientist/run_ruler.py` on each variant sequentially on
 one free GPU. Any variant scoring below **0.85 accuracy** on
-`examples/ruler/validation.jsonl` has structurally broken attention — fix
+`examples/ruler/validation_4k.jsonl` has structurally broken attention — fix
 it (widen `vortex_topk_val`/`vortex_topk_ratio` or revise the
 indexer), re-pre-flight, and re-run RULER until all 4 pass before
 launching AIME24.

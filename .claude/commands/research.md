@@ -28,7 +28,7 @@ recall screen will mispredict:
   model) and add `--generate <N>` so the captured query is a real
   **mid-generation** decode step (AIME generates long outputs — the
   throughput-relevant attention is late in generation, not the prompt's last token).
-- Hunting **long-context retrieval heads** → `--data examples/ruler/validation.jsonl`
+- Hunting **long-context retrieval heads** → `--data examples/ruler/validation_4k.jsonl`
   (RULER/NIAH), large `--max-ctx`.
 - Mix a few sources/samples for robustness. Record why you picked it in the journal.
 

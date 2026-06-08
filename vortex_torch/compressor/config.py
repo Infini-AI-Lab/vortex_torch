@@ -24,19 +24,31 @@ class CompressorConfig:
     ``latent_dim = kv_lora_rank + qk_rope_head_dim`` (576 for GLM) and the heads
     here are the *query* heads.
     """
-    latent_dim: int                 # KV/descriptor input width (576 for GLM MLA)
+    latent_dim: int                 # KV/descriptor input width (576 for GLM MLA;
+                                    #   == head_dim, e.g. 128, for MHA/GQA)
     num_q_heads: int                # number of query heads (per-head params)
-    proj_dim: int = 128             # r — descriptor rank (compression: r < latent_dim)
+    num_kv_heads: int = 0           # MHA/GQA: KV heads (cache-side params are per
+                                    #   (layer, kv_head); 0 = MLA shared latent)
+    proj_dim: int = 128             # r = d_c — descriptor rank (compression: r < latent_dim)
     arch: str = "bilinear"          # block-scorer architecture (see model.ARCH_REGISTRY)
     pool: str = "mean"              # within-block pooling: "mean" (linear) or "max"
-    num_landmarks: int = 1          # arch="landmark"/"factorized": descriptors per block (max-scored)
+    num_landmarks: int = 1          # m = b_c — arch="landmark"/"factorized"/"gqa_factorized":
+                                    #   descriptors per block (max-scored)
     hidden_dim: int = 0             # arch="mlp": hidden width of the per-head MLP heads
     block_size: int = 16            # tokens per block — sizes the learned token-mixing
                                     # (arch="factorized", which compresses block_size→m too)
     per_layer: bool = True          # separate params per (layer,head) vs shared per head
     num_layers: int = 0             # required when per_layer (number of trained layers)
     tie_qk: bool = False            # share Wq = Wk
-    init: str = "identity"          # "identity" (truncated I → centroid warm start) or "orthogonal"
+    tau_per_channel: bool = False   # gqa_envelope: learn a temperature per CHANNEL
+                                    # (vs per landmark) — lets outlier channels pick
+                                    # their own envelope sharpness
+    index_heads: int = 4            # gqa_lightning: number of ReLU indexer heads (H_I)
+    init: str = "identity"          # "identity" (truncated I → centroid warm start),
+                                    # "orthogonal", or "lowpass" (gqa_factorized: keep the
+                                    # r most rope-coherent channels — see rope_theta)
+    rope_theta: float = 1e6         # teacher RoPE base (Qwen3: 1e6); used by init="lowpass"
+                                    # to rank channels by mean-pool coherence alpha_i(B)
 
     def to_json(self, path: str) -> None:
         with open(path, "w", encoding="utf-8") as f:

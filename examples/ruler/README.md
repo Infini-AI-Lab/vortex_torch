@@ -14,12 +14,20 @@ no matter what its throughput looks like.
 
 | File | What it is |
 |------|------------|
-| `validation.jsonl` | The RULER eval set — one `{"input": <prompt>, "outputs": [<answer>]}` per line. A run scores a hit when `outputs[0]` is a substring of the model's generation. |
-| `run_ruler.py` | **MHA** runner. Boots an in-process `sgl.Engine` with vortex sparsity and scores `validation.jsonl`. Knobs via env vars (below). |
-| `run_ruler_mla.py` | **MLA** runner (DeepSeek/GLM latent attention). CLI-driven; defaults reproduce the known-good GLM-4.7-Flash config. |
-| `sweep_flows.sh` | Sweeps every built-in flow through RULER and prints an accuracy table — 9 MHA flows × 2 indexer backends + 2 MLA flows. |
+| `validation_4k.jsonl` | The RULER eval set — one `{"input": <prompt>, "outputs": [<answer>]}` per line. A run scores a hit when `outputs[0]` is a substring of the model's generation. |
+| `run_ruler_mha.py` | **MHA** runner. Boots an in-process `sgl.Engine` with vortex sparsity and scores `validation_4k.jsonl`. Default model: Qwen3-4B. |
+| `run_ruler_mla.py` | **MLA** runner (DeepSeek/GLM latent attention). Default model: GLM-4.7-Flash. |
+| `sweep_mha.sh` | Sweeps the built-in MHA flows through RULER and prints an accuracy table — 9 flows × 2 indexer backends. |
+| `sweep_mla.sh` | Same for the MLA flows — 2 flows on `cuda_mla`. |
 | `run_profile_mla.py` | **MLA selection-quality profiler**: drives a short decode with `attention_backend=cuda_mla_profile` and reports per-layer/per-head **p-coverage** + **recall@N**. |
-| `ruler_output.jsonl` | Last run's raw generations (overwritten each `run_ruler.py` run; gitignored noise). |
+| `ruler_output.jsonl` | Last run's raw generations (overwritten each `run_ruler_mha.py` run; gitignored noise). |
+
+The two runners share a **unified CLI** (`--model`, `--module`, `--block`,
+`--topk`, `--layers-skip`, `--indexer-backend`, `--attn-backend`, `--dense`,
+`--n`, `--tp`, `--kv-cache-dtype`, `--disable-radix-cache`, `--dump`, …) —
+same flags, architecture-appropriate defaults. The two sweep scripts share the
+same env-override names (`MODEL`, `PY`, `FLOWS`, `BACKENDS`, `BLOCK`, `TOPK`,
+`LAYERS_SKIP`, `EXTRA_ARGS`, `OUT`).
 
 All paths are anchored to this directory, so the scripts run from any cwd.
 
@@ -35,26 +43,29 @@ conda activate vortex_v1
 export HF_HOME=/raid/catalyst/models/
 ```
 
-## MHA — `run_ruler.py`
+## MHA — `run_ruler_mha.py`
 
 ```bash
-# default: Qwen/Qwen3-4B, gqa_block_sparse_attention, flashinfer indexer
-CUDA_VISIBLE_DEVICES=0 python examples/ruler/run_ruler.py
+# default: Qwen/Qwen3-4B, gqa_block_sparse_attention, flashinfer indexer,
+#          block=page=32, topk=29, layers_skip=[]
+CUDA_VISIBLE_DEVICES=0 python examples/ruler/run_ruler_mha.py
 
-# pick a different model (positional arg 1) and flow
-CUDA_VISIBLE_DEVICES=0 VORTEX_MODULE=lserve_sparse_attention \
-    python examples/ruler/run_ruler.py Qwen/Qwen3-4B
+# a different model / flow / budget / smaller slice / dense reference
+python examples/ruler/run_ruler_mha.py --model Qwen/Qwen3-8B \
+    --module lserve_sparse_attention --block 32 --topk 15 --gpu 0 --n 20
+python examples/ruler/run_ruler_mha.py --dense
 ```
 
-Prints `Ruler Accuracy [<flow>]: NN.NN%`.
+Key flags (shared with the MLA runner): `--model`, `--module`, `--block`/`--topk`
+(block size == page size / selected blocks), `--layers-skip "0,1"` (dense layers,
+default none), `--indexer-backend flashinfer|trtllm` (`TopK`/`Union` flows are
+trtllm-only; `topK`/`approxTopK` flows run under either), `--disable-radix-cache`
+(REQUIRED for `Save(...)`-based flows, e.g. `running_avg_block_sparse`),
+`--dense`, `--n`, `--tp`, `--kv-cache-dtype`, `--dump` (`--help` for all).
 
-| Env var | Default | Meaning |
-|---------|---------|---------|
-| `VORTEX_MODULE` | `gqa_block_sparse_attention` | Registered flow name from `vortex_torch/flow/algorithms.py`. |
-| `VORTEX_ATTENTION_BACKEND` | `flashinfer` | Indexer backend: `flashinfer` or `trtllm`. (`TopK`/`Union` flows are trtllm-only; `topK`/`approxTopK` flows run under either.) |
-| `DISABLE_RADIX_CACHE` | `0` | Set `1` for flows whose `forward_indexer` uses `Save(...)` (e.g. `running_avg_block_sparse`) — otherwise sglang's prefix-radix cache corrupts the saved per-request state. |
-| `ENABLE_VORTEX_SPARSITY` | `1` | `0` runs **dense** sglang (no sparse path) to confirm the reference accuracy. |
-| `RULER_SERVER_URL` | _(unset)_ | If set, drive an already-running sglang server over HTTP (`/generate`) instead of building an in-process engine; the server's launch flags define the config (see `examples/misc/server_launch.sh`). |
+MHA-only: `--server-url <url>` (or `RULER_SERVER_URL`) drives an already-running
+sglang server over HTTP (`/generate`) instead of building an in-process engine;
+the server's launch flags define the config (see `examples/misc/server_launch.sh`).
 
 ## MLA — `run_ruler_mla.py`
 
@@ -73,35 +84,38 @@ python examples/ruler/run_ruler_mla.py --module lserve_centroid_mla --gpu 0 --n 
 python examples/ruler/run_ruler_mla.py --dense --attn-backend trtllm_mla
 ```
 
-Key flags: `--model`, `--module`, `--attn-backend`, `--block`/`--topk`,
-`--dense`, `--n`, `--tp`, `--kv-cache-dtype`, `--dump` (`--help` for all).
+Same unified flags and defaults as the MHA runner (block=page=32, topk=29; the
+known-good ~100%-RULER GLM config used `--topk 61`); MLA-specific defaults are
+`--attn-backend cuda_mla` (dense baselines: `trtllm_mla`/`triton`) and
+`--indexer-backend trtllm` (`--help` for all).
 
-## Sweep all flows — `sweep_flows.sh`
+## Sweep all flows — `sweep_mha.sh` / `sweep_mla.sh`
 
 ```bash
-examples/ruler/sweep_flows.sh            # all: 18 MHA (9 flows × 2 backends) + 2 MLA
-examples/ruler/sweep_flows.sh mha        # just the 18 MHA runs
-examples/ruler/sweep_flows.sh mla        # just the 2 MLA runs
+examples/ruler/sweep_mha.sh                                  # 18 MHA runs (9 flows × 2 backends)
+PY="conda run -n vortex_glm python" examples/ruler/sweep_mla.sh   # 2 MLA runs (GLM env)
 
-# MLA part needs the GLM env:
-MLA_PY="conda run -n vortex_glm python" examples/ruler/sweep_flows.sh
+# unified knobs (same env names in both):
+BLOCK=16 TOPK=15 LAYERS_SKIP="0" examples/ruler/sweep_mha.sh
+FLOWS="gqa_block_sparse_attention" BACKENDS="flashinfer" EXTRA_ARGS="--n 20" \
+    examples/ruler/sweep_mha.sh
 ```
 
-Runs one flow per free GPU in waves (re-detecting free GPUs each wave via
-`algorithm_scientist/free_gpus.sh`), auto-sets `DISABLE_RADIX_CACHE=1` for
-`running_avg_block_sparse`, then prints:
+Both run one flow per free GPU in waves (re-detecting free GPUs each wave via
+`algorithm_scientist/free_gpus.sh`); `sweep_mha.sh` auto-adds
+`--disable-radix-cache` for `running_avg_block_sparse`. Each prints:
 
 ```
-===== RULER flow sweep — accuracy =====
+===== RULER MHA flow sweep — accuracy =====
 flow                               backend     accuracy
-block_sparse_attention             flashinfer  99.00%
+block_sparse_attention             flashinfer  99.0%
 ...
-rope_aware_block_sparse_mla        cuda_mla    100.0%
-lserve_centroid_mla                cuda_mla    99.0%
 ```
 
-Per-run logs land in `examples/ruler/sweep_results/logs/` (gitignored). Override
-`MODEL`, `MLA_MODEL`, `MHA_PY`, `MLA_PY`, `BACKENDS`, `HF_HOME`, `OUT` via env.
+Per-run logs land in `examples/ruler/sweep_results/logs/` (gitignored). Env
+overrides (unified across both): `MODEL`, `PY`, `FLOWS`, `BACKENDS` (MHA:
+indexer backends; MLA: sglang attention backends), `BLOCK`, `TOPK`,
+`LAYERS_SKIP`, `EXTRA_ARGS`, `OUT`.
 
 ## Profiling selection quality — `run_profile_mla.py`
 
@@ -135,6 +149,6 @@ twin lives at `examples/math/run_profile_mla.py`.
 - **Accuracy is backend-invariant** — `flashinfer` vs `trtllm` change throughput,
   not correctness. A flow that scores differently across backends usually has a
   backend-specific bug (or you hit run-to-run noise).
-- **A flow well below ~0.85** has broken attention: widen `vortex_topk_val` /
-  `vortex_topk_ratio`, check the indexer scoring, or confirm `DISABLE_RADIX_CACHE`
-  for `Save`-based flows.
+- **A flow well below ~0.85** has broken attention: widen `--topk` /
+  `vortex_topk_ratio`, check the indexer scoring, or confirm
+  `--disable-radix-cache` for `Save`-based flows.

@@ -642,7 +642,7 @@ variant (see "Novelty budget" below).
 
 Before spending 20–60 minutes on AIME24, run the fast RULER filter on
 each variant using `algorithm_scientist/run_ruler.py`. Any variant
-that scores below **0.85 accuracy** on `examples/ruler/validation.jsonl`
+that scores below **0.85 accuracy** on `examples/ruler/validation_4k.jsonl`
 has structurally broken attention — the scoring function is dropping
 so many critical tokens that AIME24 would yield no useful signal.
 Fix or replace it before launching AIME24.

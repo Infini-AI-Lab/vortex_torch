@@ -15,7 +15,7 @@ Example
         --request-rates 1,2,4,8,16 \\
         --duration-s 60 \\
         --max-tokens 128 \\
-        --prompt-file examples/ruler/validation.jsonl \\
+        --prompt-file examples/ruler/validation_4k.jsonl \\
         --prompt-field input \\
         --output-dir benchmark_ttft_tpot
 

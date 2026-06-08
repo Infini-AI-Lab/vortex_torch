@@ -113,7 +113,7 @@ Iterate loop (repeat until I say stop):
              --config "submissions/<tag>/batch_<x>_id${y}.json"
        done
    Any variant scoring below 0.85 accuracy on
-   examples/ruler/validation.jsonl has structurally broken attention —
+   examples/ruler/validation_4k.jsonl has structurally broken attention —
    widen vortex_topk_val/vortex_topk_ratio or fix the indexer,
    re-pre-flight, and re-run RULER until all 4 pass.
 

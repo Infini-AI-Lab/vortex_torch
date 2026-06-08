@@ -22,13 +22,16 @@ Components:
 from .config import CompressorConfig
 from .model import BlockCompressor
 
-__all__ = ["CompressorConfig", "BlockCompressor", "MLASupervision"]
+__all__ = ["CompressorConfig", "BlockCompressor", "MLASupervision", "MHASupervision"]
 
 
 def __getattr__(name):
-    # Lazy: importing MLASupervision pulls in transformers; keep the package
-    # importable (for the model/objective) without it.
+    # Lazy: importing the supervision classes pulls in transformers; keep the
+    # package importable (for the model/objective) without it.
     if name == "MLASupervision":
         from .capture import MLASupervision
         return MLASupervision
+    if name == "MHASupervision":
+        from .capture_mha import MHASupervision
+        return MHASupervision
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

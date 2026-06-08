@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", default="zai-org/GLM-4.7-Flash", help="HF model id (MLA).")
     p.add_argument("--module", default="rope_aware_block_sparse_mla",
                    help="vortex MLA flow name.")
-    p.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "validation.jsonl"),
+    p.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "validation_4k.jsonl"),
                    help="jsonl with the prompts.")
     p.add_argument("--field", default="input", help="jsonl field holding the prompt text.")
     p.add_argument("--gpu", default=None, help="GPU index to pin (CUDA_VISIBLE_DEVICES).")

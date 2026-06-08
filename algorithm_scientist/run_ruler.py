@@ -8,7 +8,7 @@ this script:
      flow compiles on a small grid).
   2. Boots an sglang engine with the submission's ``vortex_*`` settings
      plus the fixed RULER protocol constants below.
-  3. Runs :file:`examples/ruler/validation.jsonl` with substring-match scoring.
+  3. Runs :file:`examples/ruler/validation_4k.jsonl` with substring-match scoring.
   4. Writes a per-run summary JSON to ``summary_ruler_submissions/``.
 
 All benchmark-protocol settings are fixed — the **only** CLI argument
@@ -41,7 +41,7 @@ from vortex_torch.engine.sgl import MODEL_PATH, check_engine_config, get_engine
 # ---------------------------------------------------------------------------
 
 MAX_NEW_TOKENS              = 64
-DATA_PATH                   = "examples/ruler/validation.jsonl"
+DATA_PATH                   = "examples/ruler/validation_4k.jsonl"
 SUMMARY_DIR                 = "summary_ruler_submissions"
 
 

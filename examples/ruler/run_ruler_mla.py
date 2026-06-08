@@ -4,8 +4,10 @@ sparse MLA attention (rope-aware block-sparse routing on the hand-written CUDA
 decode kernel).
 
 This is a self-contained, single-GPU example of the vortex sparse-MLA decode
-path. The defaults reproduce the known-good GLM-4.7-Flash configuration
-(block=page=32, topk=61, ~100% on RULER); every knob is overridable on the CLI.
+path (default GLM-4.7-Flash, block=page=32, topk=29); every knob is overridable
+on the CLI (the known-good ~100%-RULER GLM config used topk=61). The CLI —
+flags AND defaults — is unified with run_ruler_mha.py; only the
+model/module/backend defaults differ.
 
     cuda_mla   sglang attention backend  -> vortex CUDA MLA decode + flashinfer prefill
     trtllm     vortex indexer backend    -> 2D block-table page selection
@@ -39,20 +41,25 @@ def parse_args() -> argparse.Namespace:
                    help="HF model id (default: GLM-4.7-Flash).")
     p.add_argument("--module", default="rope_aware_block_sparse_mla",
                    help="vortex MLA flow name (default: rope_aware_block_sparse_mla).")
-    p.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "validation.jsonl"),
+    p.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "validation_4k.jsonl"),
                    help="RULER jsonl with {input, outputs:[str]} rows.")
     p.add_argument("--gpu", default=None,
                    help="GPU index to pin (sets CUDA_VISIBLE_DEVICES). Default: inherit env.")
     p.add_argument("--n", type=int, default=100, help="Number of examples (default: 100).")
     p.add_argument("--block", type=int, default=32, help="vortex block size == page size.")
-    p.add_argument("--topk", type=int, default=61, help="vortex_topk_val (selected blocks).")
+    p.add_argument("--topk", type=int, default=29, help="vortex_topk_val (selected blocks).")
+    p.add_argument("--layers-skip", default="",
+                   help="Layers to run dense, comma-separated (e.g. '0,1'). Default: none.")
     p.add_argument("--max-new-tokens", type=int, default=128)
-    p.add_argument("--mem-fraction", type=float, default=0.85)
+    p.add_argument("--mem-fraction", type=float, default=0.9)
     p.add_argument("--tp", type=int, default=1, help="tensor-parallel size.")
     p.add_argument("--thinking", action="store_true",
                    help="Enable GLM thinking mode (default off; needles answer directly).")
     p.add_argument("--disable-cuda-graph", action="store_true",
                    help="Run eager (no cuda graph capture).")
+    p.add_argument("--disable-radix-cache", action="store_true",
+                   help="Disable sglang's prefix-radix cache — REQUIRED for flows whose "
+                        "forward_indexer uses Save(...).")
     p.add_argument("--dense", action="store_true",
                    help="Disable vortex sparsity: run dense MLA on --attn-backend.")
     p.add_argument("--kv-cache-dtype", default="auto",
@@ -61,6 +68,9 @@ def parse_args() -> argparse.Namespace:
                    help="sglang attention_backend. Sparse vortex MLA uses 'cuda_mla' "
                         "(default); dense baselines can use 'trtllm_mla' or 'triton'. "
                         "Note: flashinfer MLA does not work for GLM.")
+    p.add_argument("--indexer-backend", default="trtllm",
+                   help="vortex indexer backend (default: trtllm — the 2D block-table "
+                        "page selection the MLA flows are written for).")
     p.add_argument("--online", action="store_true",
                    help="Allow HF hub access (default: HF_HUB_OFFLINE=1).")
     p.add_argument("--dump", action="store_true",
@@ -79,9 +89,10 @@ def main() -> None:
     from transformers import AutoTokenizer
 
     mode = "dense" if args.dense else "sparse"
+    layers_skip = [int(x) for x in args.layers_skip.split(",") if x.strip()]
     print(f"[run_ruler_mla] model={args.model} mode={mode} module={args.module} "
-          f"block={args.block} topk={args.topk} n={args.n} "
-          f"kv_cache_dtype={args.kv_cache_dtype} "
+          f"block={args.block} topk={args.topk} layers_skip={layers_skip} n={args.n} "
+          f"indexer_backend={args.indexer_backend} kv_cache_dtype={args.kv_cache_dtype} "
           f"cuda_graph={'off' if args.disable_cuda_graph else 'on'}", flush=True)
 
     engine_kwargs = dict(
@@ -93,6 +104,7 @@ def main() -> None:
         kv_cache_dtype=args.kv_cache_dtype,
         mem_fraction_static=args.mem_fraction,
         disable_cuda_graph=args.disable_cuda_graph,
+        disable_radix_cache=args.disable_radix_cache,
     )
     if not args.dense:
         # Flat vortex_* kwargs; the adapter folds them into one VortexConfig and ships
@@ -100,7 +112,7 @@ def main() -> None:
         engine_kwargs.update(
             enable_vortex_sparsity=True,
             vortex_module_name=args.module,
-            vortex_attention_backend="trtllm",          # 2D block-table indexer
+            vortex_attention_backend=args.indexer_backend,  # 2D block-table indexer
             vortex_impl_backend="triton",               # tensor-core indexer GeMM
             vortex_use_tensor_core=True,
             vortex_block_size=args.block,
@@ -109,8 +121,8 @@ def main() -> None:
             vortex_block_reserved_bos=1,
             vortex_block_reserved_eos=2,
             vortex_dtype="bfloat16",
-            vortex_layers_skip=[],
-            vortex_max_seq_lens=8192,
+            vortex_layers_skip=layers_skip,
+            vortex_max_seq_lens=40960,
             vortex_workload_chunk_size=64,
         )
     llm = sgl.Engine(**engine_kwargs)

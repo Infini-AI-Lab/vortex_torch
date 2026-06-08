@@ -16,7 +16,7 @@ Usage
 ::
 
     python algorithm_scientist/research/capture_trace.py \\
-        --model Qwen/Qwen3-1.7B --data examples/ruler/validation.jsonl \\
+        --model Qwen/Qwen3-1.7B --data examples/ruler/validation_4k.jsonl \\
         --num-samples 2 --max-ctx 4096 --layers even8 \\
         --out algorithm_scientist/research/traces/qwen3_1.7b.pt
 
@@ -128,10 +128,10 @@ def _load_prompts(data_path, field, n):
 def main():
     ap = argparse.ArgumentParser(description="Capture per-layer decode q/K/V for recall study.")
     ap.add_argument("--model", required=True)
-    ap.add_argument("--data", default="examples/ruler/validation.jsonl",
+    ap.add_argument("--data", default="examples/ruler/validation_4k.jsonl",
                     help="CHOOSE THIS to match the workload you're optimizing for "
                          "(attention is workload-dependent): e.g. examples/math/aime24.jsonl "
-                         "for math reasoning, examples/ruler/validation.jsonl (RULER/NIAH) to "
+                         "for math reasoning, examples/ruler/validation_4k.jsonl (RULER/NIAH) to "
                          "surface long-context retrieval heads. jsonl needs a "
                          "prompt/input/question field.")
     ap.add_argument("--field", default=None, help="explicit field name in the jsonl")

@@ -186,7 +186,12 @@ class MLASupervision:
         amask = enc.attention_mask.to(self.device)
         self._attn_mask = amask.bool()
         self._store = {}
-        self.model(ids, attention_mask=amask, use_cache=False)
+        # logits_to_keep=1: skip the [b, T, vocab] lm_head materialization (≈10 GB
+        # at 32K context) — supervision only needs the attention-module captures.
+        try:
+            self.model(ids, attention_mask=amask, use_cache=False, logits_to_keep=1)
+        except TypeError:  # older transformers without the kwarg
+            self.model(ids, attention_mask=amask, use_cache=False)
         store, self._store, self._attn_mask = self._store, {}, None
 
         out = []
@@ -206,8 +211,15 @@ class MLASupervision:
 
     def stream(self, prompts: Iterable[str], render: bool = True,
                max_tokens: int = 8192, batch_size: int = 1) -> Iterator[dict]:
-        prompts = list(prompts)
-        for s0 in range(0, len(prompts), batch_size):
-            chunk = prompts[s0:s0 + batch_size]
+        # Lazy: accepts lists OR generators (e.g. a streamed-and-packed HF mix)
+        # without materializing the prompt set.
+        chunk = []
+        for p in prompts:
+            chunk.append(p)
+            if len(chunk) == batch_size:
+                for seq in self.supervise(chunk, render=render, max_tokens=max_tokens):
+                    yield seq
+                chunk = []
+        if chunk:
             for seq in self.supervise(chunk, render=render, max_tokens=max_tokens):
                 yield seq

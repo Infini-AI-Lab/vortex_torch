@@ -44,7 +44,7 @@ trace must match what you're optimizing for or the recall screen mispredicts:
   and `--generate <N>` so the captured query is a real **mid-generation** decode
   step (reasoning tasks emit long outputs; the throughput-relevant attention is
   late in generation, not the prompt's last token);
-- **long-context retrieval heads** → `--data examples/ruler/validation.jsonl`
+- **long-context retrieval heads** → `--data examples/ruler/validation_4k.jsonl`
   (RULER/NIAH), large `--max-ctx`.
 The trace records `calibration_data`/`generate` so results stay interpretable.
 
