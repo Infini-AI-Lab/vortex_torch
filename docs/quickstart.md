@@ -53,14 +53,13 @@ class CustomSparseAttention(vFlow):
 
 ## 2. Launch SGLang with your flow
 
-The launch script is a **separate file**. Importing `vortex_torch` is what wires
-Vortex into SGLang (it installs the `ServerArgs` ↔ `VortexConfig` adapter), so the
-import is required even though you don't call it directly. Every Vortex knob lives
-in a single [`VortexConfig`](examples.md); passing it turns sparsity **on**.
+The launch script is a **separate file**. The installed SGLang plugin wires
+Vortex in automatically. Import `vortex_torch` here to construct the
+[`VortexConfig`](examples.md); passing that config turns sparsity **on**.
 
 ```python
 import sglang as sgl
-import vortex_torch  # noqa: F401 — installs the VortexConfig adapter
+import vortex_torch
 from vortex_torch.engine.sgl.config import VortexConfig
 
 llm = sgl.Engine(

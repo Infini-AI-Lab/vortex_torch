@@ -1,54 +1,46 @@
 # Installation
 
-Vortex plugs into a **vendored SGLang** (under `third_party/`). Install SGLang
-in editable mode first, then Vortex. Installation is CPU-only — all kernels are
-prebuilt wheels or JIT-compiled at runtime — so it works even while the GPUs are
-busy.
+Vortex is an out-of-tree plugin for the official `sglang==0.5.12.post1`
+package. Installation does not require a GPU; Vortex's custom kernels are
+JIT-compiled when a GPU server starts.
 
 ## From source
 
 ```bash
-git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
+git clone https://github.com/Infini-AI-Lab/vortex_torch.git
 cd vortex_torch
-
-# 1. SGLang dependency (vendored, editable)
-cd third_party/sglang/v0.5.9/sglang
-pip install -e "python"
-cd ../../../../
-
-# 2. Vortex (editable)
-pip install -e .
+pip install -e ".[sglang]"
 ```
 
-If you cloned without `--recursive`, pull the submodules first:
+SGLang discovers the installed Vortex hook through the
+`sglang.srt.plugins` entry-point group. The old `third_party/sglang/v0.5.9`
+tree remains only as historical reference material. It is not installed,
+tested, or supported by the current runtime.
+
+Install the benchmark and dataset dependencies as a separate extra:
 
 ```bash
-git submodule update --init --recursive
+pip install -e ".[sglang,research]"
 ```
 
 ## Reproducible conda environment (recommended)
 
-The repo ships a one-shot script that builds the exact tested environment —
-Python 3.12, torch 2.9.1+cu128, flashinfer 0.6.3, transformers 4.57.1, plus
-editable SGLang and Vortex:
+The repo ships a one-shot script that creates a Python 3.12 environment and
+installs the same official SGLang/Vortex plugin stack:
 
 ```bash
 bash install_vortex.sh          # creates the `vortex_v1` conda env
 conda activate vortex_v1
 ```
 
-```{note}
-For **MLA models** such as GLM-4.7-Flash (HF type `glm4_moe_lite`, which
-requires `transformers >= 5.0`), use `install_vortex_glm.sh` instead — it builds
-a separate `vortex_glm` env that overrides transformers with a GLM-supporting
-build.
-```
+`install_vortex_glm.sh` now delegates to the same stack under the historical
+`vortex_glm` environment name; SGLang 0.5.12 already uses Transformers 5.x.
 
 ## Verify
 
 ```bash
-python -c "import torch, sglang, vortex_torch, flashinfer; print('vortex ok')"
+python -c "from importlib.metadata import entry_points; assert any(e.name == 'vortex' for e in entry_points(group='sglang.srt.plugins')); print('vortex plugin ok')"
 ```
 
-You should see `vortex ok` with no import errors. You're ready for the
+You should see `vortex plugin ok`. You're ready for the
 [Quick Start](quickstart.md).
