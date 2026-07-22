@@ -3,22 +3,11 @@ from typing import Dict, Tuple, Callable
 from ..context import Context
 from ...utils import Schedule, INDENT, indent_block
 from ...abs import FORMAT
+from ..._codegen_io import write_generated_module
 from .impl import AVAILABLE_IMPL_BACKENDS
-import os
-def generate_interface(full_graph: Graph, sub_graphs: list[Graph], ctx: Context) -> str:
 
-    cache_dir = ctx.compilation_cache_dir or os.path.dirname(__file__)
-    cache_dir = os.path.expanduser(cache_dir)
-    cache_dir = os.path.abspath(cache_dir)
-    
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir, exist_ok=True)
-    dst = os.path.join(
-        cache_dir,
-        f"{ctx.sparse_attention_name}_compiled_func.py"
-    )
-    print(f"Generating compiled function interface at {dst}")
-    
+
+def generate_interface(full_graph: Graph, sub_graphs: list[Graph], ctx: Context) -> Tuple[str, str]:
     body_parts: list[str] = []
 
     for sub_graph_id, sub_graph in enumerate(sub_graphs):
@@ -34,9 +23,13 @@ def generate_interface(full_graph: Graph, sub_graphs: list[Graph], ctx: Context)
     body_str = "\n".join(body_parts)
 
     final_str = header_str + "\n\n" + auxilary_func_def_str + "\n\n" + body_str
-
-    with open(dst, "w") as f:
-        f.write(final_str)
+    dst = write_generated_module(
+        cache_dir=ctx.compilation_cache_dir,
+        flow_name=ctx.sparse_attention_name,
+        namespace="indexer",
+        source=final_str,
+    )
+    print(f"Generating compiled function interface at {dst}")
 
     return dst, f"{ctx.sparse_attention_name}_CompiledFunc"
 
