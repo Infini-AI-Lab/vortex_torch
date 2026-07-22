@@ -1,3 +1,4 @@
+import importlib
 import sys
 from dataclasses import make_dataclass
 from types import ModuleType
@@ -55,6 +56,55 @@ class SGLangRuntimeContractTest(unittest.TestCase):
                 RuntimeError, "Incompatible official SGLang plugin runtime"
             ):
                 validate_sglang_runtime_contract()
+
+    def test_plugin_caps_vortex_request_pool_at_planner_limit(self):
+        server_args = ModuleType("sglang.srt.server_args")
+        server_args.ServerArgs = make_dataclass("ServerArgs", [])
+        sglang = ModuleType("sglang")
+        srt = ModuleType("sglang.srt")
+
+        module_name = "vortex_torch.engine.sgl.plugin"
+        previous = sys.modules.pop(module_name, None)
+        try:
+            with patch.dict(
+                sys.modules,
+                {
+                    "sglang": sglang,
+                    "sglang.srt": srt,
+                    "sglang.srt.server_args": server_args,
+                },
+            ):
+                plugin = importlib.import_module(module_name)
+
+                class Runner:
+                    pass
+
+                runner = Runner()
+                runner.server_args = type(
+                    "Args", (), {"enable_vortex_sparsity": True}
+                )()
+                original = lambda _runner, _capacity: 2048
+
+                self.assertEqual(
+                    plugin._around_resolve_max_num_reqs(original, runner, 8192),
+                    1024,
+                )
+                self.assertEqual(
+                    plugin._around_resolve_max_num_reqs(
+                        lambda _runner, _capacity: 512, runner, 8192
+                    ),
+                    512,
+                )
+
+                runner.server_args.enable_vortex_sparsity = False
+                self.assertEqual(
+                    plugin._around_resolve_max_num_reqs(original, runner, 8192),
+                    2048,
+                )
+        finally:
+            sys.modules.pop(module_name, None)
+            if previous is not None:
+                sys.modules[module_name] = previous
 
 
 if __name__ == "__main__":

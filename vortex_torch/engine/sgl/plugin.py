@@ -32,6 +32,7 @@ _VORTEX_FIELD = fields(
     )
 )[0]
 _VORTEX_LEGACY_DEFAULTS = legacy_defaults()
+_VORTEX_MAX_BATCH_SIZE = 1024
 
 
 def _server_args_getattr(self, name: str):
@@ -196,6 +197,14 @@ def _around_compute_cell_size(original, configurator, runner, num_layers):
     return kv_cell_size(runner, num_layers, element_size)
 
 
+def _around_resolve_max_num_reqs(original, runner, token_capacity):
+    max_num_reqs = original(runner, token_capacity)
+    if not runner.server_args.enable_vortex_sparsity:
+        return max_num_reqs
+    # Both SGL planner variants launch one 1024-thread block over the batch.
+    return min(max_num_reqs, _VORTEX_MAX_BATCH_SIZE)
+
+
 def _around_init_pools(original, runner, *args, **kwargs):
     if not runner.server_args.enable_vortex_sparsity:
         return original(runner, *args, **kwargs)
@@ -292,6 +301,11 @@ def register() -> None:
         (
             "sglang.srt.model_executor.pool_configurator.DefaultPoolConfigurator._compute_cell_size",
             _around_compute_cell_size,
+            HookType.AROUND,
+        ),
+        (
+            "sglang.srt.model_executor.model_runner_kv_cache_mixin.ModelRunnerKVCacheMixin._resolve_max_num_reqs",
+            _around_resolve_max_num_reqs,
             HookType.AROUND,
         ),
         (
