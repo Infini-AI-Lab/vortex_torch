@@ -4,14 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vortex_torch"
-version = "0.5.0"
+dynamic = ["version"]
 requires-python = ">=3.12"
 dependencies = [
     "torch>=2.7",
+    "numpy",
+]
+
+[project.optional-dependencies]
+sglang = [
+    "sglang==0.5.12.post1",
+    "kernels>=0.12,<0.13",
+]
+research = [
     "lighteval[math]==0.12.2",
     "huggingface_hub==0.36.2",
     "inspect-ai==0.3.207",
-    "transformers==4.57.1",
+    "transformers>=4.57.1,<5.7",
     "s3fs==2025.9.0",
     "wonderwords",
     "langdetect",
@@ -22,6 +31,25 @@ dependencies = [
     "accelerate",
     "unitxt",
 ]
+all = [
+    "vortex_torch[sglang,research]",
+]
+
+[project.entry-points."sglang.srt.plugins"]
+vortex = "vortex_torch.engine.sgl.plugin:register"
+
+[tool.setuptools.dynamic]
+version = {attr = "vortex_torch.version.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["vortex_torch*"]
+
+[tool.setuptools.package-data]
+vortex_torch = [
+    "custom_ops/**/*.json",
+    "custom_ops/**/*.cu",
+    "engine/sgl/attention_backend/csrc/*.cu",
+    "engine/sgl/attention_backend/csrc/*.cuh",
+    "kernels/topk/**/*.json",
+    "kernels/topk/**/*.cu",
+]

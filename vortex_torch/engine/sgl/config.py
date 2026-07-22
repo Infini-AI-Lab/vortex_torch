@@ -10,14 +10,96 @@ working unchanged.
 
 Two entry points populate it:
   * Python: ``sgl.Engine(vortex_topk_val=..., enable_vortex_sparsity=True, ...)``
-    still works — :func:`install_serverargs_adapter` folds those flat kwargs into
-    a ``VortexConfig`` at the ``ServerArgs`` boundary.
+    still works — the official SGLang plugin folds those flat kwargs into a
+    ``VortexConfig`` at the ``ServerArgs`` boundary.
   * Explicit: ``sgl.Engine(vortex=VortexConfig(topk_val=..., ...))``.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, fields
 from typing import Any, Dict, List, Optional, Tuple
+
+
+VORTEX_SGLANG_ABI = 1
+_REQUIRED_SGLANG_HOOKS = frozenset(
+    {
+        "server_args.vortex_config",
+        "model_runner.build_sparse_flow",
+        "kv_cache.kv_cell_size",
+        "kv_cache.make_kv_pool",
+        "model_utils.fused_kv_opt_out",
+        "disaggregation.rebuild_aux",
+    }
+)
+VORTEX_SGLANG_PLUGIN_TARGETS = frozenset(
+    {
+        "sglang.srt.server_args.ServerArgs.__init__",
+        "sglang.srt.server_args.ServerArgs.__post_init__",
+        "sglang.srt.server_args.ServerArgs.add_cli_args",
+        "sglang.srt.model_executor.model_runner.ModelRunner.configure_kv_cache_dtype",
+        "sglang.srt.model_executor.pool_configurator.DefaultPoolConfigurator._compute_cell_size",
+        "sglang.srt.model_executor.model_runner_kv_cache_mixin.ModelRunnerKVCacheMixin._init_pools",
+        "sglang.srt.models.utils.enable_fused_set_kv_buffer",
+        "sglang.srt.disaggregation.decode.DecodeTransferQueue.pop_transferred",
+    }
+)
+
+
+def validate_sglang_runtime_contract() -> None:
+    """Fail fast unless the matching Vortex plugin and hooks are active."""
+
+    try:
+        from sglang.srt.plugins import load_plugins
+
+        load_plugins()
+        from sglang.srt.server_args import ServerArgs
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise RuntimeError(
+            "Vortex's SGLang plugin is not active. Install vortex_torch "
+            "with its 'sglang' extra (sglang==0.5.12.post1)."
+        ) from exc
+
+    actual_abi = getattr(ServerArgs, "_vortex_sglang_abi", None)
+    actual_hooks = frozenset(getattr(ServerArgs, "_vortex_sglang_hooks", ()))
+
+    missing_hooks = sorted(_REQUIRED_SGLANG_HOOKS - actual_hooks)
+    server_arg_fields = {field.name for field in fields(ServerArgs)}
+
+    errors = []
+    if actual_abi != VORTEX_SGLANG_ABI:
+        errors.append(
+            f"ABI {actual_abi!r} is installed; ABI {VORTEX_SGLANG_ABI} is required"
+        )
+    if missing_hooks:
+        errors.append(f"missing hooks: {', '.join(missing_hooks)}")
+    if "vortex" not in server_arg_fields:
+        errors.append("ServerArgs has no 'vortex' field")
+    from sglang.srt.plugins.hook_registry import HookRegistry
+
+    declared_targets = frozenset(
+        getattr(ServerArgs, "_vortex_sglang_targets", ())
+    )
+    missing_declarations = sorted(
+        VORTEX_SGLANG_PLUGIN_TARGETS - declared_targets
+    )
+    missing_applied = sorted(declared_targets - HookRegistry._patched)
+    if missing_declarations:
+        errors.append(
+            "plugin did not declare targets: "
+            + ", ".join(missing_declarations)
+        )
+    if missing_applied:
+        errors.append(
+            "plugin hooks were not applied: " + ", ".join(missing_applied)
+        )
+
+    if errors:
+        raise RuntimeError(
+            "Incompatible official SGLang plugin runtime for Vortex ("
+            + "; ".join(errors)
+            + "). Reinstall matching vortex_torch and SGLang packages."
+        )
 
 
 @dataclass
@@ -55,10 +137,23 @@ class VortexConfig:
         return cls(**kw)
 
 
-# The legacy ``vortex_<name>`` -> default map, used by the ServerArgs shim when
-# vortex is disabled (so a stray read returns the historical default). Kept in
-# sync with the dataclass defaults above; duplicated into server_args.py as a
-# plain literal to avoid sglang importing vortex_torch.
+def normalize_vortex_config(value: Any) -> Optional[VortexConfig]:
+    """Normalize JSON, dict, and explicit object inputs to ``VortexConfig``."""
+    if value is None or isinstance(value, VortexConfig):
+        return value
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"--vortex-config must be valid JSON: {exc}") from exc
+    if not isinstance(value, dict):
+        raise TypeError(
+            "vortex must be a VortexConfig, JSON object, dict, or None; "
+            f"got {type(value).__name__}"
+        )
+    return VortexConfig.from_flat(value)
+
+
 def legacy_defaults() -> Dict[str, Any]:
     return {f.name: f.default for f in fields(VortexConfig)}
 
@@ -76,44 +171,7 @@ def split_flat_kwargs(kwargs: Dict[str, Any]) -> Tuple[Optional[VortexConfig], D
     return cfg, kwargs
 
 
-def install_serverargs_adapter() -> bool:
-    """Wrap ``ServerArgs.__init__`` so flat ``vortex_*`` kwargs fold into the
-    single ``vortex`` field. Idempotent; parent-process only (the spawned worker
-    unpickles ``ServerArgs`` and never re-runs ``__init__``). Returns False if
-    sglang is unavailable.
-    """
-    try:
-        from sglang.srt.server_args import ServerArgs
-    except Exception:
-        return False
-    if getattr(ServerArgs, "_vortex_adapter_installed", False):
-        return True
-
-    _orig_init = ServerArgs.__init__
-
-    def __init__(self, *args, **kwargs):
-        v = kwargs.get("vortex")
-        if isinstance(v, VortexConfig):
-            # Explicit object wins; drop any stray flat vortex_* / enable flag.
-            for k in [k for k in kwargs if k.startswith("vortex_")]:
-                kwargs.pop(k)
-            kwargs.pop("enable_vortex_sparsity", None)
-        elif isinstance(v, str):
-            # CLI path: --vortex-config '<json>' arrives as a JSON string.
-            import json
-            kwargs["vortex"] = VortexConfig.from_flat(json.loads(v))
-        else:
-            # Python path: fold flat vortex_* kwargs (gated by enable flag).
-            cfg, kwargs = split_flat_kwargs(kwargs)
-            kwargs["vortex"] = cfg
-        _orig_init(self, *args, **kwargs)
-
-    ServerArgs.__init__ = __init__
-    ServerArgs._vortex_adapter_installed = True
-    return True
-
-
 def cfg(model_runner_or_server_args) -> Optional[VortexConfig]:
-    """Accessor: return the VortexConfig from a ModelRunner or ServerArgs."""
+    """Return the Vortex config from a ModelRunner or ServerArgs object."""
     sa = getattr(model_runner_or_server_args, "server_args", model_runner_or_server_args)
     return getattr(sa, "vortex", None)
