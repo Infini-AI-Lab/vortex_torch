@@ -7,7 +7,7 @@
 # The vortex_* hyper-parameters are no longer individual CLI flags: sglang's
 # ServerArgs now carries a single aggregated `vortex` field, exposed on the CLI
 # as `--vortex-config '<json>'` (see vortex_torch/engine/sgl/config.py and
-# third_party/.../server_args.py). Passing the old per-knob `--vortex-*` flags
+# vortex_torch/engine/sgl/plugin.py). Passing the old per-knob `--vortex-*` flags
 # fails argparse. We therefore write the knobs to a JSON file and feed it
 # through `--vortex-config`. Keys are the VortexConfig field names (the
 # `vortex_` prefix is stripped). Providing a non-null vortex config implicitly
@@ -38,21 +38,18 @@ cat > "$VORTEX_CONFIG_FILE" <<'JSON'
 }
 JSON
 
-# NOTE: we cannot use `python -m sglang.launch_server` directly. That entrypoint
-# builds `ServerArgs` in the parent process before anything imports vortex_torch,
-# so the `--vortex-config` JSON string is never folded into a VortexConfig (the
-# `ServerArgs.__init__` adapter that does this is installed by `import
-# vortex_torch`). The raw string then gets pickled to the spawned scheduler
-# worker, where `server_args.vortex_block_size` -> `getattr(str, "block_size")`
-# raises AttributeError. Importing vortex_torch FIRST, in this parent process,
-# installs the adapter so the conversion happens before ServerArgs is pickled.
+# This custom Python launcher calls `prepare_server_args()` directly, so it must
+# mirror SGLang's standard CLI and call `load_plugins()` first. That discovers
+# the installed Vortex entry point, registers the ServerArgs hooks, and makes
+# `--vortex-config` available before argument parsing.
 python -c '
 import os, sys
-import vortex_torch  # installs the ServerArgs adapter + backend integration
 from sglang.launch_server import run_server
+from sglang.srt.plugins import load_plugins
 from sglang.srt.server_args import prepare_server_args
 from sglang.srt.utils import kill_process_tree
 
+load_plugins()
 server_args = prepare_server_args(sys.argv[1:])
 try:
     run_server(server_args)

@@ -222,12 +222,12 @@ class CustomSparseAttention(vFlow):
 ## 🏃 Launch it with SGLang
 
 The launch script is a **separate file** from the flow. The installed SGLang
-plugin wires Vortex into the decode loop automatically. Import
-`vortex_torch` here because the launch code constructs `VortexConfig`.
+plugin wires Vortex into the decode loop automatically. Import `VortexConfig`
+to construct the Vortex configuration; no import-for-side-effect ordering is
+required.
 
 ```python
 import sglang as sgl
-import vortex_torch
 from vortex_torch.engine.sgl.config import VortexConfig
 
 llm = sgl.Engine(
@@ -467,10 +467,11 @@ examples/misc/server_launch.sh Qwen/Qwen3-4B 1
 
 Two details make server mode work:
 
-1. **Vortex is an SGLang plugin.** Installed SGLang discovers it from the
-   `sglang.srt.plugins` entry point. The script also imports `vortex_torch`
-   explicitly so it can run the compatibility preflight before starting
-   scheduler workers.
+1. **Load plugins before parsing server arguments.** The custom launcher calls
+   SGLang's `load_plugins()` before `prepare_server_args()`. This discovers the
+   installed `sglang.srt.plugins` entry point and runs Vortex's `register()`
+   function before `--vortex-config` is parsed. The standard SGLang CLI already
+   performs the same step.
 2. **Knobs are passed as JSON via `--vortex-config`.** The per-knob
    `--vortex-*` CLI flags no longer exist; the script writes the
    `VortexConfig` fields (prefix stripped) to a temp JSON file and feeds it
