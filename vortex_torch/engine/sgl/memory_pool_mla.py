@@ -33,6 +33,7 @@ GB = 1024 * 1024 * 1024
 
 class VortexMLACachePool(MLATokenToKVPool):
 
+    is_vortex_pool = True
     supports_fused_set_kv_buffer = False
 
     def __init__(

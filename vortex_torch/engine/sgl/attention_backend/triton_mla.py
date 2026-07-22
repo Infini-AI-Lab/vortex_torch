@@ -225,6 +225,7 @@ class VortexTritonMLABackend(AttentionBackend):
         cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
+            cur_layer=layer.layer_id,
         )
 
         # 3) block-sparse MLA decode in Triton over the fused latent.

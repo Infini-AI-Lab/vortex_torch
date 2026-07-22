@@ -5,6 +5,17 @@ from .planner_sglang import get_sglang_plan_decode_v2_module
 from .prefill_sglang import get_sglang_prefill_module
 
 
+def normalize_prefill_seq_lens(
+    seq_lens: torch.Tensor,
+    prefix_lens: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Return the int32 lengths required by the prefill planner ABI."""
+
+    prefix_lens_i32 = prefix_lens.to(torch.int32)
+    input_seq_lens_i32 = seq_lens.to(torch.int32) - prefix_lens_i32
+    return prefix_lens_i32, input_seq_lens_i32
+
+
 def get_decode_planner(policy: str = None):
 
     module = get_sglang_plan_decode_v2_module(

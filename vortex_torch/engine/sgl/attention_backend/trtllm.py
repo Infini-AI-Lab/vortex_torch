@@ -20,6 +20,7 @@ from vortex_torch.indexer.utils_sglang import (
     get_chunkwise_nh2hn_transpose,
     get_decode_planner_trtllm,
     get_prefill_planner,
+    normalize_prefill_seq_lens,
 )
 if os.environ["SGLANG_ENABLE_TORCH_COMPILE"] == "1":
     import logging
@@ -319,7 +320,10 @@ class VortexTRTLLMBackend(AttentionBackend):
 
         elif forward_batch.forward_mode.is_extend():
             
-            prefix_lens = forward_batch.extend_prefix_lens
+            prefix_lens, input_seq_lens = normalize_prefill_seq_lens(
+                forward_batch.seq_lens,
+                forward_batch.extend_prefix_lens,
+            )
             extend_no_prefix = not any(forward_batch.extend_prefix_lens_cpu)
             bs = len(forward_batch.req_pool_indices)
             
@@ -327,7 +331,7 @@ class VortexTRTLLMBackend(AttentionBackend):
                 cached_seq_lens=prefix_lens,
                 dense_kv_indptr=self.kv_indptr_prefill[:bs*self.num_kv_heads+1],
                 dense_kv_indices=self.kv_indices_prefill,
-                input_seq_lens=(forward_batch.seq_lens.to(torch.int32) - prefix_lens),
+                input_seq_lens=input_seq_lens,
                 qo_indptr_ragged=self.qo_indptr[0][:bs+1],
                 qo_indptr_paged=self.qo_indptr[1][:bs*self.num_kv_heads+1],
                 kv_last_page_len=self.kv_last_page_len_prefill[:bs*self.num_kv_heads],
@@ -584,6 +588,7 @@ class VortexTRTLLMBackend(AttentionBackend):
                 o=self.ctx.metadata.sparse_block_tables,
                 cache=cache,
                 ctx=self.ctx,
+                cur_layer=layer.layer_id,
             )
             o = trtllm_batch_decode_with_kv_cache(
                 query=q,
