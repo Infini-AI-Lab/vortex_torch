@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Union, Dict
 import torch
-from vortex_torch import is_hopper
+from vortex_torch.utils import is_hopper
 from vortex_torch.abs import as_vtensor, FORMAT
 from vortex_torch.indexer import Context, MetaData
 from vortex_torch.indexer.compiler.compile import compile as compile_indexer

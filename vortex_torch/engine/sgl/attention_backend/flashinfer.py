@@ -13,7 +13,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING, Callable, List, Optional, Union, Dict, Tuple
 from functools import partial
 import torch
-from vortex_torch import is_hopper
+from vortex_torch.utils import is_hopper
 from vortex_torch.abs import as_vtensor, FORMAT
 from vortex_torch.indexer import Context, MetaData
 from vortex_torch.indexer.compiler.compile import compile as compile_indexer
