@@ -97,6 +97,37 @@ conversation does not.
 > why. Always cite the off-catalog variant and what its result said
 > about the §3 hypothesis it pre-registered.
 
+### claude_opus_5/batch_0 — Qwen3-4B AIME24: `approxTopK` tolerate_ratio sweep  (2026-07-28, GPUs 0-7, task=aime24)
+
+**Setup.** 10 variants (not the usual 4 — user-directed sweep width), identical
+except `approxTopK(tolerate_ratio=T)` baked into each `.py`.
+`block_sparse_attention`, trtllm indexer + triton impl + tensor core, block=page=32,
+topk=29, bos=1/eos=2, bf16, cuda graph on, tp=1. Pre-flight 10/10; RULER gate 1.00
+on all 10. Protocol: 16 trials, 4096 input + 32768 gen, context_length 36864.
+
+| tol | 0.0 | 0.15 | 0.25 | 0.35 | 0.45 | 0.55 | 0.65 | 0.75 | 0.85 | 0.95 |
+|-----|-----|------|------|------|------|------|------|------|------|------|
+| mean@16 | .7271 | .7229 | .6958 | .7104 | .7021 | .6896 | .7146 | .7167 | .7042 | .7083 |
+| tok/s | 5935 | 5851 | 5958 | 5777 | 6104 | 5860 | 5913 | 5893 | 6052 | 5997 |
+
+**Takeaway — `tolerate_ratio` is a non-lever on BOTH axes.** Throughput 5777-6104
+with no trend (pearson r=+0.33, p=0.36); mean@16 spread 0.0375 = 18/480 solves,
+only 1.8x the *lower-bound* binomial SE (0.0207), and the 480 generations are
+clustered in 30 problems so the true SE is several times larger. pass@16 is
+near-constant (25/30 for eight variants, 26/30 for two) — the selected block sets
+are not materially different. **Use tol=0.0**: the new trtllm bf16 2-pass leaf
+makes it exact and it costs nothing measurable.
+
+**Why (offline, real RULER-16K trace).** E[radix rounds] falls only 1.98 -> 1.49
+even at tol=0.95, on a kernel that is a small slice of decode. See §4b and
+`research/journal.md` H002.
+
+**Process note.** Submission JSONs that omit `model_path` silently inherit
+`api.py`'s `MODEL_PATH = "Qwen/Qwen3-1.7B"` — the first launch (and its RULER gate)
+ran the wrong model and nothing flagged it. Always set `model_path` explicitly.
+
+---
+
 ### claude_opus_4_8/batch_0 — GLM-4.7-Flash MLA: routing-rule novelty vs budget  (2026-06-06, GPUs 0-3, task=aime26_glm)
 
 | variant       | content_hash | RULER acc | mean@16 | pass@16 | throughput (tok/s) | e2e_time (s) | notes |
@@ -216,6 +247,44 @@ conversation does not.
 
 ---
 
+## §4b. Measured non-levers (don't re-run these)
+
+- **`approxTopK(tolerate_ratio)` is not a throughput knob.** Qwen3-4B / AIME24,
+  10 tols 0.0→0.95: throughput 5777–6104 tok/s with no trend (r=+0.33, p=0.36)
+  and mean@16 0.690–0.727, all within noise. Offline (`research/approx_topk_rounds.py`,
+  real RULER-16K trace) explains it: E[radix rounds] only falls 1.98→1.49 even at
+  tol=0.95, on a kernel that is a small slice of decode. **Use tol=0.0** — the
+  trtllm bf16 2-pass leaf makes it exact and it costs nothing measurable.
+- **Attention mass on RULER-16K is sink-dominated.** The always-kept BOS/EOS pages
+  carry 0.671 of all softmax mass = 94.7% of what exact top-k achieves (0.709).
+  The 29 selected pages move only ~3.7 pp, which is why every selection-side knob
+  looked flat. See `research/journal.md` H002.
+- **Real headroom is the SCORING RULE**: exact top-k captures just 11.4% of the
+  mass available on candidate pages. Per-head queries / QUEST envelopes / more
+  reserved recency pages are worth far more than any top-k approximation knob.
+
+**Cross-model confirmation — Llama-3.1-8B-Instruct (2026-07-29, RULER-16K only).**
+Same flow/knobs, model served from a docker volume (see `docker/README.md`).
+
+| tol | 0.0 | 0.25 | 0.45 | 0.65 | 0.85 | 0.95 | 1.0 |
+|-----|-----|------|------|------|------|------|-----|
+| mass-recall % | 24.58 | 24.57 | 24.81 | 23.91 | 23.19 | 22.90 | 20.24 |
+| recall@k | 1.000 | .987 | .959 | .907 | .826 | .770 | .463 |
+| E[rounds] | 1.969 | 1.855 | 1.738 | 1.617 | 1.469 | 1.391 | 1.000 |
+| RULER 16K | 98% | 98% | 98% | 98% | 97% | 98% | **0%** |
+
+- Llama's scoring rule is ~2x better than Qwen's: exact top-k mass-recall 24.6%
+  vs 11.4% on candidate pages (total p-coverage 0.841 vs 0.709). Sinks still carry
+  93.8% of coverage.
+- Llama's mass *does* decay monotonically with tol (beyond seed noise) while RULER
+  stays 98% — more evidence that p-coverage is a weak proxy for NIAH correctness.
+- **tol=1.0 is a cliff, not a slope: 98% -> 0%.** Not a kernel bug — the model still
+  locates the needle page but misreads it (`1ca35cfb…` -> `1ca3d5c6…`), and RULER
+  scores by substring match. Never ship tol=1.0.
+
+
+---
+
 ## §5. Patterns that worked (Pareto frontier)
 
 > Confirmed winners worth carrying forward. Each entry should give
@@ -228,6 +297,7 @@ conversation does not.
 |---|---|---|---|---|
 | batch_0_id0 (rope_aware, block=32, topk=61) | 0.7125 | 3874 | 1.00 | GLM-4.7-Flash accuracy anchor; plain mean-centroid full-dot |
 | batch_0_id3 (rope_aware, block=32, topk=40) | 0.70 | 4586 | 0.99 | GLM-4.7-Flash throughput anchor; topk=40 buys +18% thr for −1.75% mean |
+| claude_opus_5/batch_0_id0 (block_sparse, block=32, topk=29, tol=0.0) | 0.7271 | 5935 | 1.00 | Qwen3-4B, trtllm indexer + triton + tensor core. Best of a 10-point tol sweep, but ALL 10 tie within noise (0.690–0.727, tput 5777–6104) — tol is free in both directions, so prefer tol=0.0 (exact). |
 
 ---
 

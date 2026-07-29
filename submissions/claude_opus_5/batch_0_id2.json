@@ -1,0 +1,20 @@
+{
+  "model_path": "Qwen/Qwen3-4B",
+  "vortex_module_path": "submissions/claude_opus_5/batch_0_id2.py",
+  "vortex_module_name": "claude_opus_5_batch_0_id2_cls",
+  "vortex_block_size": 32,
+  "vortex_workload_chunk_size": 32,
+  "vortex_topk_val": 29,
+  "vortex_topk_ratio": 0.0,
+  "vortex_block_reserved_bos": 1,
+  "vortex_block_reserved_eos": 2,
+  "vortex_layers_skip": [],
+  "vortex_dtype": "bfloat16",
+  "vortex_attention_backend": "trtllm",
+  "vortex_impl_backend": "triton",
+  "vortex_use_tensor_core": true,
+  "kv_cache_dtype": "auto",
+  "mem_fraction_static": 0.85,
+  "disable_cuda_graph": false,
+  "tp_size": 1
+}
