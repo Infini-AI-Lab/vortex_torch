@@ -1,0 +1,10 @@
+{
+    "_doc": "topk_output trtllm/BT approxTopK variant (kernel.cu). Selected when ``approx=True`` is passed to find(); ``__TOLERATE_RATIO__`` is overridden per call via the `tolerate_ratio` kwarg, so each ratio gets its own cached module.",
+    "file": "kernel.cu",
+    "substitutions": {
+        "__THREADS_PER_BLOCK__": 1024,
+        "__VORTEX_MAX_TOPK__": 256,
+        "__TOLERATE_RATIO__": 0.0
+    },
+    "extra_cuda_cflags": []
+}

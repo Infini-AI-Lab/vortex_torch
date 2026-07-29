@@ -1,0 +1,8 @@
+{
+    "name": "approx",
+    "description": "approxTopK — adaptive 8-bit radix; accepts per-call tolerate_ratio (block-table/trtllm).",
+    "constraints": {
+        "approx": true
+    },
+    "priority": 100
+}

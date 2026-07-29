@@ -43,16 +43,49 @@ launch(
 )
 ```
 
-### Special: `approx=True` (flashinfer-only)
+### Special: `approx=True`
+
+Available on **both** backends; each `approx` leaf takes its own
+backend's ABI (above), so the only difference is the trailing args.
 
 ```python
 launch_factory = find('topk_output', 'flashinfer', approx=True)
 launch = launch_factory(tolerate_ratio=0.05)   # baked into ``__TOLERATE_RATIO__`` substitution
 launch(x, ..., max_num_pages)
+
+launch_factory = find('topk_output', 'trtllm', approx=True)
+launch = launch_factory(tolerate_ratio=0.05)
+launch(x, ..., max_blocks_per_seq, block_size)
 ```
 
 `tolerate_ratio` is a per-call knob — each distinct ratio yields a
 separately-cached compiled module.
+
+Selected indices are **unsorted within a request** (atomic-arrival
+tie-break) on both backends.
+
+The two leaves differ in key width:
+
+| | flashinfer | trtllm |
+|---|---|---|
+| score dtype | fp32 + bf16 | **bf16 only** (`TORCH_CHECK(false)` otherwise) |
+| key | fp32-promoted, 32-bit | raw bf16 bits, 16-bit |
+| rounds | 2 of 4 bytes | **2 of 2 bytes — covers the whole key** |
+| `tolerate_ratio = 0` | exact for bf16 scores only (bf16 *is* the top half of fp32); inexact for genuine fp32 scores | exact by construction |
+| gate | slots owed by the threshold bin `<= tol*k` | pass-1 strict winners `>= ceil((1-tol)*k)` — algebraically the same test |
+| `__VORTEX_MAX_TOPK__` | 2048 | 256 (matches `k_256`) |
+
+Because the gate only fires with `ceil((1-tol)*k)` strict winners, and
+those are exactly the top `n_strict` elements, the trtllm leaf
+guarantees **recall >= 1 - tol**. Verified in
+`examples/misc/test_approx_topk_trtllm.py`.
+
+Note the trtllm leaf enforces its `__VORTEX_MAX_TOPK__` bound with a
+device-side `CUDA_KERNEL_ASSERT`, not a dispatch constraint: the approx
+codegen resolves via `find(..., approx=True)` with no `max_topk_val`
+kwarg, so a `max_topk_val` constraint (as `k_256` uses) would never
+match and the flow would silently fall back to the exact CUB leaf,
+ignoring `tolerate_ratio`.
 
 ## I/O contract
 

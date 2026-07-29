@@ -521,8 +521,13 @@ self.output_func = approxTopK(tolerate_ratio=0.25)
 self.output_func(score, o, ctx=ctx)   # same call shape as topK
 ```
 
-The kernel runs up to four 8-bit refinement rounds (32 bits total)
-on fp32-promoted scores. After each round, the threshold bin is
+Available on **both** indexer backends (`flashinfer` and `trtllm`) —
+each ships its own `approx` leaf under
+`custom_ops/topk_output/<backend>/approx/`, sharing one radix routine
+and differing only in addressing.
+
+The kernel refines the fp32-promoted scores byte-by-byte, most
+significant first. After each round, the threshold bin is
 found and `topk_remaining` is the number of slots still owed by
 that bin. The kernel **stops early** as soon as
 
@@ -533,8 +538,16 @@ $$
 filling the remaining slots from the current candidate set in
 arrival order. The trade-off:
 
-- `tolerate_ratio = 0.0` → all four rounds run; result is the exact
-  top-k (only the output ordering is unsorted vs. classic `topK`).
+- `tolerate_ratio = 0.0` → the refinement round always runs, giving the
+  exact top-k for bf16 scores on both backends (the trtllm leaf is
+  bf16-only and keys on the raw 16-bit value, so its two rounds cover
+  the whole key by construction; the flashinfer leaf keys on fp32 and
+  refines two of four bytes, which is exact for bf16-valued scores but
+  not for genuine fp32 ones). Output ordering is unsorted vs. classic
+  `topK`.
+- The trtllm leaf guarantees **recall ≥ 1 − `tolerate_ratio`**: it only
+  stops early once at least `ceil((1−t)·k)` blocks are already known to
+  be true top-k members.
 - `tolerate_ratio = 1.0` → kernel stops after round 0, cheapest
   setting; selection is coarse.
 - `0 < tolerate_ratio < 1` → adaptive: cheap when scores are

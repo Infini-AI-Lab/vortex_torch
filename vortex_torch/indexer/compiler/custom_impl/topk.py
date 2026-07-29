@@ -193,12 +193,13 @@ def generate_approx_topk_impl(graph: Graph, op_id: int, ctx: Context) -> str:
     """Codegen for `approxTopK(tolerate_ratio=...)` — the adaptive 8-bit
     radix variant. Reads `tolerate_ratio` off the op instance at codegen
     time and bakes it into a compile-time substitution for the
-    JIT-built kernel under
-    ``custom_ops/topk_output/flashinfer/approx/``.
+    JIT-built kernel under ``custom_ops/topk_output/<backend>/approx/``.
 
-    Note: this kernel currently only ships the flashinfer/CSR ABI.
-    In trtllm mode the dispatch raises NotImplementedError; an
-    approx variant for trtllm/block-tables is a follow-up.
+    Both backends ship an approx leaf, and each takes its own backend's
+    C ABI (see ``generate_topk_impl`` above for the two signatures), so
+    the launcher is emitted from :mod:`indexer.compiler.backend` exactly
+    like the exact-topK path — including the full ``topk_trailing_args``
+    tuple (flashinfer passes one, trtllm two).
     """
     input_tensor_id, output_tensor_id = _check_topk_io(graph, op_id)
 
@@ -210,6 +211,8 @@ def generate_approx_topk_impl(graph: Graph, op_id: int, ctx: Context) -> str:
     # tolerate_ratio is a compile-time knob; each op-id pins its own
     # callable. The dispatcher de-dupes by (file, substitutions), so
     # two ops with the same tolerate_ratio share a compiled module.
+    bk = get_backend(ctx)
+
     callable_name = f"_vortex_approx_topk_{op_id}"
     ctx.compilation_header_lines.extend([
         "from vortex_torch.custom_ops import find as _vortex_custom_ops_find",
@@ -218,15 +221,13 @@ def generate_approx_topk_impl(graph: Graph, op_id: int, ctx: Context) -> str:
         # module (cache key includes substitutions, so two ops with the
         # same ratio share the binary).
         f"{callable_name} = _vortex_custom_ops_find("
-        f"'topk_output', 'flashinfer', approx=True)("
+        f"'topk_output', {bk.name!r}, approx=True)("
         f"tolerate_ratio={tolerate_ratio!r})",
     ])
 
-    bk = get_backend(ctx)
-    # approx_topk.cu's C signature only ever takes one trailing int.
-    # If a trtllm-specific approxTopK kernel arrives in the future,
-    # mirror generate_topk_impl above and consume bk.topk_trailing_args.
-    last_arg = bk.topk_trailing_args[0]
+    trailing = "".join(
+        f"{INDENT * 2}{arg},\n" for arg in bk.topk_trailing_args
+    )
 
     impl_lines = [
         f"{callable_name}(",
@@ -238,7 +239,6 @@ def generate_approx_topk_impl(graph: Graph, op_id: int, ctx: Context) -> str:
         f"{INDENT * 2}ctx.metadata.batch_size * ctx.num_kv_heads,",
         f"{INDENT * 2}ctx.block_reserved_bos,",
         f"{INDENT * 2}ctx.block_reserved_eos,",
-        f"{INDENT * 2}{last_arg},",
-        f")",
+        f"{trailing})",
     ]
     return "\n".join(impl_lines)
