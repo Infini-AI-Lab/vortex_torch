@@ -30,17 +30,6 @@ __all__ = [
         "__version__",
 ]
 
-
-# Eagerly install the ServerArgs flat-kwargs adapter so sgl.Engine(vortex_*=...)
-# keeps working (it must be active in the *parent* before ServerArgs is built).
-# Light: imports only sglang.srt.server_args, not the engine. Best-effort.
-try:
-    from .engine.sgl.config import install_serverargs_adapter as _vx_install_adapter
-    _vx_install_adapter()
-except Exception:
-    pass
-
-
 def __getattr__(name):
     # Lazily expose ``vortex_torch.integration`` (the single sglang-integration
     # module) without making a plain ``import vortex_torch`` pull in sglang/the
@@ -52,5 +41,4 @@ def __getattr__(name):
         from .engine.sgl import integration
         return integration
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 

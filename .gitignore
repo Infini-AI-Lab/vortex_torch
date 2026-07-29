@@ -64,7 +64,9 @@ MANIFEST
 !vortex_torch/custom_ops/**/meta.json
 !vortex_torch/custom_ops/**/config.json
 
-tests/
+tests/*
+!tests/test_codegen_io.py
+!tests/test_sglang_runtime_contract.py
 *_backup.py
 # PyInstaller
 #  Usually these files are written by a python script from a template

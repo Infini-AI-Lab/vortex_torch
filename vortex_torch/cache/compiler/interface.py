@@ -16,24 +16,12 @@ from typing import Tuple, List
 from ..context import Context
 from ...utils import INDENT, indent_block
 from ...abs import FORMAT
+from ..._codegen_io import write_generated_module
 from .impl import AVAILABLE_IMPL_BACKENDS
-import os
 
 
 def generate_interface(full_graph: Graph, sub_graphs: List[Graph], ctx: Context) -> Tuple[str, str]:
     """Emit the compiled module to disk and return ``(file_path, class_name)``."""
-
-    cache_dir = ctx.compilation_cache_dir or os.path.dirname(__file__)
-    cache_dir = os.path.expanduser(cache_dir)
-    cache_dir = os.path.abspath(cache_dir)
-
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir, exist_ok=True)
-    dst = os.path.join(
-        cache_dir,
-        f"{ctx.sparse_attention_name}_compiled_func.py",
-    )
-    print(f"Generating compiled cache function interface at {dst}")
 
     body_parts: List[str] = []
 
@@ -48,9 +36,13 @@ def generate_interface(full_graph: Graph, sub_graphs: List[Graph], ctx: Context)
     body_str = "\n".join(body_parts)
 
     final_str = header_str + "\n\n" + auxilary_func_def_str + "\n\n" + body_str
-
-    with open(dst, "w") as f:
-        f.write(final_str)
+    dst = write_generated_module(
+        cache_dir=ctx.compilation_cache_dir,
+        flow_name=ctx.sparse_attention_name,
+        namespace="cache",
+        source=final_str,
+    )
+    print(f"Generating compiled cache function interface at {dst}")
 
     return dst, f"{ctx.sparse_attention_name}_CompiledFunc"
 

@@ -57,6 +57,8 @@ then we interpret external auguments to the physical address
 
 class VortexCachePool(KVCache):
 
+    is_vortex_pool = True
+
     # Vortex stores K/V in a block-interleaved layout (see
     # vortex_torch/cache/triton_kernels/set_kv.py — position is mapped to
     # ``(token//page) * (page * num_kv_head) + head * page + token%page``).
@@ -205,8 +207,7 @@ class VortexCachePool(KVCache):
         return total_bytes
     
     def get_kv_size_bytes(self):
-        
-        raise NotImplementedError
+        return self.get_cache_size_bytes()
     
     # for disagg (PD disaggregation, Option B)
     def get_contiguous_buf_infos(self):
@@ -267,17 +268,18 @@ class VortexCachePool(KVCache):
             if layer_id in self.layers_skip:
                 continue
             self.compiled_cache.forward(
-                self.cache[layer_id - self.start_layer], loc, ctx=self.ctx
+                self.cache[layer_id - self.start_layer], loc, ctx=self.ctx,
+                cur_layer=layer_id,
             )
 
     def maybe_get_custom_mem_pool(self):
         return self.custom_mem_pool
 
-    def get_cpu_copy(self, indices):
+    def get_cpu_copy(self, indices, mamba_indices=None):
         
         raise NotImplementedError
 
-    def load_cpu_copy(self, kv_cache_cpu, indices):
+    def load_cpu_copy(self, kv_cache_cpu, indices, mamba_indices=None):
         
         raise NotImplementedError
 
@@ -359,7 +361,10 @@ class VortexCachePool(KVCache):
         )
         if layer_id in self.layers_skip:
             return
-        self.compiled_cache.forward(self.cache[layer_id - self.start_layer], loc, ctx=self.ctx)
+        self.compiled_cache.forward(
+            self.cache[layer_id - self.start_layer], loc, ctx=self.ctx,
+            cur_layer=layer_id,
+        )
         
     def move_kv_cache(self, tgt_loc: torch.Tensor, src_loc: torch.Tensor):
         

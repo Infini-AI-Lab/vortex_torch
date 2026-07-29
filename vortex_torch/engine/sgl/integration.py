@@ -152,12 +152,10 @@ def build_sparse_flow(runner) -> Optional[Any]:
     if not sa.enable_vortex_sparsity:
         return None
 
-    import vortex_torch
+    from vortex_torch.flow import build_vflow, vFlowMLA
 
-    flow = vortex_torch.flow.build_vflow(
-        sa.vortex_module_name, user_file=sa.vortex_module_path
-    )
-    if isinstance(flow, vortex_torch.flow.vFlowMLA):
+    flow = build_vflow(sa.vortex_module_name, user_file=sa.vortex_module_path)
+    if isinstance(flow, vFlowMLA):
         # MLA flow: latent geometry instead of a single head_dim.
         flow.initialize(
             block_size=runner.block_size,

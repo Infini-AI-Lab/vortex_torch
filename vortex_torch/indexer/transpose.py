@@ -45,18 +45,16 @@ class Transpose(vOp):
             FORMAT.BATCHED if x._format == FORMAT.BATCHED else FORMAT.RAGGED
         )
 
-        # Allocate output buffer: [S, D1, D0]
-        # S is derived from runtime context (number of pages/tokens in the pipeline)
-        S = ctx.max_num_pages
+        # The leading axis is a dynamic batch/page placeholder at trace time.
         D0, D1 = x.shape[1], x.shape[2]
         # Pure-metadata vTensor — no real allocation. The compiled code
         # supplies storage; we only need shape/dtype/device for codegen.
         self.output_buffer = vTensor(
-            shape=(S, D1, D0),
+            shape=(0, D1, D0),
             dtype=ctx.vortex_dtype,
             device=x.device,
             _format=self.output_format,
-            tensor_id=-1,  # set by caller / graph registration if needed
+            tensor_id=len(ctx.tensor_list),
         )
 
         for t in [x]:
@@ -64,5 +62,11 @@ class Transpose(vOp):
                 ctx.add_aux_flops(
                     t.shape[1] * t.shape[2]
                 )
+
+        ctx.tensor_list.append(self.output_buffer)
+        ctx.output_tensor_to_op_list.append(len(ctx.op_list))
+        ctx.op_list.append(self)
+        ctx.op_to_input_tensor_list.append([x.tensor_id])
+        ctx.op_to_output_tensor_list.append([self.output_buffer.tensor_id])
 
         return self.output_buffer

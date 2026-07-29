@@ -388,13 +388,8 @@
         <pre><code>git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
 cd vortex_torch
 
-<span class="cmt"># SGLang dependency (vendored)</span>
-cd third_party/sglang/v0.5.9/sglang
-pip install -e "python"
-cd ../../../../
-
-<span class="cmt"># Vortex</span>
-pip install -e .</code></pre>
+<span class="cmt"># Official SGLang + Vortex plugin</span>
+pip install -e ".[sglang]"</code></pre>
       </div>
       <div class="panel cite reveal">
         <div class="panel-head">

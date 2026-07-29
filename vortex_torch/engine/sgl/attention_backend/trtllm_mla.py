@@ -268,6 +268,7 @@ class VortexTRTLLMMLABackend(AttentionBackend):
         cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
+            cur_layer=layer.layer_id,
         )
 
         # 3) MLA decode over the selected pages, on the fused latent.

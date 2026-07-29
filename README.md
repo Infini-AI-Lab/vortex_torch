@@ -55,16 +55,14 @@ This makes Vortex a platform for **autonomous algorithm discovery**: AI agents g
 
 ```bash
 git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
-
-# Install SGLang dependency
-cd third_party/sglang/v0.5.9/sglang
-pip install -e "python"
-cd ../../../../
-
-# Install Vortex
 cd vortex_torch
-pip install -e .
+pip install -e ".[sglang]"
 ```
+
+This installs the official `sglang==0.5.12.post1` package. SGLang discovers
+Vortex through its standard `sglang.srt.plugins` entry point; no patched
+SGLang checkout is required. Add the research dependencies used by the
+benchmark scripts with `pip install -e ".[sglang,research]"`.
 
 ---
 
@@ -223,15 +221,13 @@ class CustomSparseAttention(vFlow):
 
 ## 🏃 Launch it with SGLang
 
-The launch script is a **separate file** from the flow. It imports
-sglang and vortex_torch, then starts the engine. Importing `vortex_torch`
-is what wires vortex into sglang's decode loop (it installs the
-`ServerArgs` ↔ `VortexConfig` adapter), so the import is required even
-though you don't call it directly.
+The launch script is a **separate file** from the flow. The installed SGLang
+plugin wires Vortex into the decode loop automatically. Import `VortexConfig`
+to construct the Vortex configuration; no import-for-side-effect ordering is
+required.
 
 ```python
 import sglang as sgl
-import vortex_torch  # noqa: F401 — import for side effect: installs the VortexConfig adapter
 from vortex_torch.engine.sgl.config import VortexConfig
 
 llm = sgl.Engine(
@@ -471,12 +467,11 @@ examples/misc/server_launch.sh Qwen/Qwen3-4B 1
 
 Two details make server mode work:
 
-1. **`import vortex_torch` must run first.** The script doesn't call
-   `python -m sglang.launch_server` directly — that builds `ServerArgs` in
-   the parent before vortex is imported, so the adapter that folds the
-   config wouldn't be installed yet. Instead it imports `vortex_torch`,
-   then calls sglang's `run_server`, so the `ServerArgs` ↔ `VortexConfig`
-   adapter is in place before the args are pickled to the scheduler worker.
+1. **Load plugins before parsing server arguments.** The custom launcher calls
+   SGLang's `load_plugins()` before `prepare_server_args()`. This discovers the
+   installed `sglang.srt.plugins` entry point and runs Vortex's `register()`
+   function before `--vortex-config` is parsed. The standard SGLang CLI already
+   performs the same step.
 2. **Knobs are passed as JSON via `--vortex-config`.** The per-knob
    `--vortex-*` CLI flags no longer exist; the script writes the
    `VortexConfig` fields (prefix stripped) to a temp JSON file and feeds it
@@ -509,5 +504,3 @@ If you find Vortex useful in your research, please cite:
       url={https://arxiv.org/abs/2606.06453}, 
 }
 ```
-
-

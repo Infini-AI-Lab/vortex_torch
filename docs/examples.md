@@ -197,11 +197,9 @@ examples/misc/server_launch.sh Qwen/Qwen3-4B 1
 
 Two details make server mode work:
 
-1. **`import vortex_torch` must run first.** The script doesn't call
-   `python -m sglang.launch_server` directly — that builds `ServerArgs` before
-   Vortex is imported, so the adapter wouldn't be installed yet. It imports
-   `vortex_torch`, then calls SGLang's `run_server`, so the `ServerArgs` ↔
-   `VortexConfig` adapter is in place before the args are pickled to the worker.
+1. **Vortex must be installed with the `sglang` extra.** SGLang discovers the
+   `vortex_torch` plugin before parsing `ServerArgs`, and the same config is
+   preserved when the scheduler worker is spawned.
 2. **Knobs are passed as JSON via `--vortex-config`.** The per-knob `--vortex-*`
    flags no longer exist; the script writes the `VortexConfig` fields (prefix
    stripped) to a temp JSON file and feeds it through `--vortex-config '<json>'`.
