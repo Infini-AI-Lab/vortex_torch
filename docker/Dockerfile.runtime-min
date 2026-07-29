@@ -1,0 +1,38 @@
+# Minimal runtime image for running vortex_torch from a BIND-MOUNTED conda env.
+#
+# This is deliberately NOT a self-contained vortex image (see ./Dockerfile for
+# that). On hosts where the docker image store is small, a full image will not
+# fit; here the toolchain and the vortex_v1 env are bind-mounted from the host
+# and this image supplies only the handful of system shared libraries that the
+# sglang / vortex wheels dlopen at import time.
+#
+# Layer size: a few MB on top of the CUDA base image.
+#
+# Build:
+#   docker build -f docker/Dockerfile.runtime-min -t vortex-runtime-min .
+# Run (see ../vortex_docker_run.sh):
+#   docker run --rm --gpus all -v /home/<user>:/home/<user> \
+#       -v /usr/local/cuda:/usr/local/cuda:ro -v vortex_models:/models \
+#       vortex-runtime-min <cmd>
+FROM nvidia/cuda:12.8.0-base-ubuntu22.04
+
+# libnuma1        - sgl_kernel / common_ops
+# libibverbs1     - sglang distributed transport probes
+# libgomp1        - OpenMP runtime used by torch CPU kernels
+# libnl-*         - pulled in by libibverbs
+# ca-certificates - HF hub TLS when downloading models into the volume
+# g++/ninja       - torch cpp_extension JIT builds the vortex + sglang kernels at
+#                   runtime. nvcc shells out to a bare `gcc`/`g++` on PATH (it
+#                   ignores $CC), so a prefixed conda toolchain is not enough.
+#                   Ubuntu 22.04's gcc 11 also matches the host gcc that produced
+#                   the existing ~/.cache/torch_extensions artifacts.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libnuma1 \
+        libibverbs1 \
+        libgomp1 \
+        libnl-3-200 \
+        libnl-route-3-200 \
+        ca-certificates \
+        g++ \
+        ninja-build \
+    && rm -rf /var/lib/apt/lists/*
