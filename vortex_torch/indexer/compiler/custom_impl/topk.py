@@ -7,6 +7,8 @@ dependency on the Schedule.W fused kernel (Triton-emitted or CUDA-emitted),
 so they live under ``custom_impl`` and are dispatched from
 ``indexer/compiler/impl.py`` regardless of which backend handles W.
 """
+import os
+
 from ..graph import Graph
 from ...context import Context
 from ....abs import FORMAT
@@ -57,6 +59,41 @@ def generate_topk_impl(graph: Graph, op_id: int, ctx: Context) -> str:
     input_tensor_id, output_tensor_id = _check_topk_io(graph, op_id)
 
     bk = get_backend(ctx)
+    if os.environ.get("VORTEX_USE_TORCH_TOPK", "0") == "1":
+        assert bk.name == "trtllm", (
+            "The vectorized torch.topk ablation currently requires the "
+            "TensorRT-LLM block-table layout."
+        )
+        ctx.compilation_header_lines.append("import torch")
+        # Native-API baseline: operate directly on the padded TensorRT-LLM
+        # block table with stock PyTorch tensor ops. The planner has already
+        # populated BOS/EOS and short-row fallbacks; only eligible long rows
+        # have their middle slots replaced.
+        return "\n".join([
+            "_eff_bs = ctx.metadata.batch_size * ctx.num_kv_heads",
+            "_stride = ctx.metadata.dense_block_tables.shape[1]",
+            f"_scores = tensor_{input_tensor_id}.reshape(-1)"
+            "[:_eff_bs * _stride].view(_eff_bs, _stride).float()",
+            "_dense_tokens = ctx.metadata.dense_seqlens[:_eff_bs]",
+            "_dense_blocks = torch.div(",
+            f"{INDENT}_dense_tokens + ctx.block_size - 1, ctx.block_size,",
+            f"{INDENT}rounding_mode='floor')",
+            "_candidate = torch.clamp(",
+            f"{INDENT}_dense_blocks - ctx.block_reserved_bos - ctx.block_reserved_eos,",
+            f"{INDENT}min=0)",
+            "_pos = torch.arange(_stride, device=_scores.device)[None, :]",
+            "_valid = ((_pos >= ctx.block_reserved_bos) &",
+            f"{INDENT * 2}(_pos < (_dense_blocks - ctx.block_reserved_eos)[:, None]))",
+            "_masked_scores = _scores.masked_fill(~_valid, float('-inf'))",
+            f"_, _top_pos = torch.topk(_masked_scores, k={ctx.topk_val}, dim=1)",
+            "_picked = torch.gather(",
+            f"{INDENT}ctx.metadata.dense_block_tables[:_eff_bs], 1, _top_pos)",
+            f"_dst = tensor_{output_tensor_id}[:_eff_bs, "
+            f"ctx.block_reserved_bos:ctx.block_reserved_bos + {ctx.topk_val}]",
+            f"_eligible = (_candidate >= {ctx.topk_val})[:, None]",
+            "_dst.copy_(torch.where(_eligible, _picked, _dst))",
+        ])
+
     trailing = "".join(
         f"{INDENT * 2}{arg},\n" for arg in bk.topk_trailing_args
     )

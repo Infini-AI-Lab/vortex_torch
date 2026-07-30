@@ -1,6 +1,7 @@
 import torch
 from typing import List, Dict, Set, DefaultDict, Tuple, Optional, Callable
 from collections import defaultdict, deque
+import os
 from ..context import Context
 from ...abs import vTensor, vOp
 from ...utils import Schedule
@@ -575,7 +576,15 @@ def contruct_graph(ctx: Context) -> Tuple[Graph, List[Graph]]:
     # ---------------------------------------------------------------
     # Phase 2: Fuse W-connected ops (cycle-safe merges only)
     # ---------------------------------------------------------------
-    uf = _fuse_w_ops(op_dag, op_list)
+    # Ablation hook: leave every Schedule.W op in its own generated kernel.
+    # Cross-subgraph tensors are then materialized by _build_all_graphs, giving
+    # a true unfused execution while preserving operator semantics.
+    if os.environ.get("VORTEX_DISABLE_FUSION", "0") == "1":
+        uf = UnionFind()
+        for op_id in op_dag.nodes:
+            uf.add(op_id)
+    else:
+        uf = _fuse_w_ops(op_dag, op_list)
 
     # ---------------------------------------------------------------
     # Phase 3: Convert back to Graph objects (full + subgraphs)

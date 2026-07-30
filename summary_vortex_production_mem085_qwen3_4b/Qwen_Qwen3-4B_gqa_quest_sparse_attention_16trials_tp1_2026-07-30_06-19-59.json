@@ -1,0 +1,37 @@
+{
+    "mean@16": 0.6270833333333333,
+    "pass@16": 0.8333333333333334,
+    "pass@4": 0.7655860805860806,
+    "pass@8": 0.805009065009065,
+    "total_example": 480,
+    "e2e_time": 545.7234694957733,
+    "total_tokens": 5378904,
+    "throughput": 9856.46449285,
+    "args": {
+        "trials": 16,
+        "topk_val": 125,
+        "topk_ratio": 0.0,
+        "block_size": 16,
+        "page_size": 16,
+        "workload_chunk_size": 32,
+        "generation_max_new_tokens": 16384,
+        "max_input_length": 4096,
+        "vortex_module_name": "gqa_quest_sparse_attention",
+        "model_name": "Qwen/Qwen3-4B",
+        "sparse_attention": true,
+        "mem": 0.85,
+        "data_path": "examples/math/aime24.jsonl",
+        "tp_size": 1,
+        "kv_cache_dtype": "auto",
+        "attention_backend": "flashinfer",
+        "vortex_attention_backend": "trtllm",
+        "vortex_impl_backend": "triton",
+        "vortex_use_tensor_core": true,
+        "vortex_layers_skip": [
+            0
+        ],
+        "disable_vortex_fusion": false,
+        "naive_workload_planner": false,
+        "use_torch_topk": false
+    }
+}

@@ -1,3 +1,4 @@
+import os
 import torch
 from typing import Tuple
 from .context import Context
@@ -106,6 +107,43 @@ def get_decode_planner_trtllm(policy: str = None):
             ctx.block_reserved_eos,
             ctx.workload_chunk_size,
         )
+        if os.environ.get("VORTEX_NAIVE_WORKLOAD_PLANNER", "0") == "1":
+            # Controlled planner ablation. Keep the normal block-table and
+            # seqlen preparation above, but replace its compact prefix-sum
+            # worklist with a padded (row x chunk) rectangular worklist.
+            # This deliberately includes zero-length entries for shorter rows.
+            rows = cached_seq_lens.shape[0] * ctx.num_kv_heads
+            dense_blocks = torch.div(
+                md.dense_seqlens[:rows] + ctx.block_size - 1,
+                ctx.block_size,
+                rounding_mode="floor",
+            )
+            block_count = torch.clamp(
+                dense_blocks - ctx.block_reserved_eos, min=0
+            )
+            max_chunks = (
+                int(block_count.max().item()) + ctx.workload_chunk_size - 1
+            ) // ctx.workload_chunk_size
+            n = rows * max_chunks
+            flat = torch.arange(n, dtype=torch.int32, device=cached_seq_lens.device)
+            row = torch.div(flat, max_chunks, rounding_mode="floor")
+            chunk = flat - row * max_chunks
+            offset_in_row = chunk * ctx.workload_chunk_size
+            lens = torch.clamp(
+                block_count[row.long()] - offset_in_row,
+                min=0,
+                max=ctx.workload_chunk_size,
+            )
+            md.winfo_q_indices[:n].copy_(row)
+            md.winfo_kv_offsets[:n].copy_(
+                row * ctx.max_num_blocks_per_request + offset_in_row
+            )
+            md.winfo_kv_lens[:n].copy_(lens)
+            md.winfo_is_first_workload_per_batch[:n].copy_(
+                (chunk == 0).to(torch.uint8)
+            )
+            md.winfo_num_workloads.fill_(n)
+            md.winfo_chunk_size.fill_(ctx.workload_chunk_size)
         md.set_batch_size(cached_seq_lens.shape[0])
 
     return plan_decode_trtllm
@@ -192,4 +230,3 @@ def get_chunkwise_hn2nh_transpose():
         )
 
     return chunkwise_hn2nh_transpose
-

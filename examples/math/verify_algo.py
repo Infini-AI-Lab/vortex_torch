@@ -39,11 +39,28 @@ vortex_use_tensor_core: bool = False,
 vortex_layers_skip: list = None,
 vortex_module_path: str = None,
 disable_cuda_graph: bool = False,
+disable_vortex_fusion: bool = False,
+naive_workload_planner: bool = False,
+use_torch_topk: bool = False,
 ):
     if vortex_layers_skip is None:
         vortex_layers_skip = [0]
 
+    if disable_vortex_fusion:
+        os.environ["VORTEX_DISABLE_FUSION"] = "1"
+    else:
+        os.environ.pop("VORTEX_DISABLE_FUSION", None)
+    if naive_workload_planner:
+        os.environ["VORTEX_NAIVE_WORKLOAD_PLANNER"] = "1"
+    else:
+        os.environ.pop("VORTEX_NAIVE_WORKLOAD_PLANNER", None)
+    if use_torch_topk:
+        os.environ["VORTEX_USE_TORCH_TOPK"] = "1"
+    else:
+        os.environ.pop("VORTEX_USE_TORCH_TOPK", None)
+
     llm = sgl.Engine(model_path=model_name,
+                    random_seed=0,
                     disable_cuda_graph=disable_cuda_graph,
                     vortex_module_path=vortex_module_path,
                     vortex_block_size=block_size,
@@ -67,7 +84,7 @@ disable_cuda_graph: bool = False,
                     mem_fraction_static=mem,
                     vortex_workload_chunk_size=max(page_size // block_size, workload_chunk_size),
                     vortex_compilation_cache_dir="~/.vortex_compilation_cache",
-                    context_length=40960,
+                    context_length=max_input_length + generation_max_new_tokens,
                     trust_remote_code=True,
                     )
     
@@ -329,6 +346,27 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--disable-vortex-fusion",
+        action="store_true",
+        help="Ablation: emit each fusible Vortex operator as a separate kernel "
+             "and materialize intermediates.",
+    )
+
+    parser.add_argument(
+        "--naive-workload-planner",
+        action="store_true",
+        help="Ablation: replace the compact workload list with a padded "
+             "request x KV-head x chunk worklist. Requires eager decode.",
+    )
+
+    parser.add_argument(
+        "--use-torch-topk",
+        action="store_true",
+        help="Ablation: replace Vortex's custom top-k selector with a "
+             "vectorized torch.topk implementation over block tables.",
+    )
+
+    parser.add_argument(
         "--summary-dir",
         type=str,
         default="summary_ratio",
@@ -410,6 +448,9 @@ if __name__ == "__main__":
         vortex_layers_skip=args.vortex_layers_skip,
         vortex_module_path=args.vortex_module_path,
         disable_cuda_graph=args.disable_cuda_graph,
+        disable_vortex_fusion=args.disable_vortex_fusion,
+        naive_workload_planner=args.naive_workload_planner,
+        use_torch_topk=args.use_torch_topk,
     )
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     os.makedirs(args.summary_dir, exist_ok=True)
@@ -439,7 +480,9 @@ if __name__ == "__main__":
         "vortex_impl_backend": args.vortex_impl_backend,
         "vortex_use_tensor_core": args.vortex_use_tensor_core,
         "vortex_layers_skip": args.vortex_layers_skip,
+        "disable_vortex_fusion": args.disable_vortex_fusion,
+        "naive_workload_planner": args.naive_workload_planner,
+        "use_torch_topk": args.use_torch_topk,
     }
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=4)
-    
