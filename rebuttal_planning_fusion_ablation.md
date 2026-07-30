@@ -15,12 +15,29 @@ cache; at `mem=0.85`, it reaches **4.40×/3.73×** the native baseline throughpu
 | + Vortex fusion and CUDA graphs | 0.60 | **10,329.8 (3.86×)** | **8,717.5 (3.30×)** |
 | Fully optimized Vortex (larger KV cache) | 0.85 | **11,770.9 (4.40×)** | **9,856.5 (3.73×)** |
 
-The native baseline implements the same Quest block selection with stock
-PyTorch operators and `torch.topk`, constructs a padded request × KV-head ×
-chunk worklist, and passes the selected block table to TensorRT-LLM's sparse
-attention API. Thus, it measures the API-composition approach requested by the
-reviewer, rather than comparing only attention-kernel latency. We do not label
-this row as a direct FlexAttention or FlashInfer measurement.
+Vortex and existing attention libraries address complementary parts of the
+pipeline:
+
+| Component | Role |
+|---|---|
+| **Vortex** | Defines the dynamic sparse-attention algorithm; computes scores, budgets, and selected KV indices; and optimizes this selection through workload planning, fusion, and specialized operators. |
+| **FlexAttention / FlashInfer / TensorRT-LLM / FlashAttention** | Execute attention after its mask, CSR indices, or block table is available. Their accepted representation and supported sparsity differ, but they do not implement Quest's dynamic index-selection pipeline. |
+
+Vortex therefore reuses optimized attention kernels rather than replacing
+them: it lowers the selected indices to the backend's expected representation
+and invokes that backend for the attention computation. In this experiment,
+the output is a TensorRT-LLM-style block table consumed by its sparse-attention
+path. The native baseline keeps that same attention path, but implements
+Quest's preceding selection stage using stock PyTorch operators,
+`torch.topk`, and a padded request × KV-head × chunk worklist. The comparison
+thus isolates Vortex's contribution in *producing the indices*, not a new
+attention kernel.
+
+FlexAttention would analogously consume a block mask, FlashInfer a compatible
+CSR/block-sparse representation, and FlashAttention is used for compatible
+dense or paged-attention stages. Because these interfaces are not identical,
+we do not label the measured TensorRT-LLM row as a direct FlexAttention,
+FlashInfer, or FlashAttention benchmark.
 
 Quest is a useful fusion case because its indexer contains two multiplications,
 an elementwise maximum, and two reductions. With fusion disabled, these
