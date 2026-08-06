@@ -196,8 +196,26 @@ const int64_t     max_num_pages
             reserved_bos,
             reserved_eos
         );
+    } else if (max_num_pages <= 8192){
+        TopKOutput_BF16_Kernel<1024, 8><<<nblks, 1024, 0, stream>>>(
+            reinterpret_cast<__nv_bfloat16*>(x.data_ptr<at::BFloat16>()),
+            dense_kv_indptr.data_ptr<int>(),
+            sparse_kv_indptr.data_ptr<int>(),
+            dense_kv_indices.data_ptr<int>(),
+            sparse_kv_indices.data_ptr<int>(),
+            topk_val,
+            reserved_bos,
+            reserved_eos
+        );
     } else {
-        TORCH_CHECK(false);
+        // The next tier up (<1024, 16>) would need ~66 KB of *static* shared
+        // memory for the CUB block-sort scratch, above the 48 KB per-block
+        // limit ptxas enforces, so 8192 is the highest tier this dispatch
+        // shape can reach without switching to dynamic shared memory.
+        TORCH_CHECK(false, "topk_output: max_num_pages (", max_num_pages,
+                    ") exceeds the maximum supported (8192). Reduce the "
+                    "context length / raise page_size so that "
+                    "ceil(max_seq_len / page_size) <= 8192.");
     }
 
 }
