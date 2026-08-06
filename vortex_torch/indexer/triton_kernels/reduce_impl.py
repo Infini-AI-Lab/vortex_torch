@@ -4,6 +4,7 @@ import triton.language as tl
 from ..context import Context
 from typing import Literal
 from ...utils import ReduceType
+from .utils_impl import next_pow2
 
 @triton.jit
 def reduce_rr_kernel(
@@ -13,8 +14,10 @@ winfo_offsets,     # int32
 winfo_lens,        # int32
 winfo_num_workloads, # int32*
 max_chunk_size: tl.constexpr,
-x_D0: tl.constexpr,
-x_D1: tl.constexpr,
+x_D0: tl.constexpr,      # real extent of dim 0; may be any positive integer
+x_D1: tl.constexpr,      # real extent of dim 1; may be any positive integer
+x_D0_PAD: tl.constexpr,  # next_pow2(x_D0); tl.arange needs a power-of-two length
+x_D1_PAD: tl.constexpr,  # next_pow2(x_D1)
 DIM: tl.constexpr,
 REDUCE_TYPE: tl.constexpr
 ):  
@@ -31,8 +34,10 @@ REDUCE_TYPE: tl.constexpr
     end   = start + per + (pid < r)
 
     idx_ptr = tl.arange(0, max_chunk_size)
-    dim0 = tl.arange(0, x_D0)
-    dim1 = tl.arange(0, x_D1)
+    dim0 = tl.arange(0, x_D0_PAD)
+    dim1 = tl.arange(0, x_D1_PAD)
+    dim0_mask = dim0 < x_D0
+    dim1_mask = dim1 < x_D1
     
     for i in range(start, end):
         
@@ -45,7 +50,13 @@ REDUCE_TYPE: tl.constexpr
                 dim0[None,:,None] * x_D1 + \
                 dim1[None, None, :]
 
-        x_i = tl.load(x_i_ptr, mask=valid[:,None,None], other=0.0).to(tl.float32)
+        # Lanes past the real extent are outside the tensor: mask them and
+        # fill with the identity element of the reduction, so they cannot
+        # affect the result. Mean divides by the real extent, not the padded
+        # one, so 0.0 is the right filler there too.
+        pad_val = -1e30 if REDUCE_TYPE == 1 else (1e30 if REDUCE_TYPE == 2 else 0.0)
+        load_mask = valid[:, None, None] & dim0_mask[None, :, None] & dim1_mask[None, None, :]
+        x_i = tl.load(x_i_ptr, mask=load_mask, other=pad_val).to(tl.float32)
         if DIM == 1:
             
             if REDUCE_TYPE == 0:
@@ -64,11 +75,11 @@ REDUCE_TYPE: tl.constexpr
                 x_i_reduce = tl.sum(x_i, axis=1)
 
             else:
-                x_i_reduce = tl.zeros((max_chunk_size, x_D1), dtype=tl.bfloat16)
+                x_i_reduce = tl.zeros((max_chunk_size, x_D1_PAD), dtype=tl.bfloat16)
             
             x_i_reduce = x_i_reduce.to(tl.bfloat16)
             o_i_ptr = o + x_off * x_D1 + idx_ptr[:, None] * x_D1 + dim1[None,:]
-            tl.store(o_i_ptr, x_i_reduce, mask=valid[:, None])
+            tl.store(o_i_ptr, x_i_reduce, mask=valid[:, None] & dim1_mask[None, :])
         
         elif DIM == 2:
             
@@ -88,11 +99,11 @@ REDUCE_TYPE: tl.constexpr
                 x_i_reduce = tl.sum(x_i, axis=2)
 
             else:
-                x_i_reduce = tl.zeros((max_chunk_size, x_D1), dtype=tl.float32)
+                x_i_reduce = tl.zeros((max_chunk_size, x_D0_PAD), dtype=tl.float32)
 
             x_i_reduce = x_i_reduce.to(tl.bfloat16)
             o_i_ptr = o + x_off * x_D0 + idx_ptr[:, None] * x_D0 + dim0[None,:]
-            tl.store(o_i_ptr, x_i_reduce, mask=valid[:, None])
+            tl.store(o_i_ptr, x_i_reduce, mask=valid[:, None] & dim0_mask[None, :])
 
 
 
@@ -113,6 +124,8 @@ ctx: Context
         ctx.max_chunk_size,
         x.shape[-2], 
         x.shape[-1], 
+        next_pow2(x.shape[-2]),
+        next_pow2(x.shape[-1]),
         dim, 
         reduce_type.value,
         num_warps=4, 
@@ -140,6 +153,8 @@ num_sms: int,
         max_chunk_size,
         x.shape[-2], 
         x.shape[-1], 
+        next_pow2(x.shape[-2]),
+        next_pow2(x.shape[-1]),
         dim, 
         reduce_type.value,
         num_warps=4, 

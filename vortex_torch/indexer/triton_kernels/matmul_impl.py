@@ -2,6 +2,7 @@ import torch
 import triton
 import triton.language as tl
 from ..context import Context
+from .utils_impl import next_pow2
 
 @triton.jit
 def mm_bpr_kernel(
@@ -14,7 +15,8 @@ winfo_y_offsets,     # int32
 winfo_y_lens,        # int32
 winfo_num_workloads, # int32*
 max_chunk_size: tl.constexpr,
-G: tl.constexpr,
+G: tl.constexpr,      # real group size; may be any positive integer
+G_PAD: tl.constexpr,  # next_pow2(G); tl.arange needs a power-of-two length
 C: tl.constexpr,
 D: tl.constexpr,
 ):
@@ -32,15 +34,16 @@ D: tl.constexpr,
     # Index vectors
     d_ptr   = tl.arange(0, D)
     c_ptr   = tl.arange(0, C)
-    g_ptr   = tl.arange(0, G)
+    g_ptr   = tl.arange(0, G_PAD)
+    g_mask  = g_ptr < G
     idx_ptr = tl.arange(0, max_chunk_size)
 
     # Stride across B for x
     x_stride = G * D
 
-    # Persistent cache: the current x[x_idx] as a whole [G, D] tile
+    # Persistent cache: the current x[x_idx] as a whole [G_PAD, D] tile
     current_x_idx = tl.full((), -1, dtype=tl.int32)
-    x_i = tl.zeros((G, D), dtype=tl.float32)
+    x_i = tl.zeros((G_PAD, D), dtype=tl.float32)
 
     
     for i in range(start, end):
@@ -48,9 +51,11 @@ D: tl.constexpr,
         x_idx_i32 = tl.load(winfo_x_indices + i).to(tl.int32)
         if x_idx_i32 != current_x_idx:
             x_base = (x_idx_i32 * x_stride).to(tl.int32)
-            # Load x_i: [G, D] (f32)
+            # Load x_i: [G_PAD, D] (f32). Rows g >= G are outside the
+            # tensor, so they are masked out and zero-filled; zeros contribute
+            # nothing to the dot product below and are never stored.
             x_offs = x_base + (g_ptr[:, None] * D + d_ptr[None, :]).to(tl.int32)
-            x_i = tl.load(x + x_offs).to(tl.float32) # f32
+            x_i = tl.load(x + x_offs, mask=g_mask[:, None], other=0.0).to(tl.float32) # f32
             current_x_idx = x_idx_i32
 
         # Range of y rows for this workload
@@ -74,14 +79,14 @@ D: tl.constexpr,
         rows_total: tl.constexpr = max_chunk_size * C
         y_rc = tl.reshape(y_tile, (rows_total, D))  # [RC, D], f32
 
-        # Use x without transpose: x_i is [G, D] (f32)
+        # Use x without transpose: x_i is [G_PAD, D] (f32)
         # Elementwise multiply in f32, then cast to fp32 and reduce over D:
-        # [RC, 1, D] * [1, G, D] -> [RC, G, D] (f32), then sum over D -> [RC, G] (fp32)
+        # [RC, 1, D] * [1, G_PAD, D] -> [RC, G_PAD, D] (f32), then sum over D -> [RC, G_PAD] (fp32)
         prod_ = y_rc[:, None, :] * x_i[None, :, :]   # f32 mult
         acc = tl.sum(prod_, 2)             # fp32 reduction on D
 
         # Reshape back to [rows, C, G] and store (fp32)
-        o_i = tl.reshape(acc, (max_chunk_size, C, G))  # [rows, C, G], fp32
+        o_i = tl.reshape(acc, (max_chunk_size, C, G_PAD))  # [rows, C, G_PAD], fp32
         o_i = o_i.to(tl.bfloat16)
         # Linear output offset: row*C*G + c*G + g, where row starts at y_off
         offs_o = (
@@ -90,7 +95,7 @@ D: tl.constexpr,
             g_ptr[None, None, :]
         ).to(tl.int32)
 
-        tl.store(o + offs_o, o_i, mask=valid[:, None, None])
+        tl.store(o + offs_o, o_i, mask=valid[:, None, None] & g_mask[None, None, :])
 
 
 
@@ -109,7 +114,8 @@ ctx: Context
         ctx.winfo_kv_lens,
         ctx.winfo_num_workloads,
         ctx.max_chunk_size,
-        x.shape[-2], y.shape[-2], x.shape[-1], num_warps=32, num_stages=1
+        x.shape[-2], next_pow2(x.shape[-2]), y.shape[-2], x.shape[-1],
+        num_warps=32, num_stages=1
     )
 
 
@@ -134,7 +140,8 @@ num_sms: int,
         winfo_y_lens,
         winfo_num_workloads,
         max_chunk_size,
-        x.shape[-2], y.shape[-2], x.shape[-1], num_warps=32, num_stages=1
+        x.shape[-2], next_pow2(x.shape[-2]), y.shape[-2], x.shape[-1],
+        num_warps=32, num_stages=1
     )
 
 
