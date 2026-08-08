@@ -11,13 +11,12 @@ busy.
 git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
 cd vortex_torch
 
-# 1. SGLang dependency (vendored, editable)
-cd third_party/sglang/v0.5.9/sglang
-pip install -e "python"
-cd ../../../../
-
-# 2. Vortex (editable)
-pip install -e .
+# SGLang (vendored) + Vortex, both editable, in ONE pip resolve.
+# sglang 0.5.16 pins a mutually version-locked stack (torch 2.11.0,
+# flashinfer_python[cu13] 0.6.14, sglang-kernel 0.4.5, transformers 5.12.1,
+# cuda-python>=13). Installing the pieces separately — or upgrading one
+# afterwards — silently yields an ABI-mismatched env.
+pip install -e "third_party/sglang/v0.5.16/sglang/python" -e .
 ```
 
 If you cloned without `--recursive`, pull the submodules first:

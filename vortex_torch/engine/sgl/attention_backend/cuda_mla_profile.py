@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from .cuda_mla import VortexCudaMLABackend
+from vortex_torch.engine.sgl.compat import token_to_kv_pool
 
 if TYPE_CHECKING:
     from sglang.srt.layers.radix_attention import RadixAttention
@@ -152,7 +153,7 @@ class VortexCudaMLAProfileBackend(VortexCudaMLABackend):
         md = self.ctx.metadata
         block_tables = md.sparse_block_tables          # [bs, max_blocks] page ids
         seqlens = md.sparse_seqlens                    # [bs] selected token count
-        latent = forward_batch.token_to_kv_pool.get_key_buffer(layer.layer_id).view(
+        latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
             -1, self.kv_cache_dim
         )
         bsz = self.block_size

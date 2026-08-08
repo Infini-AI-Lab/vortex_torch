@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# Reproducible build of the `vortex_glm` conda environment.
+# DEPRECATED under sglang 0.5.16 — use install_vortex.sh instead.
 #
-# `vortex_glm` is the env for GLM-4.7-Flash (HF model type `glm4_moe_lite`), which
-# REQUIRES transformers >= 5.0 — `vortex_v1` (transformers 4.57.1) cannot load it.
-# Both sglang and vortex_torch pin `transformers==4.57.1`, so the build installs
-# them first and then OVERRIDES transformers with the pinned GLM-supporting git
-# commit as the final step. flashinfer 0.6.3 (used by the MLA prefill) comes in as
-# an sglang base dep; flash-attention is never installed (not a dependency).
+# This script existed solely to work around a transformers version split: GLM-4.7-Flash
+# (HF model type `glm4_moe_lite`) REQUIRES transformers >= 5.0, while sglang 0.5.9 and
+# vortex_torch both pinned `transformers==4.57.1`. So `vortex_glm` installed the 4.57.1
+# stack and then OVERRODE transformers with a GLM-supporting git commit.
+#
+# sglang 0.5.16 pins `transformers==5.12.1` outright, so the default `vortex_v1` env
+# built by install_vortex.sh already loads GLM-4.7-Flash. There is no split left and
+# no override step to perform — this script is kept only for reproducing the old
+# 0.5.9-era environment, and it still points at the vendored v0.5.9 tree.
 #
 # Captured from the working env: python 3.12, torch 2.9.1+cu128, flashinfer 0.6.3,
 # sglang (editable, vendored v0.5.9), transformers @ 76732b4 (5.0.0.dev0).

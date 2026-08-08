@@ -56,13 +56,12 @@ This makes Vortex a platform for **autonomous algorithm discovery**: AI agents g
 ```bash
 git clone --recursive https://github.com/Infini-AI-Lab/vortex_torch.git
 
-# Install SGLang dependency
-cd third_party/sglang/v0.5.9/sglang
-pip install -e "python"
-cd ../../../../
-
-# Install Vortex
+# Install SGLang + Vortex in ONE pip resolve (0.5.16's stack is
+# mutually version-locked: torch 2.11.0 / flashinfer[cu13] 0.6.14 /
+# sglang-kernel 0.4.5 / transformers 5.12.1 / CUDA 13). Do not pre-pin
+# torch or upgrade individual packages afterwards.
 cd vortex_torch
+pip install -e "third_party/sglang/v0.5.16/sglang/python" -e .
 pip install -e .
 ```
 

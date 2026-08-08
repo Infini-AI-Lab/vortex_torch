@@ -107,6 +107,48 @@ def _create_cuda_mla_profile_backend(runner):
     return VortexCudaMLAProfileBackend(runner)
 
 
+def _register_mla_forward_method() -> None:
+    """Tell DeepSeek-family models to use the MHA prefill path under vortex MLA.
+
+    ``DeepseekV2AttentionMLA.dispatch_attn_forward_method`` picks the extend
+    implementation from a registry keyed by attention-backend name
+    (``models/deepseek_common/attention_backend_handler.py``). vortex's MLA
+    backends (``cuda_mla`` / ``cuda_mla_profile``) are not upstream names, so
+    they fall through to the ``triton`` handler — which returns ``MHA`` only when
+    the batch has **no cached prefix** and otherwise returns ``MLA`` (the
+    weight-absorbed MQA path).
+
+    That absorb path hands the attention backend the *fused latent* K
+    (``kv_lora_rank + qk_rope_head_dim``, e.g. 576) instead of per-head K/V,
+    which vortex's MHA prefill wrapper cannot consume — it fails with
+    ``shape '[-1, H, qk_head_dim]' is invalid`` as soon as sglang's radix cache
+    produces a prefix hit. vortex reconstructs prefix K/V from the latent itself
+    (``mla_prefill._reconstruct_prefix_kv``), so MHA is correct for **every**
+    extend batch, prefix or not.
+
+    Registering a handler is enough — the registry is a plain public dict, so no
+    edit to the vendored sglang is needed. No-op on releases without it.
+    """
+    try:
+        from sglang.srt.models.deepseek_common.attention_backend_handler import (
+            AttentionBackendRegistry,
+            AttnForwardMethod,
+        )
+    except Exception:
+        return
+
+    def handle_attention_vortex_mla(attn, forward_batch):
+        # Decode/idle goes through vortex's own sparse decode kernel, which reads
+        # the latent directly; MLA is the right (and only) choice there. Every
+        # extend batch uses the MHA prefill wrapper.
+        if forward_batch.forward_mode.is_decode_or_idle():
+            return AttnForwardMethod.MLA
+        return AttnForwardMethod.MHA
+
+    for name in ("cuda_mla", "cuda_mla_profile"):
+        AttentionBackendRegistry.register(name, handle_attention_vortex_mla)
+
+
 def integrate() -> bool:
     """Register vortex attention backends into sglang's public registry.
 
@@ -120,6 +162,8 @@ def integrate() -> bool:
         from sglang.srt.layers.attention import attention_registry as AR
     except Exception:
         return False
+
+    _register_mla_forward_method()
 
     B = AR.ATTENTION_BACKENDS  # plain dict: name -> creator(runner)
     # Capture upstream creators and install flag-aware shims that delegate back
@@ -181,25 +225,54 @@ def build_sparse_flow(runner) -> Optional[Any]:
 # ---------------------------------------------------------------------------
 # 3. KV-cache pool construction  (model_runner_kv_cache_mixin.py hook)
 # ---------------------------------------------------------------------------
-def make_kv_pool(runner):
+def make_kv_pool(runner, *, size=None, layer_info=None, req_to_token_pool=None):
     """Build the vortex KV pool — MLA (fused latent) or MHA — for ``runner``.
 
     Called only from the ``enable_vortex_sparsity`` branch of the pool-selection
     chain, so the flag is already known to be set here.
-    """
-    from sglang.srt.layers.dp_attention import get_attention_tp_size
 
+    ``size`` / ``layer_info`` exist because sglang moved pool construction:
+
+    * sglang <= 0.5.9 built the pool from ``ModelRunner.init_memory_pool``, by
+      which point ``runner.max_total_num_tokens`` / ``runner.num_effective_layers``
+      / ``runner.{start,end}_layer`` were all set on the runner.
+    * sglang >= 0.5.16 builds it inside ``KVCacheConfigurator.configure()``,
+      which runs BEFORE the runner is given ``max_total_num_tokens`` (the
+      configurator returns it) and keeps the layer span on a ``ModelLayerInfo``
+      struct (``layer_info``) rather than on the runner. The caller therefore
+      passes both explicitly.
+
+    ``req_to_token_pool`` is passed for the same reason: the vortex pool compiles
+    its cache flow against it (``Context.create`` sizes
+    ``max_new_tokens_per_batch`` from ``req_to_token_pool.size``), and under
+    0.5.16 the configurator builds that pool as a local and only assigns it to
+    the runner after ``configure()`` returns — so ``runner.req_to_token_pool`` is
+    still None here.
+
+    Falling back to the runner attributes keeps the 0.5.9 call site working.
+    """
+    from vortex_torch.engine.sgl.compat import get_attention_tp_size
+
+    if size is None:
+        size = runner.max_total_num_tokens
+    if layer_info is None:
+        layer_info = runner
+    if req_to_token_pool is not None and runner.req_to_token_pool is None:
+        # Publish it early so the flow compile (and anything else reached from
+        # the pool constructor) sees the real pool instead of None. The
+        # configurator assigns the same object to the runner right after.
+        runner.req_to_token_pool = req_to_token_pool
     common = dict(
-        size=runner.max_total_num_tokens,
+        size=size,
         page_size=runner.page_size,
         dtype=runner.kv_cache_dtype,
-        layer_num=runner.num_effective_layers,
+        layer_num=layer_info.num_effective_layers,
         device=runner.device,
         enable_memory_saver=runner.server_args.enable_memory_saver,
         sparse_attention=runner.sparse_attention,
         model_runner=runner,
-        start_layer=runner.start_layer,
-        end_layer=runner.end_layer,
+        start_layer=layer_info.start_layer,
+        end_layer=layer_info.end_layer,
     )
     if runner.use_mla_backend:
         from .memory_pool_mla import VortexMLACachePool
@@ -252,7 +325,7 @@ def kv_cell_size(runner, num_layers: int, kv_size: int) -> int:
             runner.model_config.kv_lora_rank + runner.model_config.qk_rope_head_dim
         )
     else:
-        from sglang.srt.layers.dp_attention import get_attention_tp_size
+        from vortex_torch.engine.sgl.compat import get_attention_tp_size
         base_elems = (
             runner.model_config.get_num_kv_heads(get_attention_tp_size())
             * runner.model_config.head_dim

@@ -1,4 +1,7 @@
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+# CUDA 13 base: sglang 0.5.16 pins cuda-python>=13 and the cu13 flashinfer /
+# cutlass-dsl wheels (torch 2.11.0). The 12.8 base the 0.5.9 image used is not
+# compatible with that stack.
+FROM nvidia/cuda:13.0.1-cudnn-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -46,27 +49,25 @@ WORKDIR /workspace
 RUN git clone -b "${VORTEX_TORCH_REF}" --recursive \
     https://github.com/Infini-AI-Lab/vortex_torch.git
 
-# Install the vendored sglang from source. sglang v0.5.9 does NOT ship an
-# install.sh; the README's "Method 2: From source"
-# (third_party/sglang/v0.5.9/sglang/docs/get_started/install.md, also
+# Install the vendored sglang together with vortex_torch in ONE pip resolve.
+# sglang v0.5.16 does NOT ship an install.sh; the README's "Method 2: From
+# source" (third_party/sglang/v0.5.16/sglang/docs_new/.../install.mdx, also
 # https://docs.sglang.io/get_started/install.html) is just
 #     pip install -e "python"
-# which pulls torch 2.9.1 (cu128 wheel from PyPI), flashinfer_python/cubin
-# 0.6.3, sgl-kernel 0.3.21, transformers 4.57.1, and the rest of the runtime
-# tree.
-WORKDIR /workspace/vortex_torch/third_party/sglang/v0.5.9/sglang
-
-RUN pip install --no-cache-dir -e "python"
-
+# which pulls torch 2.11.0, flashinfer_python[cu13] 0.6.14, sglang-kernel 0.4.5,
+# transformers 5.12.1, cuda-python>=13 and the rest of the runtime tree. Both
+# editables go in one command so pip solves the whole graph at once — 0.5.16's
+# stack is mutually version-locked, and piecewise installs / later per-package
+# upgrades silently produce an ABI-mismatched env.
 WORKDIR /workspace/vortex_torch
 
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir \
+    -e "third_party/sglang/v0.5.16/sglang/python" \
+    -e .
 
-# GLM-4.7-Flash note: this image ships transformers 4.57.1 (sglang's pin), which
-# does NOT recognize the `glm4_moe_lite` architecture. If you need GLM-4.7-Flash,
-# override transformers with the pinned commit (see install_vortex_glm.sh):
-#   pip install --upgrade \
-#     "git+https://github.com/huggingface/transformers.git@76732b4e7120808ff989edbd16401f61fa6a0afa"
+# GLM-4.7-Flash works out of the box here: sglang 0.5.16 pins transformers
+# 5.12.1, and `glm4_moe_lite` needs transformers >= 5. (Under the old 0.5.9
+# image the 4.57.1 pin required the separate vortex_glm env / override step.)
 
 RUN which python && python --version && which pip && pip --version
 

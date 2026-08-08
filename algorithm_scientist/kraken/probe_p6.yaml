@@ -1,0 +1,50 @@
+jobName: zhuominc-vortex-probe-p6
+jobPriority: HIGH
+projectName: green
+resourceConfig:
+  queue: green-rl-gym-p6-bom-128
+  nodeCount: 1
+containers:
+  - imageUri: 339713096311.dkr.ecr.ap-south-1.amazonaws.com/agi-training-toolkit-images-gpu-nv4-p6:agi-training-nv4-ebony-2026-02-03T03.40.50Z
+    command: bash
+    args:
+      - -lc
+      - |
+        echo "===== HOST / GPU ====="
+        hostname; nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv || echo "no nvidia-smi"
+        echo "===== CUDA driver capability (need CUDA 13 for sglang 0.5.16) ====="
+        nvidia-smi | head -4
+        echo "===== OS / PYTHON ====="
+        cat /etc/os-release | head -3
+        which python python3 uv conda pip; python3 -VV
+        echo "===== EXISTING TORCH ====="
+        python3 -c "import torch;print('torch',torch.__version__,'cuda',torch.version.cuda)" 2>&1 | head -3
+        echo "===== MOUNTS ====="
+        df -h | grep -Ev "^(tmpfs|devtmpfs|shm)" | head -20
+        for d in /scratch /checkpoint-fsx /fsx /home /mnt /data /workspace; do
+          [ -d "$d" ] && echo "EXISTS $d" && ls "$d" 2>/dev/null | head -5
+        done
+        echo "===== WRITABLE ====="
+        for d in /scratch /checkpoint-fsx /fsx /tmp /workspace; do
+          [ -d "$d" ] && (touch "$d/.zh_wtest" 2>/dev/null && echo "WRITABLE $d" && rm -f "$d/.zh_wtest" || echo "readonly  $d")
+        done
+        echo "===== NETWORK ====="
+        timeout 60 curl -sS -o /dev/null -w "pypi:%{http_code}\n" https://pypi.org/simple/ || echo "pypi unreachable"
+        timeout 60 curl -sS -o /dev/null -w "hf:%{http_code}\n" https://huggingface.co || echo "hf unreachable"
+        timeout 60 curl -sS -o /dev/null -w "github:%{http_code}\n" https://github.com || echo "github unreachable"
+        echo "===== HF CACHE (models already local?) ====="
+        for h in "$HF_HOME" /scratch/hf /checkpoint-fsx/hf ~/.cache/huggingface; do
+          [ -n "$h" ] && [ -d "$h" ] && echo "HF dir $h:" && ls "$h" 2>/dev/null | head -5
+        done
+        echo "===== DISK ====="
+        df -h /tmp / | tail -3
+        echo "===== PROBE DONE ====="
+        sleep 7200
+    environmentVariables:
+      - name: PYTHONUNBUFFERED
+        value: "True"
+workloadTaxonomyConfig:
+  workloadType: data-gen
+  subtype: general
+  role: general
+  runType: dev

@@ -48,6 +48,14 @@ from vortex_torch.indexer.compiler.compile import compile as compile_indexer
 from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 
 from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
+
+from vortex_torch.engine.sgl.compat import (
+    attention_backend_base,
+    bind_kv_pool,
+    dense_capture_cuda_graph,
+    dense_replay_cuda_graph,
+    token_to_kv_pool,
+)
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
 from .cuda_mla_kernel import allocate_mla_buffers, make_mla_decoder
@@ -99,11 +107,14 @@ def _register_cuda_mla_dispatch() -> None:
 _register_cuda_mla_dispatch()
 
 
-class VortexCudaMLABackend(AttentionBackend):
+class VortexCudaMLABackend(*attention_backend_base()):
     """Standalone vortex sparse MLA backend on the hand-written CUDA decode kernel."""
 
     def __init__(self, model_runner: "ModelRunner", skip_prefill: bool = False):
         super().__init__()
+        # sglang >= 0.5.16 reads the KV / req pools off the *backend*
+        # (forward_context.get_token_to_kv_pool); publish them here.
+        bind_kv_pool(self, model_runner)
         sa = model_runner.server_args
 
         self.max_context_len = model_runner.model_config.context_len
@@ -318,9 +329,11 @@ class VortexCudaMLABackend(AttentionBackend):
         self, bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
         forward_mode, spec_info,
     ):
-        self._dense.init_forward_metadata_capture_cuda_graph(
-            bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
-            forward_mode, spec_info,
+        dense_capture_cuda_graph(
+            self._dense,
+            bs=bs, num_tokens=num_tokens, req_pool_indices=req_pool_indices,
+            seq_lens=seq_lens, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -334,9 +347,12 @@ class VortexCudaMLABackend(AttentionBackend):
         self, bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
         forward_mode, spec_info, seq_lens_cpu,
     ):
-        self._dense.init_forward_metadata_replay_cuda_graph(
-            bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
-            forward_mode, spec_info, seq_lens_cpu,
+        dense_replay_cuda_graph(
+            self._dense,
+            bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
+            seq_lens_sum=seq_lens_sum, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
+            seq_lens_cpu=seq_lens_cpu,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -376,7 +392,7 @@ class VortexCudaMLABackend(AttentionBackend):
             k_f = k.view(-1, 1, self.kv_cache_dim)
             kv_c = k_f[..., : self.kv_lora_rank]
             k_pe = k_f[..., self.kv_lora_rank :]
-            forward_batch.token_to_kv_pool.set_mla_kv_buffer(
+            token_to_kv_pool(forward_batch).set_mla_kv_buffer(
                 layer, forward_batch.out_cache_loc.to(torch.int64), kv_c, k_pe,
             )
 
@@ -391,7 +407,7 @@ class VortexCudaMLABackend(AttentionBackend):
         # select the active layer's baked weight slice at runtime. The arg
         # defaults to 0 in the generated forward(), so every other flow that
         # doesn't pass it is unaffected.
-        cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
+        cache = token_to_kv_pool(forward_batch).get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
             cur_layer=layer.layer_id,
@@ -401,7 +417,7 @@ class VortexCudaMLABackend(AttentionBackend):
         #    was built once for this step by _plan() (in init_forward_metadata); run()
         #    just consumes it with this layer's block table => one plan, all layers.
         bs = query.shape[0]
-        latent = forward_batch.token_to_kv_pool.get_key_buffer(layer.layer_id).view(
+        latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
             -1, self.kv_cache_dim
         )
         o = query.new_empty((bs, self.num_qo_heads, self.kv_lora_rank))
@@ -430,7 +446,7 @@ class VortexCudaMLABackend(AttentionBackend):
             q, k, v,
             kv_indices_prefix=getattr(fm, "kv_indices", None),
             key_buffer=(
-                forward_batch.token_to_kv_pool.get_key_buffer(layer.layer_id)
+                token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id)
                 if self._prefill_has_prefix else None
             ),
             kv_b_proj=getattr(layer, "kv_b_proj", None),

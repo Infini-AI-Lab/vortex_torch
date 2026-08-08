@@ -1,0 +1,32 @@
+jobName: zhuominc-vortex-mla
+jobPriority: HIGH
+projectName: green
+resourceConfig:
+  queue: green-rl-gym-p6-bom-128
+  nodeCount: 1
+containers:
+  - imageUri: 339713096311.dkr.ecr.ap-south-1.amazonaws.com/agi-training-toolkit-images-gpu-nv4-p6:agi-training-nv4-ebony-2026-02-03T03.40.50Z
+    command: bash
+    args:
+      - -lc
+      - |
+        set -x
+        cd /scratch/zhuominc/vortex_torch || exit 1
+        # /scratch is FSx, so the venv + HF cache + repo built by the probe job
+        # persist across jobs; nothing to reinstall.
+        MODEL=zai-org/GLM-4.7-Flash \
+        PY=/scratch/zhuominc/venv-0516/bin/python \
+        OUT=/scratch/zhuominc/sweep_results \
+        HF_HOME=/scratch/zhuominc/hf HF_HUB_OFFLINE=1 \
+          bash examples/ruler/sweep_mla.sh 2>&1 | tee /scratch/zhuominc/logs/sweep_mla.log
+        echo "===== MLA SWEEP EXIT ====="
+        # Keep the pod alive so results can be pulled and follow-ups run.
+        sleep 21600
+    environmentVariables:
+      - name: PYTHONUNBUFFERED
+        value: "True"
+workloadTaxonomyConfig:
+  workloadType: data-gen
+  subtype: general
+  role: general
+  runType: dev

@@ -15,9 +15,10 @@
 #
 # Environment overrides (unified with sweep_mha.sh):
 #   MODEL=zai-org/GLM-4.7-Flash   # HF model id
-#   PY="python"                   # interpreter where `import vortex_torch` works;
-#                                 #   GLM needs transformers >= 5 (vortex_glm env),
-#                                 #   e.g. PY="conda run -n vortex_glm python"
+#   PY="python"                   # interpreter where `import vortex_torch` works
+#                                 #   (vortex_v1 env; sglang 0.5.16 pins
+#                                 #   transformers 5.12.1, so GLM loads there too
+#                                 #   -- the old vortex_glm split is obsolete)
 #   FLOWS="..."                   # space-separated flow list (default: both)
 #   BACKENDS="cuda_mla"           # sglang attention backends (--attn-backend)
 #   BLOCK=32                      # block size (page_size == vortex_block_size)

@@ -88,12 +88,15 @@ def analyze(model: str) -> Dict[str, Any]:
                 "vortex path). vFlow is a standard vFlow subclass.",
         })
 
-    # Conda env: GLM-family loads only in vortex_glm; everything else vortex_v1.
+    # Conda env: one env for every model. sglang 0.5.16 pins transformers
+    # 5.12.1, so the default vortex_v1 env loads GLM-family (glm4_moe*) too --
+    # the old vortex_glm split (sglang 0.5.9 pinned transformers 4.57.1) is gone.
     glm = "glm" in model_type or "glm" in model.lower()
-    out["recommended_env"] = "vortex_glm" if glm else "vortex_v1"
+    out["recommended_env"] = "vortex_v1"
     out["env_note"] = (
-        "GLM-family (glm4_moe*) only loads in vortex_glm (transformers 5.0)."
-        if glm else "Qwen/Llama/DeepSeek-family load in vortex_v1."
+        "GLM-family (glm4_moe*) needs transformers >= 5, which sglang 0.5.16 "
+        "pins, so vortex_v1 loads it; the separate vortex_glm env is obsolete."
+        if glm else "All families load in vortex_v1 (transformers 5.12.1)."
     )
 
     # Known-supported quick verdict.

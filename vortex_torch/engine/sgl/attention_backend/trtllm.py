@@ -28,7 +28,14 @@ if os.environ["SGLANG_ENABLE_TORCH_COMPILE"] == "1":
     torch._dynamo.config.suppress_errors = True
 
 from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
-from sglang.srt.layers.dp_attention import get_attention_tp_size
+
+from vortex_torch.engine.sgl.compat import (
+    attention_backend_base,
+    is_draft_extend,
+    bind_kv_pool,
+    token_to_kv_pool,
+)
+from vortex_torch.engine.sgl.compat import get_attention_tp_size
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
 from sglang.srt.utils import is_flashinfer_available
 if TYPE_CHECKING:
@@ -60,7 +67,7 @@ class PrefillMetadata:
 global_workspace_buffer = None
 
 
-class VortexTRTLLMBackend(AttentionBackend):
+class VortexTRTLLMBackend(*attention_backend_base()):
     """Flashinfer trtllm attention kernels."""
 
     def __init__(
@@ -71,6 +78,9 @@ class VortexTRTLLMBackend(AttentionBackend):
         kv_last_page_len_buf: Optional[torch.Tensor] = None,
     ):
         super().__init__()
+        # sglang >= 0.5.16 reads the KV / req pools off the *backend*
+        # (forward_context.get_token_to_kv_pool); publish them here.
+        bind_kv_pool(self, model_runner)
 
         # Parse constants
         self.max_context_len = model_runner.model_config.context_len
@@ -285,7 +295,7 @@ class VortexTRTLLMBackend(AttentionBackend):
     
     def init_forward_metadata(self, forward_batch: ForwardBatch):
         
-        assert not forward_batch.forward_mode.is_draft_extend()
+        assert not is_draft_extend(forward_batch.forward_mode)
         assert not forward_batch.forward_mode.is_target_verify()
         
         if forward_batch.forward_mode.is_decode_or_idle():
@@ -319,7 +329,12 @@ class VortexTRTLLMBackend(AttentionBackend):
 
         elif forward_batch.forward_mode.is_extend():
             
-            prefix_lens = forward_batch.extend_prefix_lens
+            # sglang_plan_prefill reads cached_seq_lens / input_seq_lens as
+            # int32. extend_prefix_lens is int32 on the eager path, but the
+            # 0.5.16 prefill cuda-graph runner allocates its static
+            # extend_prefix_lens buffer as int64, so coerce rather than trust
+            # the caller's dtype.
+            prefix_lens = forward_batch.extend_prefix_lens.to(torch.int32)
             extend_no_prefix = not any(forward_batch.extend_prefix_lens_cpu)
             bs = len(forward_batch.req_pool_indices)
             
@@ -493,7 +508,7 @@ class VortexTRTLLMBackend(AttentionBackend):
             )
             
             
-            k_cache, v_cache = forward_batch.token_to_kv_pool.get_kv_buffer(layer.layer_id)
+            k_cache, v_cache = token_to_kv_pool(forward_batch).get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
             v_cache = v_cache.view(-1, self.page_size, 1, self.head_dim)
             o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
@@ -515,7 +530,7 @@ class VortexTRTLLMBackend(AttentionBackend):
             o, _ = merge_state(o1, s1, o2_t, s2_t)
 
         if save_kv_cache:
-                forward_batch.token_to_kv_pool.set_kv_buffer(
+                token_to_kv_pool(forward_batch).set_kv_buffer(
                     layer, cache_loc, k, v, layer.k_scale, layer.v_scale
                 )
 
@@ -543,12 +558,12 @@ class VortexTRTLLMBackend(AttentionBackend):
         if k is not None:
             assert v is not None
             if save_kv_cache:
-                forward_batch.token_to_kv_pool.set_kv_buffer(
+                token_to_kv_pool(forward_batch).set_kv_buffer(
                     layer, cache_loc, k, v, layer.k_scale, layer.v_scale
                 )
 
         # Read Cache from memory pool
-        cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
+        cache = token_to_kv_pool(forward_batch).get_cache(layer.layer_id)
 
         # NHD per-tensor cache layout: [num_pages, block_size, 1, head_dim]
         cache_k = cache["k"].view(-1, self.block_size, 1, self.head_dim)

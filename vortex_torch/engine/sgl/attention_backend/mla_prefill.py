@@ -111,6 +111,17 @@ class MLAPrefill:
         self._q_dtype = q_dtype
         self._has_prefix = has_prefix
 
+        # flashinfer's prefill plan() requires int32 indptrs. sglang widened
+        # TritonAttnBackend.qo_indptr from int32 to int64 in 0.5.16 (kv_indptr is
+        # still int32), and since we forward the dense backend's buffers straight
+        # through, an int64 qo_indptr gets reinterpreted as int32 inside
+        # PrefillSplitQOKVIndptr -> bogus offsets ("qo_indptr[i] - qo_indptr[i-1]
+        # should be non-negative"). Coerce instead of trusting the dtype.
+        if qo_indptr.dtype != torch.int32:
+            qo_indptr = qo_indptr.to(torch.int32)
+        if kv_indptr_prefix is not None and kv_indptr_prefix.dtype != torch.int32:
+            kv_indptr_prefix = kv_indptr_prefix.to(torch.int32)
+
         # Extend part: keys are the query tokens themselves (kv_indptr == qo_indptr),
         # plain MHA (num_kv_heads == num_qo_heads), causal.
         self._extend.plan(

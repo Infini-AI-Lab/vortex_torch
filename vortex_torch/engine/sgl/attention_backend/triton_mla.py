@@ -37,6 +37,14 @@ from vortex_torch.indexer.compiler.compile import compile as compile_indexer
 from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 
 from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
+
+from vortex_torch.engine.sgl.compat import (
+    attention_backend_base,
+    bind_kv_pool,
+    dense_capture_cuda_graph,
+    dense_replay_cuda_graph,
+    token_to_kv_pool,
+)
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
 from .triton_mla_kernel import decode_blocktable_mla
@@ -46,11 +54,14 @@ if TYPE_CHECKING:
     from sglang.srt.model_executor.model_runner import ModelRunner
 
 
-class VortexTritonMLABackend(AttentionBackend):
+class VortexTritonMLABackend(*attention_backend_base()):
     """Standalone vortex sparse MLA backend on the Triton decode kernel."""
 
     def __init__(self, model_runner: "ModelRunner", skip_prefill: bool = False):
         super().__init__()
+        # sglang >= 0.5.16 reads the KV / req pools off the *backend*
+        # (forward_context.get_token_to_kv_pool); publish them here.
+        bind_kv_pool(self, model_runner)
         sa = model_runner.server_args
 
         self.max_context_len = model_runner.model_config.context_len
@@ -157,9 +168,11 @@ class VortexTritonMLABackend(AttentionBackend):
         self, bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
         forward_mode, spec_info,
     ):
-        self._dense.init_forward_metadata_capture_cuda_graph(
-            bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
-            forward_mode, spec_info,
+        dense_capture_cuda_graph(
+            self._dense,
+            bs=bs, num_tokens=num_tokens, req_pool_indices=req_pool_indices,
+            seq_lens=seq_lens, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -172,9 +185,12 @@ class VortexTritonMLABackend(AttentionBackend):
         self, bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
         forward_mode, spec_info, seq_lens_cpu,
     ):
-        self._dense.init_forward_metadata_replay_cuda_graph(
-            bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
-            forward_mode, spec_info, seq_lens_cpu,
+        dense_replay_cuda_graph(
+            self._dense,
+            bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
+            seq_lens_sum=seq_lens_sum, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
+            seq_lens_cpu=seq_lens_cpu,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -213,7 +229,7 @@ class VortexTritonMLABackend(AttentionBackend):
             k_f = k.view(-1, 1, self.kv_cache_dim)
             kv_c = k_f[..., : self.kv_lora_rank]
             k_pe = k_f[..., self.kv_lora_rank :]
-            forward_batch.token_to_kv_pool.set_mla_kv_buffer(
+            token_to_kv_pool(forward_batch).set_mla_kv_buffer(
                 layer, forward_batch.out_cache_loc.to(torch.int64), kv_c, k_pe,
             )
 
@@ -222,14 +238,14 @@ class VortexTritonMLABackend(AttentionBackend):
 
         # 2) indexer fills the sparse block table (topk middle); plan_decode
         #    prefilled BOS/EOS + sparse_seqlens.
-        cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
+        cache = token_to_kv_pool(forward_batch).get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
         )
 
         # 3) block-sparse MLA decode in Triton over the fused latent.
         bs = query.shape[0]
-        latent = forward_batch.token_to_kv_pool.get_key_buffer(layer.layer_id).view(
+        latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
             -1, self.kv_cache_dim
         )
         o = decode_blocktable_mla(

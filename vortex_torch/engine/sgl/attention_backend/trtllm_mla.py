@@ -29,6 +29,14 @@ from vortex_torch.indexer.compiler.compile import compile as compile_indexer
 from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 
 from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
+
+from vortex_torch.engine.sgl.compat import (
+    attention_backend_base,
+    bind_kv_pool,
+    dense_capture_cuda_graph,
+    dense_replay_cuda_graph,
+    token_to_kv_pool,
+)
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
 if TYPE_CHECKING:
@@ -52,12 +60,15 @@ class MLADecodeMetadata:
 _mla_workspace_buffer = None
 
 
-class VortexTRTLLMMLABackend(AttentionBackend):
+class VortexTRTLLMMLABackend(*attention_backend_base()):
     """Standalone vortex sparse MLA backend (no inheritance from sglang's
     dense MLA backend)."""
 
     def __init__(self, model_runner: "ModelRunner", skip_prefill: bool = False):
         super().__init__()
+        # sglang >= 0.5.16 reads the KV / req pools off the *backend*
+        # (forward_context.get_token_to_kv_pool); publish them here.
+        bind_kv_pool(self, model_runner)
         sa = model_runner.server_args
         assert sa.page_size in (32, 64), (
             f"trtllm_mla requires page_size 32 or 64, got {sa.page_size}"
@@ -202,9 +213,11 @@ class VortexTRTLLMMLABackend(AttentionBackend):
         self, bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
         forward_mode, spec_info,
     ):
-        self._dense.init_forward_metadata_capture_cuda_graph(
-            bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
-            forward_mode, spec_info,
+        dense_capture_cuda_graph(
+            self._dense,
+            bs=bs, num_tokens=num_tokens, req_pool_indices=req_pool_indices,
+            seq_lens=seq_lens, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -217,9 +230,12 @@ class VortexTRTLLMMLABackend(AttentionBackend):
         self, bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
         forward_mode, spec_info, seq_lens_cpu,
     ):
-        self._dense.init_forward_metadata_replay_cuda_graph(
-            bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
-            forward_mode, spec_info, seq_lens_cpu,
+        dense_replay_cuda_graph(
+            self._dense,
+            bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
+            seq_lens_sum=seq_lens_sum, encoder_lens=encoder_lens,
+            forward_mode=forward_mode, spec_info=spec_info,
+            seq_lens_cpu=seq_lens_cpu,
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -257,7 +273,7 @@ class VortexTRTLLMMLABackend(AttentionBackend):
         # Sparse path -------------------------------------------------------
         # 1) write the new token's latent into the single fused cache["latent"].
         if save_kv_cache and k is not None:
-            forward_batch.token_to_kv_pool.set_mla_kv_buffer(
+            token_to_kv_pool(forward_batch).set_mla_kv_buffer(
                 layer, forward_batch.out_cache_loc.to(torch.int64), k, k_rope
             )
 
@@ -265,14 +281,14 @@ class VortexTRTLLMMLABackend(AttentionBackend):
         # 2) indexer fills the sparse block table (topk middle); plan_decode
         #    prefilled BOS/EOS + sparse_seqlens. Query = fused [q_nope_out | q_pe].
         query = torch.cat([q, q_rope], dim=-1).contiguous()
-        cache = forward_batch.token_to_kv_pool.get_cache(layer.layer_id)
+        cache = token_to_kv_pool(forward_batch).get_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
         )
 
         # 3) MLA decode over the selected pages, on the fused latent.
         bs = q.shape[0]  # decode batch (one token/request); slice the preallocated metadata
-        kv_cache = forward_batch.token_to_kv_pool.get_fused_latent_buffer(layer.layer_id)
+        kv_cache = token_to_kv_pool(forward_batch).get_fused_latent_buffer(layer.layer_id)
         k_scale = layer.k_scale_float if layer.k_scale_float is not None else 1.0
         bmm1_scale = layer.scaling * k_scale
         o = trtllm_batch_decode_with_kv_cache_mla(

@@ -3,14 +3,21 @@
 # Reproducible build of the `vortex_v1` conda environment — the default env for
 # this project (all the slash commands, RULER, and AIME24 runners expect it).
 #
-# Unlike `vortex_glm` (see install_vortex_glm.sh), this env KEEPS the pinned
-# transformers==4.57.1 that both sglang and vortex_torch require — there is NO
-# transformers override step. It therefore does NOT load GLM-4.7-Flash
-# (`glm4_moe_lite` needs transformers >= 5.0); use install_vortex_glm.sh for that.
+# sglang 0.5.16 pins transformers==5.12.1, so this single env ALSO loads
+# GLM-4.7-Flash (`glm4_moe_lite`, which needs transformers >= 5). The separate
+# `vortex_glm` env that install_vortex_glm.sh built for the transformers-4/5
+# split is therefore obsolete under 0.5.16 — use this script for every model.
 #
-# Captured from the working env: python 3.12, torch 2.9.1+cu128, torchvision
-# 0.24.1, torchaudio 2.9.1, flashinfer 0.6.3, transformers 4.57.1, sglang
-# (editable, vendored v0.5.9), vortex_torch (editable).
+# Dependency policy: sglang, sglang-kernel, torch, flashinfer, transformers and
+# everything else are installed by ONE pip resolve, driven by the vendored
+# sglang's own `python/pyproject.toml`. Do NOT pre-pin torch or upgrade
+# individual packages afterwards — 0.5.16's set is mutually version-locked
+# (torch 2.11.0 / flashinfer 0.6.14[cu13] / sglang-kernel 0.4.5 / CUDA 13) and
+# piecewise installs silently produce an ABI-mismatched env.
+#
+# Resulting env: python 3.12, torch 2.11.0, flashinfer_python 0.6.14,
+# sglang-kernel 0.4.5, transformers 5.12.1, sglang (editable, vendored
+# v0.5.16), vortex_torch (editable).
 #
 # Usage:
 #   bash install_vortex.sh            # create the env
@@ -18,7 +25,8 @@
 #   ENV_NAME=vortex2 bash install_vortex.sh   # build under a different name
 #
 # Install only needs CPU (all kernels are prebuilt wheels or JIT-compiled at
-# runtime), so it works even while the GPUs are busy.
+# runtime), so it works even while the GPUs are busy. Note the runtime needs a
+# CUDA 13-capable driver.
 
 set -euo pipefail
 
@@ -26,7 +34,7 @@ ENV_NAME="${ENV_NAME:-vortex_v1}"
 PY_VER="${PY_VER:-3.12}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SGLANG_DIR="$REPO_ROOT/third_party/sglang/v0.5.9/sglang/python"
+SGLANG_DIR="$REPO_ROOT/third_party/sglang/v0.5.16/sglang/python"
 [ -d "$SGLANG_DIR" ] || { echo "ERROR: vendored sglang not found at $SGLANG_DIR" >&2; exit 1; }
 
 # ---- conda bootstrap -------------------------------------------------------
@@ -42,41 +50,46 @@ if conda env list | awk '{print $1}' | grep -qx "$ENV_NAME"; then
     fi
 fi
 
-echo ">>> [1/4] creating conda env '$ENV_NAME' (python $PY_VER)"
+echo ">>> [1/3] creating conda env '$ENV_NAME' (python $PY_VER)"
 conda create -y -n "$ENV_NAME" python="$PY_VER"
 conda activate "$ENV_NAME"
 python -m pip install --upgrade pip
 
-# ---- 2. torch (CUDA 12.8 build) pinned first ------------------------------
-# Pinned before sglang sees `torch==2.9.1` so the exact CUDA build is locked in
-# and torchvision/torchaudio match. (Default PyPI torch 2.9.1 is the cu128 wheel.)
-echo ">>> [2/4] installing torch 2.9.1 + torchvision 0.24.1 + torchaudio 2.9.1 (cu128)"
-pip install torch==2.9.1 torchvision==0.24.1 torchaudio==2.9.1
+# ---- 2. sglang + vortex_torch in ONE resolve ------------------------------
+# Both editable, installed together so pip solves sglang's pinned stack
+# (torch 2.11.0, flashinfer_python[cu13] 0.6.14, sglang-kernel 0.4.5,
+# transformers 5.12.1, cuda-python>=13, ...) and vortex_torch's requirements
+# simultaneously. A conflict surfaces here as a resolver error rather than as a
+# silently broken env.
+echo ">>> [2/3] installing vendored sglang + vortex_torch (single resolve)"
+pip install -e "$SGLANG_DIR" -e "$REPO_ROOT"
 
-# ---- 3. sglang (editable, vendored) ---------------------------------------
-# Pulls the runtime tree: flashinfer_python/cubin 0.6.3, sgl-kernel, xgrammar,
-# outlines, cuda-python, etc. (and the pinned transformers 4.57.1 — KEPT here).
-echo ">>> [3/4] installing vendored sglang (editable) from $SGLANG_DIR"
-pip install -e "$SGLANG_DIR"
-
-# ---- 4. vortex_torch (editable) -------------------------------------------
-echo ">>> [4/4] installing vortex_torch (editable) from $REPO_ROOT"
-pip install -e "$REPO_ROOT"
-
-# ---- verify ----------------------------------------------------------------
-echo ">>> verifying the environment"
+# ---- 3. verify -------------------------------------------------------------
+echo ">>> [3/3] verifying the environment"
 python - <<'PY'
+import sys
+
 import torch, transformers, sglang, vortex_torch
 import flashinfer
-print(f"  python        : {__import__('sys').version.split()[0]}")
+print(f"  python        : {sys.version.split()[0]}")
 print(f"  torch         : {torch.__version__}  (cuda {torch.version.cuda})")
 print(f"  transformers  : {transformers.__version__}")
 print(f"  flashinfer    : {flashinfer.__version__}")
 print(f"  sglang        : {sglang.__version__}")
 print(f"  vortex_torch  : {getattr(vortex_torch, '__version__', '?')}")
-ok = transformers.__version__.startswith("4.57")
-print(f"  transformers 4.57.x (sglang/vortex_torch pin): {ok}")
-assert ok, f"expected transformers 4.57.x, got {transformers.__version__}"
+
+# sglang 0.5.16 pins transformers 5.x; GLM-4.7-Flash needs >= 5.
+ok = int(transformers.__version__.split(".")[0]) >= 5
+print(f"  transformers >= 5 (sglang 0.5.16 pin, GLM-capable): {ok}")
+assert ok, f"expected transformers >= 5, got {transformers.__version__}"
+
+# The vortex hooks must be live in the vendored tree.
+from sglang.srt.server_args import ServerArgs
+assert hasattr(ServerArgs, "_VORTEX_LEGACY_DEFAULTS"), (
+    "sglang is installed but the vortex patch is missing — check that "
+    "SGLANG_DIR points at third_party/sglang/v0.5.16/sglang/python"
+)
+print("  vortex sglang hooks: present")
 PY
 
 echo ""

@@ -1,7 +1,7 @@
-# vortex_torch + sglang v0.5.9, with PD (prefill/decode) disaggregation.
+# vortex_torch + sglang v0.5.16, with PD (prefill/decode) disaggregation.
 #
 # Builds the v0.6 branch (vendored sglang lives at
-# third_party/sglang/v0.5.9/sglang) and adds the RDMA/InfiniBand userspace
+# third_party/sglang/v0.5.16/sglang) and adds the RDMA/InfiniBand userspace
 # stack + the Mooncake transfer engine that sglang's disaggregation backend
 # needs to move KV cache between prefill and decode workers.
 #
@@ -9,18 +9,19 @@
 #   DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.pd \
 #     --build-arg VORTEX_TORCH_REF=v0.6 \
 #     --build-arg TORCH_CUDA_ARCH_LIST="9.0" \
-#     -t vortex-torch:pd-0.5.9 .
+#     -t vortex-torch:pd-0.5.16 .
 #   # Blackwell (B200/sm100): pass TORCH_CUDA_ARCH_LIST="10.0".
 #
 # Run (needs RDMA devices + IPC/host net for the transfer engine), e.g.:
 #   docker run --gpus all --ipc=host --network=host \
 #     --device=/dev/infiniband --cap-add=IPC_LOCK \
 #     -v /raid/catalyst/models:/models -e HF_HOME=/models \
-#     -it vortex-torch:pd-0.5.9
+#     -it vortex-torch:pd-0.5.16
 #   # then: bash marks/pd/run_p1d1.sh   (mooncake backend, --disaggregation-ib-device mlx5_0)
 
-# CUDA 12.9 matches sglang 0.5.9's pins (cuda-python==12.9, torch==2.9.1).
-ARG CUDA_VERSION=12.9.1
+# CUDA 13 matches sglang 0.5.16's pins (cuda-python>=13, torch==2.11.0,
+# flashinfer_python[cu13]==0.6.14).
+ARG CUDA_VERSION=13.0.1
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -75,18 +76,23 @@ WORKDIR /workspace
 RUN git clone -b "${VORTEX_TORCH_REF}" --recursive \
     https://github.com/Infini-AI-Lab/vortex_torch.git
 
-# --- sglang v0.5.9 (vendored): editable install of its python package ---
-# (v0.5.9 has no install.sh; pulls torch==2.9.1, flashinfer==0.6.3,
-#  sgl-kernel==0.3.21 as wheels.)
-WORKDIR /workspace/vortex_torch/third_party/sglang/v0.5.9/sglang
-RUN pip install --no-cache-dir -e "python"
-
-# --- vortex_torch (pure Python + Triton JIT; no compiled C extension) ---
+# --- sglang v0.5.16 (vendored) + vortex_torch: ONE pip resolve ---
+# v0.5.16 has no install.sh; `pip install -e python` pulls torch==2.11.0,
+# flashinfer_python[cu13]==0.6.14, sglang-kernel==0.4.5, transformers==5.12.1,
+# cuda-python>=13 as wheels. Both editables in a single command so pip solves
+# the whole graph at once — the stack is mutually version-locked and piecewise
+# installs (or later per-package upgrades) silently break ABI compatibility.
 WORKDIR /workspace/vortex_torch
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir \
+    -e "third_party/sglang/v0.5.16/sglang/python" \
+    -e .
 
 # --- Mooncake transfer engine (KV transport for PD disaggregation) ---
-# CUDA 12.x → pip wheel. (CUDA>=13 would need a from-source build.)
+# NOTE: sglang 0.5.16 moves this image to CUDA 13, and mooncake publishes pip
+# wheels for CUDA 12.x only — a CUDA 13 image needs a from-source mooncake
+# build. Left as the pip wheel here; if the install fails on the CUDA 13 base,
+# build mooncake from source instead (PD disaggregation is not exercised by the
+# sweep_mha / sweep_mla validation).
 RUN pip install --no-cache-dir "mooncake-transfer-engine==${MOONCAKE_VERSION}"
 
 # --- sanity checks ---
