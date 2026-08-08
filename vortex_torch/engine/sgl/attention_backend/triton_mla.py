@@ -31,21 +31,12 @@ from typing import TYPE_CHECKING, Optional
 
 import torch
 
-from vortex_torch.abs import as_vtensor, FORMAT
-from vortex_torch.indexer import Context, MetaData
-from vortex_torch.indexer.compiler.compile import compile as compile_indexer
 from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 
-from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
+from vortex_torch.engine.sgl.compat import token_to_kv_pool
+from .base import VortexMLABackendBase
 
-from vortex_torch.engine.sgl.compat import (
-    GraphMetadataArgs,
-    attention_backend_base,
-    capture_dense,
-    publish_pools,
-    replay_dense,
-    token_to_kv_pool,
-)
+
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
 from .triton_mla_kernel import decode_blocktable_mla
@@ -55,35 +46,13 @@ if TYPE_CHECKING:
     from sglang.srt.model_executor.model_runner import ModelRunner
 
 
-class VortexTritonMLABackend(*attention_backend_base()):
+class VortexTritonMLABackend(VortexMLABackendBase):
     """Standalone vortex sparse MLA backend on the Triton decode kernel."""
 
     def __init__(self, model_runner: "ModelRunner", skip_prefill: bool = False):
         super().__init__()
-        # sglang >= 0.5.16 reads the KV / req pools off the *backend*
-        # (forward_context.get_token_to_kv_pool); publish them here.
-        publish_pools(self, model_runner)
-        sa = model_runner.server_args
+        self._init_mla_geometry(model_runner)
 
-        self.max_context_len = model_runner.model_config.context_len
-        self.device = model_runner.device
-
-        mc = model_runner.model_config
-        self.kv_lora_rank = mc.kv_lora_rank
-        self.qk_rope_head_dim = mc.qk_rope_head_dim
-        self.kv_cache_dim = self.kv_lora_rank + self.qk_rope_head_dim   # 576
-        # indexer Context.create reads parent.head_dim — the fused absorbed
-        # query [q_nope_out | q_pe] has width kv_cache_dim.
-        self.head_dim = self.kv_cache_dim
-        self.num_qo_heads = mc.num_attention_heads                      # tp handled by sglang
-        self.num_kv_heads = 1
-        self.group_size = self.num_qo_heads
-        self.q_data_type = model_runner.dtype
-        self.data_type = model_runner.kv_cache_dtype
-
-        self.page_size = sa.page_size
-        self.block_size = sa.vortex_block_size
-        assert self.page_size % self.block_size == 0
         # The block-table kernel multiplies page id by block_size; require
         # page == block (one block per page) so a page id maps directly to a
         # contiguous block_size run of latent slots.
@@ -91,121 +60,18 @@ class VortexTritonMLABackend(*attention_backend_base()):
             "VortexTritonMLABackend requires page_size == vortex_block_size "
             f"(got page_size={self.page_size}, block_size={self.block_size})."
         )
-        self.layers_skip = sa.vortex_layers_skip
-        self.req_to_token = model_runner.req_to_token_pool.req_to_token
 
         # vortex sparse-decode metadata planner (block tables + seqlens).
-        self.plan_decode = get_decode_planner_trtllm(sa.vortex_schedule_policy)
+        self.plan_decode = get_decode_planner_trtllm(
+            model_runner.server_args.vortex_schedule_policy
+        )
 
         # Dense Triton helper (COMPOSITION) for prefill / skipped-layer decode /
         # cuda-graph. It also owns the dense MLA metadata (token-level kv_indices).
         from sglang.srt.layers.attention.triton_backend import TritonAttnBackend
         self._dense = TritonAttnBackend(model_runner)
 
-        # Indexer compile (ctx.metadata buffers live on the context).
-        self.sparse_attention = model_runner.sparse_attention   # a vFlowMLA
-        self.ctx = Context()
-        self._compile(model_runner)
-
-    # ------------------------------------------------------------------ #
-    # indexer compilation (single fused query "q")
-    # ------------------------------------------------------------------ #
-    def _compile(self, model_runner) -> None:
-        device = model_runner.device
-        indexer = self.sparse_attention.forward_indexer
-
-        self.ctx.create(self, model_runner)
-        self.ctx.metadata = MetaData.preallocate(self.ctx, device=device)
-        self.ctx.assert_created()
-        self.ctx.profile()
-
-        def register(vt, name):
-            self.ctx.tensor_list.append(vt)
-            self.ctx.output_tensor_to_op_list.append(None)
-            self.ctx.tensor_id_to_tensor_name_map[vt.tensor_id] = name
-
-        def make_dummy(shape, fmt, tid, tdtype=None, zeros=False):
-            factory = torch.zeros if zeros else torch.empty
-            return as_vtensor(
-                factory(shape, device=device, dtype=tdtype or self.q_data_type),
-                fmt, tensor_id=tid,
-            )
-
-        with torch.no_grad():
-            q_dummy = make_dummy((0, self.group_size, self.kv_cache_dim), FORMAT.BATCHED, 0)
-            register(q_dummy, "q")
-            o_dummy = make_dummy((0, 1, 1), FORMAT.RAGGED, 1)
-            register(o_dummy, "o")
-            cache_dummy = {}
-            for i, (name, (shape, cdt)) in enumerate(
-                self.sparse_attention.get_cache_meta_info().items()
-            ):
-                vt = make_dummy((0, shape[0], shape[1]), FORMAT.PAGED, 2 + i, tdtype=cdt, zeros=True)
-                cache_dummy[name] = vt
-                register(vt, f"cache['{name}']")
-            indexer(q_dummy, o_dummy, cache_dummy, ctx=self.ctx)
-
-        self.compiled_indexer = compile_indexer(self.ctx)()
-        self.ctx.summary()
-        self.ctx.execute()
-
-    # ------------------------------------------------------------------ #
-    # per-batch metadata
-    # ------------------------------------------------------------------ #
-    def init_forward_metadata(self, forward_batch: ForwardBatch):
-        self._dense.init_forward_metadata(forward_batch)
-        if forward_batch.forward_mode.is_decode_or_idle():
-            self.plan_decode(
-                cached_seq_lens=forward_batch.seq_lens.to(torch.int32),
-                req_to_token=self.req_to_token,
-                req_indices=forward_batch.req_pool_indices,
-                ctx=self.ctx,
-            )
-
-    def init_cuda_graph_state(self, max_bs, max_num_tokens, kv_indices_buf=None):
-        self._dense.init_cuda_graph_state(max_bs, max_num_tokens, kv_indices_buf)
-
-    def init_forward_metadata_capture_cuda_graph(
-        self, bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
-        forward_mode, spec_info,
-    ):
-        capture_dense(
-            self._dense,
-            GraphMetadataArgs(
-                bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
-                forward_mode=forward_mode, encoder_lens=encoder_lens,
-                spec_info=spec_info,
-            ),
-        )
-        if forward_mode.is_decode_or_idle():
-            self.plan_decode(
-                cached_seq_lens=seq_lens.to(torch.int32),
-                req_to_token=self.req_to_token,
-                req_indices=req_pool_indices, ctx=self.ctx,
-            )
-
-    def init_forward_metadata_replay_cuda_graph(
-        self, bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
-        forward_mode, spec_info, seq_lens_cpu,
-    ):
-        replay_dense(
-            self._dense,
-            GraphMetadataArgs(
-                bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
-                forward_mode=forward_mode, encoder_lens=encoder_lens,
-                spec_info=spec_info, seq_lens_cpu=seq_lens_cpu,
-                seq_lens_sum=seq_lens_sum,
-            ),
-        )
-        if forward_mode.is_decode_or_idle():
-            self.plan_decode(
-                cached_seq_lens=seq_lens.to(torch.int32),
-                req_to_token=self.req_to_token,
-                req_indices=req_pool_indices, ctx=self.ctx,
-            )
-
-    def get_cuda_graph_seq_len_fill_value(self):
-        return self._dense.get_cuda_graph_seq_len_fill_value()
+        self._compile_indexer(model_runner)
 
     # ------------------------------------------------------------------ #
     # decode (sparse for non-skipped layers; dense otherwise)
@@ -264,8 +130,3 @@ class VortexTritonMLABackend(*attention_backend_base()):
         )
         return o.view(-1, layer.tp_q_head_num * self.kv_lora_rank)
 
-    # ------------------------------------------------------------------ #
-    # prefill — always dense (no sparsity), delegated to the dense helper
-    # ------------------------------------------------------------------ #
-    def forward_extend(self, *args, **kwargs):
-        return self._dense.forward_extend(*args, **kwargs)

@@ -17,9 +17,7 @@ import torch
 # modules are imported from inside vortex_torch's own import chain (the
 # sglang hook), where the root package has not yet bound its re-exports.
 from vortex_torch.utils import is_hopper
-from vortex_torch.abs import as_vtensor, FORMAT
-from vortex_torch.indexer import Context, MetaData
-from vortex_torch.indexer.compiler.compile import compile as compile_indexer
+from vortex_torch.indexer import Context
 from vortex_torch.indexer.utils_sglang import (
     get_chunkwise_hn2nh_transpose,
     get_chunkwise_nh2hn_transpose,
@@ -32,15 +30,13 @@ if os.environ["SGLANG_ENABLE_TORCH_COMPILE"] == "1":
     torch._logging.set_logs(dynamo=logging.ERROR)
     torch._dynamo.config.suppress_errors = True
 
-from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
-
 from vortex_torch.engine.sgl.compat import (
-    attention_backend_base,
     get_attention_tp_size,
     is_draft_extend,
     publish_pools,
     token_to_kv_pool,
 )
+from .base import VortexBackendBase
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
 from sglang.srt.utils import is_flashinfer_available
 from sglang.srt.layers.attention.flashinfer_backend import should_use_tensor_core
@@ -70,7 +66,7 @@ class PrefillMetadata:
 global_workspace_buffer = None
 
 
-class VortexFlashInferBackend(*attention_backend_base()):
+class VortexFlashInferBackend(VortexBackendBase):
     """Flashinfer attention kernels."""
 
     def __init__(
@@ -97,14 +93,12 @@ class VortexFlashInferBackend(*attention_backend_base()):
         assert model_runner.sliding_window_size is None
         assert not model_runner.model_config.is_encoder_decoder 
         assert not self.skip_prefill
-        # NOTE: `is_multimodal` is an architecture-name lookup (the model *can*
-        # take images), not a property of this request. It is not by itself a
-        # reason vortex cannot run: the indexer scores blocks from the K the
-        # model already wrote to the cache, so image tokens and any rope variant
-        # (mrope / partial rotary) are the model's business, not vortex's. What
-        # vortex has NOT been validated against is a batch that actually carries
-        # image tokens, so gate on the inputs rather than on the architecture.
-        # Enforced per-batch in `init_forward_metadata`.
+        # `is_multimodal` is deliberately NOT asserted on: it is an
+        # architecture-name lookup (the model *can* take images), not a property
+        # of this request, and vortex scores blocks from the K the model already
+        # wrote — so image support and rope variants are the model's business.
+        # What is unvalidated is a batch actually carrying image tokens, which
+        # `init_forward_metadata` rejects per-batch.
         assert kv_indptr_buf is None
         assert kv_last_page_len_buf is None
         self.num_wrappers = 2
@@ -159,7 +153,7 @@ class VortexFlashInferBackend(*attention_backend_base()):
 
         # ===========================
         # Decode-path buffers live on ``self.ctx.metadata`` (pre-allocated
-        # in ``_compile``). The flashinfer wrappers consume them directly
+        # in ``_compile_indexer``). The flashinfer wrappers consume them directly
         # via ``self.ctx.metadata.dense_kv_indptr`` etc.
         # ===========================
 
@@ -245,64 +239,13 @@ class VortexFlashInferBackend(*attention_backend_base()):
 
         self.sparse_attention = model_runner.sparse_attention
         self.ctx = Context()
-        self._compile(model_runner)
+        self._compile_indexer(model_runner)
         # Other metadata
         self.forward_metadata: Union[PrefillMetadata, DecodeMetadata] = None
         self.decode_cuda_graph_metadata: Dict[int, List[BatchDecodeWithPagedKVCacheWrapper]] = {}
         self.plan_graph: Dict[int, Tuple[torch.Tensor, torch.Tensor, torch.cuda.CUDAGraph]]
     
 
-    def _compile(self, model_runner: "ModelRunner") -> None:
-        """Trace the sparse-attention indexer on zero-sized dummies and compile it."""
-        device = model_runner.device
-        dtype = self.q_data_type
-        indexer = self.sparse_attention.forward_indexer
-
-        self.ctx.create(self, model_runner)
-        # Allocate every per-forward-batch buffer (winfo_*, dense/sparse
-        # kv_indptr+indices, kv_last_page_len) on a single MetaData owned
-        # by the context. The decode planner writes into this MetaData;
-        # the indexer kernels read from it, and the flashinfer decode
-        # wrappers below take pointers into it.
-        self.ctx.metadata = MetaData.preallocate(self.ctx, device=device)
-        self.ctx.assert_created()
-        self.ctx.profile()
-
-        def register(vt, name: str) -> None:
-            self.ctx.tensor_list.append(vt)
-            self.ctx.output_tensor_to_op_list.append(None)
-            self.ctx.tensor_id_to_tensor_name_map[vt.tensor_id] = name
-
-        def make_dummy(shape, fmt, tensor_id, *, tdtype=dtype, zeros=False):
-            factory = torch.zeros if zeros else torch.empty
-            return as_vtensor(factory(shape, device=device, dtype=tdtype), fmt, tensor_id=tensor_id)
-
-        with torch.no_grad():
-            q_dummy = make_dummy((0, self.group_size, self.head_dim), FORMAT.BATCHED, tensor_id=0)
-            register(q_dummy, "q")
-
-            o_dummy = make_dummy((0, 1, 1), FORMAT.RAGGED, tensor_id=1)
-            register(o_dummy, "o")
-
-            cache_dummy = {}
-            for i, (name, (shape, cache_dtype)) in enumerate(
-                self.sparse_attention.get_cache_meta_info().items()
-            ):
-                vt = make_dummy(
-                    (0, shape[0], shape[1]),
-                    FORMAT.PAGED,
-                    tensor_id=2 + i,
-                    tdtype=cache_dtype,
-                    zeros=True,
-                )
-                cache_dummy[name] = vt
-                register(vt, f"cache['{name}']")
-
-            indexer(q_dummy, o_dummy, cache_dummy, ctx=self.ctx)
-
-        self.compiled_indexer = compile_indexer(self.ctx)()
-        self.ctx.summary()
-        self.ctx.execute()
 
     
     def init_forward_metadata(self, forward_batch: ForwardBatch):

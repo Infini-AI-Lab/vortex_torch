@@ -26,7 +26,7 @@ Two layers:
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -231,7 +231,13 @@ class VortexMLABackendBase(VortexBackendBase):
             self._plan_sparse(seq_lens, req_pool_indices)
 
     def get_cuda_graph_seq_len_fill_value(self) -> int:
-        return 1
+        """Defer to the wrapped backend.
+
+        Not hardcoded: this value pads `seq_lens` in captured graphs, and the
+        dense backend is what reads those padded entries on skipped layers. If
+        the two disagree the padding is wrong for one of them.
+        """
+        return self._dense.get_cuda_graph_seq_len_fill_value()
 
     def forward_extend(self, *args, **kwargs):
         """MLA prefill is dense; the wrapped backend owns it."""

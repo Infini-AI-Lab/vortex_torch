@@ -261,3 +261,67 @@ Consequences for this repo:
   needs transformers>=5. Under 0.5.16 the default env *is* transformers 5, so
   the split collapses into one env.
 - CUDA 13 wheels: the container image must have a CUDA 13-capable driver.
+
+## Backend simplification (follow-up)
+
+The five backends each spelled out the same skeleton. Measured before touching
+anything: `_compile` was **2 real implementations copied 5 times** — the MHA pair
+(`flashinfer`/`trtllm`) differed only in comments, the MLA trio by one comment
+line, and `triton_mla`/`cuda_mla` were byte-identical. The single substantive
+difference across all five is the traced query's inner dim (`head_dim` for
+MHA/GQA, `kv_lora_rank + qk_rope_head_dim` for MLA).
+
+`attention_backend/base.py` now owns that:
+
+* `VortexBackendBase._compile_indexer` — the shared indexer trace/compile,
+  parameterised by `indexer_query_dim_attr`.
+* `VortexMLABackendBase` — the MLA geometry read (`_init_mla_geometry`, ~25
+  identical lines), the per-batch sparse planning for **all three** phases
+  (eager / graph capture / graph replay), the dense delegation and
+  `get_cuda_graph_seq_len_fill_value`. Two hooks carry the only per-backend
+  deltas: `_after_plan_decode` (cuda_mla's load-balanced work queue) and
+  `_init_extend_metadata` (cuda_mla's flashinfer prefill planning).
+
+Net -159 lines, and each backend is now down to what is actually specific to it:
+`triton_mla` / `trtllm_mla` are `__init__` + `forward_decode`.
+
+Two bugs this surfaced, both worth recording:
+
+* `get_cuda_graph_seq_len_fill_value` **delegates to `_dense`** in all three MLA
+  backends. My first draft of the base hardcoded `return 1`, which would have
+  silently desynced graph padding from the dense backend that reads those padded
+  entries on skipped layers.
+* Removing "dead" imports deleted `token_to_kv_pool`, still used 7x across the
+  MLA backends. Caught by the MLA gate, not by the MHA ones — a reminder that the
+  MHA sweeps alone do not cover these files.
+
+### Default indexer backend is now `trtllm`
+
+`VortexConfig.attention_backend` defaults to `trtllm` (was `flashinfer`);
+flashinfer stays fully supported and both are swept. The default is mirrored in
+the vendored `server_args._VORTEX_LEGACY_DEFAULTS` literal — the two must stay in
+sync.
+
+### `attention_backend` no longer has to be typed
+
+Asking for vortex's `trtllm` used to also require passing sglang's
+`attention_backend="flashinfer"` — the name of the registry *slot* vortex's shim
+replaces, which has nothing to do with trtllm and reads like a mistake.
+`config._default_sglang_backend` now fills that in when the caller leaves it
+unset, and is **hybrid-aware**: hybrid-GDN models get `trtllm_mha`, because
+upstream asserts against `flashinfer` for them on Blackwell. An explicit value
+always wins; MLA is untouched (its sglang name genuinely selects a different
+decode kernel).
+
+### Final validation — 38 runs, all matching baseline
+
+| sweep | model | result |
+|---|---|---|
+| `sweep_mha` | Qwen3-4B (homogeneous) | **18/18** — 16 at 100%, venergy 99%/99% |
+| `sweep_mha` | Qwen3.5-4B (hybrid) | **18/18 all at 100%** |
+| `sweep_mla` | GLM-4.7-Flash (`cuda_mla`) | lserve_centroid 100%, rope_aware 98% |
+
+Zero tracebacks, `cuda_graph=on` throughout. The Qwen3-4B and GLM numbers are
+identical to the pre-refactor baseline, so the simplification is
+behaviour-preserving. Notably `venergy_gated_centroid` reaches 100% on the hybrid
+model but not on Qwen3-4B — the only flow whose score differs between the two.

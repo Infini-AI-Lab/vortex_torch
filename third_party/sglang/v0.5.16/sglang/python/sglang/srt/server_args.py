@@ -2904,7 +2904,7 @@ class ServerArgs:
         "workload_chunk_size": 32, "dtype": "bfloat16", "module_path": None,
         "module_name": None, "block_size": 16, "topk_ratio": 0.0,
         "compilation_cache_dir": None, "schedule_policy": None,
-        "attention_backend": "flashinfer", "impl_backend": "triton",
+        "attention_backend": "trtllm", "impl_backend": "triton",
         "use_tensor_core": False,
     }
 

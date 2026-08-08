@@ -39,7 +39,11 @@ class VortexConfig:
     topk_ratio: float = 0.0
     compilation_cache_dir: Optional[str] = None
     schedule_policy: Optional[str] = None
-    attention_backend: str = "flashinfer"
+    # Which vortex MHA/GQA backend to build. "trtllm" is the default: its
+    # block-table decode is the faster path and is what the current sweeps use.
+    # "flashinfer" remains fully supported (it is the historical default, and the
+    # RULER sweeps cover both), so switching back is a one-flag change.
+    attention_backend: str = "trtllm"
     impl_backend: str = "triton"
     use_tensor_core: bool = False
 
@@ -76,18 +80,18 @@ def split_flat_kwargs(kwargs: Dict[str, Any]) -> Tuple[Optional[VortexConfig], D
     return cfg, kwargs
 
 
-#: Which sglang ``attention_backend`` name vortex should register under, per
-#: vortex backend. These are *sglang creator names* — the slot vortex's shim
-#: hijacks — not the vortex backend itself, which ``VortexConfig.attention_backend``
-#: selects. They are separate concepts that users kept having to reconcile by
-#: hand (asking for vortex's "trtllm" meant typing sglang's "flashinfer"), so
-#: vortex now fills the sglang name in whenever the caller left it unset.
-_SGLANG_BACKEND_FOR: Dict[str, str] = {
-    # MHA/GQA: both vortex MHA backends are registered on sglang's "flashinfer"
-    # slot (and on "trtllm_mha", which hybrid-GDN models require on Blackwell).
-    "flashinfer": "flashinfer",
-    "trtllm": "flashinfer",
-}
+#: vortex MHA/GQA backends, i.e. the ``VortexConfig.attention_backend`` values
+#: for which vortex owns an sglang registry slot. Both are registered on the same
+#: two slots (see ``integration._make_mha_shim``), so the *sglang* name does not
+#: choose between them — ``VortexConfig.attention_backend`` does.
+_VORTEX_MHA_BACKENDS = frozenset({"flashinfer", "trtllm"})
+
+#: sglang slot to claim for a vortex MHA/GQA run. ``flashinfer`` is the historical
+#: default; hybrid models (some layers linear-attention / RNN) must use
+#: ``trtllm_mha`` because upstream restricts their full-attention backend to
+#: ``{triton, trtllm_mha, fa4}`` on Blackwell and *asserts* on ``flashinfer``.
+_SGLANG_SLOT_DEFAULT = "flashinfer"
+_SGLANG_SLOT_HYBRID = "trtllm_mha"
 
 
 def _default_sglang_backend(kwargs: Dict[str, Any]) -> None:
@@ -96,18 +100,49 @@ def _default_sglang_backend(kwargs: Dict[str, Any]) -> None:
     Without this, asking for vortex's ``trtllm`` indexer path also required
     passing sglang's ``attention_backend="flashinfer"`` — the name of the
     registry slot vortex's shim replaces, which has nothing to do with trtllm and
-    reads like a mistake. An explicit ``attention_backend`` is always respected;
-    MLA runs are left alone because their sglang name (``cuda_mla`` /
-    ``triton`` / ``trtllm_mla``) genuinely selects a different decode kernel.
+    reads like a mistake. The two are orthogonal: ``VortexConfig.attention_backend``
+    picks the vortex backend, this picks which upstream slot it is reached through.
+
+    An explicit ``attention_backend`` is always respected. MLA runs are left
+    alone: their sglang name (``cuda_mla`` / ``triton`` / ``trtllm_mla``)
+    genuinely selects a different decode kernel, so there is nothing to infer.
     """
     cfg = kwargs.get("vortex")
     if not isinstance(cfg, VortexConfig):
         return
     if kwargs.get("attention_backend") is not None:
         return
-    name = _SGLANG_BACKEND_FOR.get(cfg.attention_backend)
-    if name is not None:
-        kwargs["attention_backend"] = name
+    if cfg.attention_backend not in _VORTEX_MHA_BACKENDS:
+        return
+    kwargs["attention_backend"] = (
+        _SGLANG_SLOT_HYBRID
+        if _is_hybrid_model(kwargs.get("model_path"))
+        else _SGLANG_SLOT_DEFAULT
+    )
+
+
+def _is_hybrid_model(model_path: Optional[str]) -> bool:
+    """True when ``model_path`` interleaves full attention with linear/RNN layers.
+
+    Best-effort and deliberately quiet: this only chooses a *default*, and an
+    explicit ``attention_backend`` bypasses it entirely. A wrong answer here is
+    not silent — picking ``flashinfer`` for a hybrid model trips upstream's own
+    assertion with a clear message.
+
+    Reads the HF config only (no weights, no ``ModelConfig``), because this runs
+    inside ``ServerArgs.__init__`` before sglang has built either.
+    """
+    if not model_path:
+        return False
+    try:
+        from transformers import AutoConfig
+
+        from vortex_torch.engine.sgl.compat import full_attention_layer_ids
+
+        hf_config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
+        return full_attention_layer_ids(hf_config) is not None
+    except Exception:
+        return False
 
 
 def install_serverargs_adapter() -> bool:
