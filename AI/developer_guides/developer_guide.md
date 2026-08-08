@@ -128,7 +128,7 @@ vortex_torch/
 │   └── compiler/               # mirror of indexer/compiler
 ├── engine/
 │   └── sgl.py                  # get_engine_from_json + check_engine_config
-└── third_party/sglang/v0.5.9/sglang/...  # patched sglang with the VTX backend
+└── third_party/sglang/v0.5.16/sglang/... # patched sglang with the VTX backend
 ```
 
 Rule of thumb: **every op has one class and one codegen function**;
@@ -1363,7 +1363,7 @@ class, and returns it.
 
 ## 13. Runtime integration with sglang
 
-Patched sglang ships in `third_party/sglang/v0.5.9/sglang/`. Two glue files:
+Patched sglang ships in `third_party/sglang/v0.5.16/sglang/`. Two glue files:
 
 ### 13.1 `VTXGraphAttnBackend` (sglang/srt/layers/attention/vtx_graph_backend.py)
 

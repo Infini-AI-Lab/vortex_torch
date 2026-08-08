@@ -2,6 +2,11 @@
 
 **Branch:** `v0.6`  ·  **sglang:** vendored `third_party/sglang/v0.5.9`  ·  **status:** validated (100% RULER on GLM‑4.7‑Flash, `cuda_mla`)
 
+> **Historical (sglang 0.5.9).** The vendored 0.5.9 tree was removed on the
+> `v0.9` branch; the integration now targets `third_party/sglang/v0.5.16`.
+> The hook *design* below still holds, but several hooks moved file — see
+> [sglang_0516_bump.md](sglang_0516_bump.md) for the current surface.
+
 ## 1. Problem
 
 vortex_torch plugs sparse attention into sglang's decode loop. Historically the

@@ -1,9 +1,12 @@
 # How sglang schedules requests, evicts KV cache, and retracts decode
 
-A code-pointer guide for `third_party/sglang/v0.4.9/sglang/python/sglang/`. Every file
-path below is relative to that root. Line numbers are from the vendored
-copy on the `v0.4` branch — they may drift by a few lines after a
-rebase, so use the symbol names (which are stable) as the anchor.
+A code-pointer guide for `third_party/sglang/v0.5.16/sglang/python/sglang/`. Every
+file path below is relative to that root.
+
+> **Line numbers (and some paths) are from the vendored sglang 0.4.9 tree**,
+> which is no longer in the repo — 0.5.16 is the only vendored release as of the
+> `v0.9` branch. Use the symbol names, which are stable, as the anchor; the
+> scheduler grew substantially between the two releases.
 
 There are four behaviours to understand, and they are all driven by a
 single actor — the `Scheduler` in `srt/managers/scheduler.py`:

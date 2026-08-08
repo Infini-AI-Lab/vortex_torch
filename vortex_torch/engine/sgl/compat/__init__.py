@@ -13,10 +13,11 @@ Each submodule owns one kind of change:
 * :mod:`cuda_graph`  — the two cuda-graph metadata ABIs, in both directions.
 * :mod:`runner_view` — a read-only ``ModelRunner`` overlay for pool construction.
 
-Every shim supports *both* vendored trees (v0.5.9 and v0.5.16), so a submission
-or backend written against one runs unchanged on the other. Keep this package
-import-light: it is imported at attention-backend module scope, inside the
-spawned scheduler worker.
+The vendored tree is v0.5.16. Every shim still resolves against the older 0.5.9
+layout as well — that costs nothing and is what makes each one self-documenting
+about *what* moved — but only 0.5.16 is tested. Keep this package import-light:
+it is imported at attention-backend module scope, inside the spawned scheduler
+worker.
 """
 from vortex_torch.engine.sgl.compat.cuda_graph import (
     GraphMetadataArgs,

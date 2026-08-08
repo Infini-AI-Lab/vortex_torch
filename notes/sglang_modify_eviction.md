@@ -2,7 +2,13 @@
 
 This is a recipe for changing **how / when sglang evicts KV cache**. All
 file paths are under
-`third_party/sglang/v0.4.9/sglang/python/sglang/`.
+`third_party/sglang/v0.5.16/sglang/python/sglang/`.
+
+> **Written against the vendored sglang 0.4.9 tree**, which is no longer in the
+> repo (0.5.16 is the only vendored release as of the `v0.9` branch). The four
+> knobs below still exist, but some have moved file — notably the KV-pool and
+> pool-sizing code, which 0.5.16 split into `mem_cache/kv_cache_configurator.py`
+> and `model_executor/pool_configurator.py`. Search by symbol name, not path.
 
 There are **four independent knobs** you can turn. Pick the one that
 matches the change you want — most users only need #1 (swap the

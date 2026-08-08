@@ -59,7 +59,7 @@ POD=<jobName>-worker-0
 
 # Ship the working tree (the vendored sglang is not on a remote branch).
 tar czf /tmp/vortex_repo.tgz --exclude=.git --exclude=__pycache__ \
-    --exclude='.venv*' --exclude=logs --exclude='third_party/sglang/v0.4.9' \
+    --exclude='.venv*' --exclude=logs \
     --exclude=third_party/flashinfer --exclude=third_party/flash-attention .
 kubectl cp /tmp/vortex_repo.tgz $POD:/scratch/vortex_repo.tgz
 kubectl exec $POD -- bash -lc '
