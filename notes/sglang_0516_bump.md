@@ -54,7 +54,7 @@ files** — that is the entire surface to re-apply:
    `init_forward_metadata` itself is unchanged (still the eager entry point).
 
    Handled by `LegacyCudaGraphABIMixin` in
-   `vortex_torch/engine/sgl/compat.py`: it implements
+   `vortex_torch/engine/sgl/compat/cuda_graph.py`: it implements
    `init_forward_metadata_out_graph`, unpacks the ForwardBatch-like view the
    runner passes (`build_replay_fb_view` supplies `batch_size`,
    `req_pool_indices`, `seq_lens`, `seq_lens_sum`, `seq_lens_cpu`,
@@ -75,7 +75,7 @@ Found by running RULER on a B200; each one was a hard crash, not a warning.
    given `max_total_num_tokens` (the configurator returns it) and before
    `req_to_token_pool` is assigned; the layer span moved to `layer_info`
    (`num_effective_layers` / `start_layer` / `end_layer` are gone from
-   `ModelRunner`). `make_kv_pool(runner, *, size, layer_info, req_to_token_pool)`
+   `ModelRunner`). `make_kv_pool(runner, *, max_total_num_tokens, layer_info, req_to_token_pool)`
    now takes them explicitly, defaulting to the runner attributes so the 0.5.9
    call site still works. The vortex pool needs `req_to_token_pool` because
    `Context.create` sizes `max_new_tokens_per_batch` from `req_to_token_pool.size`.
@@ -93,7 +93,7 @@ Found by running RULER on a B200; each one was a hard crash, not a warning.
     `forward_context.get_token_to_kv_pool()`, which reads
     `get_attn_backend().token_to_kv_pool`. 19 call sites across the 6 backend
     modules went through `compat.token_to_kv_pool(forward_batch)`, and every
-    backend `__init__` now calls `compat.bind_kv_pool(self, model_runner)` so
+    backend `__init__` now calls `compat.publish_pools(self, model_runner)` so
     upstream's own accessor resolves for vortex backends too (this is what
     `enable_fused_set_kv_buffer` uses to find the pool — so the opt-out in
     §"fused-KV-store hazard" depends on it).
@@ -103,7 +103,7 @@ Found by running RULER on a B200; each one was a hard crash, not a warning.
     (`self._dense`) for the dense layers and forwarded
     `init_forward_metadata_{capture,replay}_cuda_graph` to it — which 0.5.16's
     backend no longer has (`AttributeError: 'TritonAttnBackend' object has no
-    attribute ...`). `compat.dense_{capture,replay}_cuda_graph(dense, ...)` now
+    attribute ...`). `compat.capture_dense()` / `compat.replay_dense()` now
     call whichever ABI the wrapped object implements, synthesizing the
     ForwardBatch-like view for the 0.5.16 `_out_graph` form.
 13. **`TritonAttnBackend.qo_indptr` widened int32 → int64** (`kv_indptr` stayed
@@ -132,6 +132,44 @@ Found by running RULER on a B200; each one was a hard crash, not a warning.
     This also means the MLA path was only ever exercised prefix-free before;
     the prefix branch is newly covered by this validation.
 
+## Where the version-specific code lives
+
+Two places, deliberately separated so the next bump is cheap:
+
+**1. The vendored tree keeps only the call sites** — 6 files, ~150 lines, every
+one marked `[VORTEX HOOK]` and doing nothing but delegating into
+`vortex_torch.integration`. Re-applying the patch on a new release means finding
+6 spots, not re-deriving behaviour. Confirm the surface hasn't grown with:
+
+```bash
+diff -rq --exclude=.git --exclude=__pycache__ \
+  <pristine sglang checkout> third_party/sglang/v0.5.16/sglang
+```
+
+**2. `vortex_torch/engine/sgl/compat/` absorbs the API churn**, one submodule per
+kind of change, each shim supporting *both* vendored trees so vortex source is
+version-agnostic:
+
+| submodule | absorbs |
+|---|---|
+| `symbols.py` | relocated / renamed functions (`get_attention_tp_size`, `is_draft_extend`) |
+| `pools.py` | how the KV / req-to-token pools are reached, in both directions (`token_to_kv_pool`, `publish_pools`) |
+| `cuda_graph.py` | the two cuda-graph metadata ABIs, in both directions (`GraphMetadataArgs`, `LegacyCudaGraphABIMixin`, `capture_dense`, `replay_dense`, `attention_backend_base`) |
+| `runner_view.py` | a read-only `ModelRunner` overlay for pool construction (`runner_view`) |
+
+`runner_view` is worth a note: 0.5.16 builds the KV pool before the runner has
+`max_total_num_tokens` / `req_to_token_pool`, and the layer span moved off the
+runner entirely. Rather than back-fill those onto a caller-owned object (a side
+effect whose ordering then matters), the overlay answers the missing attributes
+and forwards the rest. The runner is only ever *read* during pool construction —
+nothing stores it — so a view suffices, it rejects writes, and with no overrides
+it returns the runner itself so the 0.5.9 path carries no wrapper.
+
+`algorithm_scientist/kraken/build_env.sh` asserts the integration is live after
+install — hooks present, all 5 backends registered, and `cuda_mla` resolving to
+vortex's MLA-extend handler — and refuses to run the sweeps otherwise. A broken
+hook otherwise surfaces much later as an unexplained RULER score.
+
 ## Validation results (sglang 0.5.16, 8x B200, RULER validation_4k, block=32 topk=29)
 
 `examples/ruler/sweep_mha.sh` — Qwen3-4B, 9 flows x 2 indexer backends, **18/18 pass**:
@@ -156,7 +194,9 @@ Found by running RULER on a B200; each one was a hard crash, not a warning.
 | lserve_centroid_mla | 100.0% |
 
 All 20 runs clear the 0.85 RULER gate. Prefill + decode cuda graphs enabled
-throughout (the prefill graph is new in 0.5.16).
+throughout (the prefill graph is new in 0.5.16). Both sweeps were re-run after
+the `compat/` refactor and reproduced all 20 numbers exactly, so the cleanup is
+behaviour-preserving.
 
 ## Build / install gotchas
 

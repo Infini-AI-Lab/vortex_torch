@@ -39,10 +39,11 @@ from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
 
 from vortex_torch.engine.sgl.compat import (
+    GraphMetadataArgs,
     attention_backend_base,
-    bind_kv_pool,
-    dense_capture_cuda_graph,
-    dense_replay_cuda_graph,
+    capture_dense,
+    publish_pools,
+    replay_dense,
     token_to_kv_pool,
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
@@ -61,7 +62,7 @@ class VortexTritonMLABackend(*attention_backend_base()):
         super().__init__()
         # sglang >= 0.5.16 reads the KV / req pools off the *backend*
         # (forward_context.get_token_to_kv_pool); publish them here.
-        bind_kv_pool(self, model_runner)
+        publish_pools(self, model_runner)
         sa = model_runner.server_args
 
         self.max_context_len = model_runner.model_config.context_len
@@ -168,11 +169,13 @@ class VortexTritonMLABackend(*attention_backend_base()):
         self, bs, num_tokens, req_pool_indices, seq_lens, encoder_lens,
         forward_mode, spec_info,
     ):
-        dense_capture_cuda_graph(
+        capture_dense(
             self._dense,
-            bs=bs, num_tokens=num_tokens, req_pool_indices=req_pool_indices,
-            seq_lens=seq_lens, encoder_lens=encoder_lens,
-            forward_mode=forward_mode, spec_info=spec_info,
+            GraphMetadataArgs(
+                bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
+                forward_mode=forward_mode, encoder_lens=encoder_lens,
+                spec_info=spec_info,
+            ),
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(
@@ -185,12 +188,14 @@ class VortexTritonMLABackend(*attention_backend_base()):
         self, bs, req_pool_indices, seq_lens, seq_lens_sum, encoder_lens,
         forward_mode, spec_info, seq_lens_cpu,
     ):
-        dense_replay_cuda_graph(
+        replay_dense(
             self._dense,
-            bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
-            seq_lens_sum=seq_lens_sum, encoder_lens=encoder_lens,
-            forward_mode=forward_mode, spec_info=spec_info,
-            seq_lens_cpu=seq_lens_cpu,
+            GraphMetadataArgs(
+                bs=bs, req_pool_indices=req_pool_indices, seq_lens=seq_lens,
+                forward_mode=forward_mode, encoder_lens=encoder_lens,
+                spec_info=spec_info, seq_lens_cpu=seq_lens_cpu,
+                seq_lens_sum=seq_lens_sum,
+            ),
         )
         if forward_mode.is_decode_or_idle():
             self.plan_decode(

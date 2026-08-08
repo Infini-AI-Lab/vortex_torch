@@ -1,0 +1,63 @@
+# Leviathan (kraken) job template for vortex_torch on 8x B200.
+#
+# Submit with:
+#   kraken -p green jobs create -i algorithm_scientist/kraken/job.yaml
+#
+# Then drive the container interactively (the pod idles for 6h):
+#   kraken -p green jobs update-kubeconfig -j <jobName>
+#   kubectl exec <jobName>-worker-0 -- bash -lc '...'
+#
+# Edit `jobName` before submitting — kraken rejects a duplicate name, and the
+# pod is `<jobName>-worker-0`.
+#
+# Notes on the choices here:
+#   * queue: green-rl-gym-p6-bom-128 is the ap-south-1 B200 pool. Keep the job
+#     in the same region as the image's ECR (also ap-south-1) — a cross-region
+#     pull of this image takes >15 min and can outlive a short job.
+#   * image: the standard AGI training toolkit image. Ships a CUDA 13.2 driver
+#     (required by sglang 0.5.16) and python3.12 alongside its default 3.10.
+#   * /scratch is FSx and persists across jobs, so the venv, HF cache and repo
+#     built by `build_env.sh` are reused rather than rebuilt each run.
+jobName: zhuominc-vortex-v09
+jobPriority: HIGH
+projectName: green
+resourceConfig:
+  queue: green-rl-gym-p6-bom-128
+  nodeCount: 1
+containers:
+  - imageUri: 339713096311.dkr.ecr.ap-south-1.amazonaws.com/agi-training-toolkit-images-gpu-nv4-p6:agi-training-nv4-ebony-2026-02-03T03.40.50Z
+    command: bash
+    args:
+      - -lc
+      - |
+        set -x
+        echo "===== HOST ====="
+        hostname
+        nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv
+        nvidia-smi | sed -n '3p'      # driver + CUDA version line
+        python3.12 -VV
+
+        echo "===== PERSISTENT STATE (/scratch = FSx) ====="
+        for d in /scratch/zhuominc/vortex_torch /scratch/zhuominc/venv-0516 /scratch/zhuominc/hf; do
+          [ -e "$d" ] && echo "present  $d" || echo "MISSING  $d"
+        done
+
+        echo "===== NETWORK ====="
+        timeout 60 curl -sS -o /dev/null -w "pypi:%{http_code}\n" https://pypi.org/simple/ || echo "pypi unreachable"
+        timeout 60 curl -sS -o /dev/null -w "hf:%{http_code}\n" https://huggingface.co || echo "hf unreachable"
+
+        # Idle so the pod can be driven with `kubectl exec`. To run the sweeps
+        # unattended instead, replace this with:
+        #   cd /scratch/zhuominc/vortex_torch && SWEEP=both \
+        #     REPO=$PWD VENV=/scratch/zhuominc/venv-0516 \
+        #     bash algorithm_scientist/kraken/build_env.sh
+        echo "===== READY (idling 6h) ====="
+        sleep 21600
+    environmentVariables:
+      - name: PYTHONUNBUFFERED
+        value: "True"
+workloadTaxonomyConfig:
+  workloadType: data-gen
+  subtype: general
+  role: general
+  runType: dev

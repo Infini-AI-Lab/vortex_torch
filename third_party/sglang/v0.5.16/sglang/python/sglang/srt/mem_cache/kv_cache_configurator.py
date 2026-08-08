@@ -787,12 +787,13 @@ class KVCacheConfigurator:
             # (vortex sparsity and use_mla_backend are orthogonal).
             import vortex_torch
 
-            # size / layer_info are passed explicitly: this runs before the
-            # runner is given max_total_num_tokens (we return it), and the layer
-            # span lives on layer_info rather than on the runner in 0.5.16.
+            # These three are passed explicitly because this runs before the
+            # runner has them: max_total_num_tokens is what we are computing,
+            # req_to_token_pool is still a local here, and the layer span lives
+            # on layer_info rather than on the runner in 0.5.16.
             token_to_kv_pool = vortex_torch.integration.make_kv_pool(
                 self.model_runner,
-                size=sizes.max_total_num_tokens,
+                max_total_num_tokens=sizes.max_total_num_tokens,
                 layer_info=self.layer_info,
                 req_to_token_pool=req_to_token_pool,
             )

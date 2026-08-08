@@ -225,85 +225,54 @@ def build_sparse_flow(runner) -> Optional[Any]:
 # ---------------------------------------------------------------------------
 # 3. KV-cache pool construction  (model_runner_kv_cache_mixin.py hook)
 # ---------------------------------------------------------------------------
-def make_kv_pool(runner, *, size=None, layer_info=None, req_to_token_pool=None):
+def make_kv_pool(runner, *, max_total_num_tokens=None, layer_info=None,
+                 req_to_token_pool=None):
     """Build the vortex KV pool — MLA (fused latent) or MHA — for ``runner``.
 
     Called only from the ``enable_vortex_sparsity`` branch of the pool-selection
     chain, so the flag is already known to be set here.
 
-    ``size`` / ``layer_info`` exist because sglang moved pool construction:
-
-    * sglang <= 0.5.9 built the pool from ``ModelRunner.init_memory_pool``, by
-      which point ``runner.max_total_num_tokens`` / ``runner.num_effective_layers``
-      / ``runner.{start,end}_layer`` were all set on the runner.
-    * sglang >= 0.5.16 builds it inside ``KVCacheConfigurator.configure()``,
-      which runs BEFORE the runner is given ``max_total_num_tokens`` (the
-      configurator returns it) and keeps the layer span on a ``ModelLayerInfo``
-      struct (``layer_info``) rather than on the runner. The caller therefore
-      passes both explicitly.
-
-    ``req_to_token_pool`` is passed for the same reason: the vortex pool compiles
-    its cache flow against it (``Context.create`` sizes
-    ``max_new_tokens_per_batch`` from ``req_to_token_pool.size``), and under
-    0.5.16 the configurator builds that pool as a local and only assigns it to
-    the runner after ``configure()`` returns — so ``runner.req_to_token_pool`` is
-    still None here.
-
-    Falling back to the runner attributes keeps the 0.5.9 call site working.
+    The keyword arguments supply what the runner cannot answer yet, because
+    sglang 0.5.16 moved *when* the pool is built (see
+    :func:`vortex_torch.engine.sgl.compat.runner_view` for the details). Omit
+    them — the sglang <= 0.5.9 call site — and the runner is used as-is.
     """
-    from vortex_torch.engine.sgl.compat import get_attention_tp_size
+    from vortex_torch.engine.sgl.compat import (
+        get_attention_tp_size,
+        runner_view,
+    )
 
-    if size is None:
-        size = runner.max_total_num_tokens
-    if layer_info is None:
-        layer_info = runner
-    if req_to_token_pool is not None and runner.req_to_token_pool is None:
-        # Publish it early so the flow compile (and anything else reached from
-        # the pool constructor) sees the real pool instead of None. The
-        # configurator assigns the same object to the runner right after.
-        runner.req_to_token_pool = req_to_token_pool
+    runner = runner_view(
+        runner,
+        max_total_num_tokens=max_total_num_tokens,
+        layer_info=layer_info,
+        req_to_token_pool=req_to_token_pool,
+    )
     common = dict(
-        size=size,
         page_size=runner.page_size,
         dtype=runner.kv_cache_dtype,
-        layer_num=layer_info.num_effective_layers,
+        layer_num=runner.num_effective_layers,
         device=runner.device,
         enable_memory_saver=runner.server_args.enable_memory_saver,
         sparse_attention=runner.sparse_attention,
         model_runner=runner,
-        start_layer=layer_info.start_layer,
-        end_layer=layer_info.end_layer,
+        start_layer=runner.start_layer,
+        end_layer=runner.end_layer,
     )
     if runner.use_mla_backend:
         from .memory_pool_mla import VortexMLACachePool
         return VortexMLACachePool(
-            common["size"],
-            page_size=common["page_size"],
-            dtype=common["dtype"],
+            runner.max_total_num_tokens,
             kv_lora_rank=runner.model_config.kv_lora_rank,
             qk_rope_head_dim=runner.model_config.qk_rope_head_dim,
-            layer_num=common["layer_num"],
-            device=common["device"],
-            enable_memory_saver=common["enable_memory_saver"],
-            sparse_attention=common["sparse_attention"],
-            model_runner=runner,
-            start_layer=common["start_layer"],
-            end_layer=common["end_layer"],
+            **common,
         )
     from .memory_pool import VortexCachePool
     return VortexCachePool(
-        common["size"],
-        page_size=common["page_size"],
-        dtype=common["dtype"],
+        runner.max_total_num_tokens,
         head_num=runner.model_config.get_num_kv_heads(get_attention_tp_size()),
         head_dim=runner.model_config.head_dim,
-        layer_num=common["layer_num"],
-        device=common["device"],
-        enable_memory_saver=common["enable_memory_saver"],
-        sparse_attention=common["sparse_attention"],
-        model_runner=runner,
-        start_layer=common["start_layer"],
-        end_layer=common["end_layer"],
+        **common,
     )
 
 

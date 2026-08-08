@@ -31,11 +31,11 @@ from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
 
 from vortex_torch.engine.sgl.compat import (
     attention_backend_base,
+    get_attention_tp_size,
     is_draft_extend,
-    bind_kv_pool,
+    publish_pools,
     token_to_kv_pool,
 )
-from vortex_torch.engine.sgl.compat import get_attention_tp_size
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
 from sglang.srt.utils import is_flashinfer_available
 if TYPE_CHECKING:
@@ -80,7 +80,7 @@ class VortexTRTLLMBackend(*attention_backend_base()):
         super().__init__()
         # sglang >= 0.5.16 reads the KV / req pools off the *backend*
         # (forward_context.get_token_to_kv_pool); publish them here.
-        bind_kv_pool(self, model_runner)
+        publish_pools(self, model_runner)
 
         # Parse constants
         self.max_context_len = model_runner.model_config.context_len
