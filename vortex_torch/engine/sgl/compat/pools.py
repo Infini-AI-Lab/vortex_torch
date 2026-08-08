@@ -32,6 +32,31 @@ def token_to_kv_pool(forward_batch):
     return get_token_to_kv_pool()
 
 
+def vortex_cache(forward_batch, layer_id: int):
+    """The vortex per-layer cache dict for ``layer_id`` (a **global** layer id).
+
+    ``VortexCachePool.get_cache`` is vortex's own accessor and upstream pools do
+    not forward it. On a hybrid model the pool vortex gets handed is upstream's
+    ``HybridLinearKVPool`` wrapper, so reach through to the inner
+    ``full_kv_pool`` — translating the global layer id to the dense
+    full-attention index the way the wrapper does for every other accessor.
+    """
+    pool = token_to_kv_pool(forward_batch)
+    get_cache = getattr(pool, "get_cache", None)
+    if get_cache is not None:
+        return get_cache(layer_id)
+
+    inner = getattr(pool, "full_kv_pool", None)
+    translate = getattr(pool, "_transfer_full_attention_id", None)
+    if inner is None or translate is None:
+        raise AttributeError(
+            f"{type(pool).__name__} exposes neither `get_cache` nor a "
+            "`full_kv_pool` + `_transfer_full_attention_id` pair, so the vortex "
+            "per-layer cache cannot be reached through it."
+        )
+    return inner.get_cache(translate(layer_id))
+
+
 def publish_pools(backend, model_runner) -> None:
     """Expose the pools on ``backend`` so upstream's accessors resolve.
 

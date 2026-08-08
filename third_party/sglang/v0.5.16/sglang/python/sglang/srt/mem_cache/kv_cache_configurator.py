@@ -785,13 +785,17 @@ class KVCacheConfigurator:
             # inside make_kv_pool by use_mla_backend. Placed FIRST so neither the
             # dense-MLA nor the MHA branch below can capture a vortex run
             # (vortex sparsity and use_mla_backend are orthogonal).
-            import vortex_torch
+            # Import the submodule directly — see the note in
+            # model_runner.initialize(): `import vortex_torch` + attribute
+            # access relies on a lazy __getattr__ that may not be installed
+            # yet mid-import.
+            from vortex_torch.engine.sgl import integration as vortex_integration
 
             # These three are passed explicitly because this runs before the
             # runner has them: max_total_num_tokens is what we are computing,
             # req_to_token_pool is still a local here, and the layer span lives
             # on layer_info rather than on the runner in 0.5.16.
-            token_to_kv_pool = vortex_torch.integration.make_kv_pool(
+            token_to_kv_pool = vortex_integration.make_kv_pool(
                 self.model_runner,
                 max_total_num_tokens=sizes.max_total_num_tokens,
                 layer_info=self.layer_info,

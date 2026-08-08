@@ -36,7 +36,23 @@ _INTEGRATED = False
 # ---------------------------------------------------------------------------
 # 1. Attention-backend registration (replaces all attention_registry.py edits)
 # ---------------------------------------------------------------------------
-def _make_flashinfer_shim(orig):
+def _make_mha_shim(orig):
+    """Route the non-MLA + sparsity case to a vortex backend, else defer.
+
+    Installed on every sglang backend name under which a vortex MHA/GQA run may
+    be requested. Which vortex backend is built depends on
+    ``vortex_attention_backend`` (the indexer/planner path), NOT on the sglang
+    name — the name only decides *where upstream would have gone* if sparsity
+    were off, which is what ``orig`` preserves.
+
+    Two names carry this shim:
+
+    * ``flashinfer`` — the historical default for homogeneous MHA/GQA models.
+    * ``trtllm_mha`` — needed for **hybrid** models (Qwen3.5 and other
+      hybrid-GDN architectures): upstream restricts their full-attention backend
+      to ``{triton, trtllm_mha, fa4}`` on Blackwell/sm100 and asserts on
+      ``flashinfer``, so that name cannot be used to reach vortex there.
+    """
     def create(runner):
         sa = runner.server_args
         # Only the non-MLA + sparsity case is vortex's; everything else (dense
@@ -168,8 +184,14 @@ def integrate() -> bool:
     B = AR.ATTENTION_BACKENDS  # plain dict: name -> creator(runner)
     # Capture upstream creators and install flag-aware shims that delegate back
     # to them when vortex is off. cuda_mla is brand new.
-    if "flashinfer" in B:
-        B["flashinfer"] = _make_flashinfer_shim(B["flashinfer"])
+    #
+    # The MHA/GQA shim goes on two names: `flashinfer` (the default for
+    # homogeneous models) and `trtllm_mha` (the route for hybrid models, whose
+    # full-attention backend upstream restricts to {triton, trtllm_mha, fa4} on
+    # Blackwell). Both build the same vortex backend; see _make_mha_shim.
+    for name in ("flashinfer", "trtllm_mha"):
+        if name in B:
+            B[name] = _make_mha_shim(B[name])
     if "trtllm_mla" in B:
         B["trtllm_mla"] = _make_trtllm_mla_shim(B["trtllm_mla"])
     if "triton" in B:
@@ -196,12 +218,17 @@ def build_sparse_flow(runner) -> Optional[Any]:
     if not sa.enable_vortex_sparsity:
         return None
 
-    import vortex_torch
+    # Import the subpackage directly, not `import vortex_torch` + attribute
+    # access: this runs inside vortex_torch's own import chain (sglang's hook
+    # imports this module, which the package __init__ has not finished binding
+    # submodules for), so `vortex_torch.flow` may not exist yet. That surfaced as
+    # a bare `AttributeError: module 'vortex_torch' has no attribute 'flow'`.
+    from vortex_torch import flow as vortex_flow
 
-    flow = vortex_torch.flow.build_vflow(
+    flow = vortex_flow.build_vflow(
         sa.vortex_module_name, user_file=sa.vortex_module_path
     )
-    if isinstance(flow, vortex_torch.flow.vFlowMLA):
+    if isinstance(flow, vortex_flow.vFlowMLA):
         # MLA flow: latent geometry instead of a single head_dim.
         flow.initialize(
             block_size=runner.block_size,
@@ -227,10 +254,17 @@ def build_sparse_flow(runner) -> Optional[Any]:
 # ---------------------------------------------------------------------------
 def make_kv_pool(runner, *, max_total_num_tokens=None, layer_info=None,
                  req_to_token_pool=None):
-    """Build the vortex KV pool — MLA (fused latent) or MHA — for ``runner``.
+    """Build the vortex KV pool for ``runner``.
 
     Called only from the ``enable_vortex_sparsity`` branch of the pool-selection
-    chain, so the flag is already known to be set here.
+    chain, so the flag is already known to be set here. Three shapes:
+
+    * **MHA / GQA** — a flat :class:`VortexCachePool` over every layer.
+    * **MLA** — a :class:`VortexMLACachePool` (fused latent) over every layer.
+    * **Hybrid** (some layers linear-attention / RNN, e.g. Qwen3.5) — a vortex
+      pool covering *only* the full-attention layers, wrapped in upstream's
+      ``HybridLinearKVPool`` alongside the mamba state pool. See
+      :func:`_wrap_hybrid`.
 
     The keyword arguments supply what the runner cannot answer yet, because
     sglang 0.5.16 moved *when* the pool is built (see
@@ -238,7 +272,8 @@ def make_kv_pool(runner, *, max_total_num_tokens=None, layer_info=None,
     them — the sglang <= 0.5.9 call site — and the runner is used as-is.
     """
     from vortex_torch.engine.sgl.compat import (
-        get_attention_tp_size,
+        full_attention_layer_ids,
+        in_span,
         runner_view,
     )
 
@@ -248,16 +283,42 @@ def make_kv_pool(runner, *, max_total_num_tokens=None, layer_info=None,
         layer_info=layer_info,
         req_to_token_pool=req_to_token_pool,
     )
+
+    full_ids = full_attention_layer_ids(runner.model_config)
+    if full_ids is None:
+        # Homogeneous: every layer attends, vortex owns the whole pool.
+        return _make_vortex_pool(runner, layer_num=runner.num_effective_layers)
+
+    # Hybrid: size to this rank's full-attention layers only. Sizing to the total
+    # layer count over-allocates by the interleave factor (4x on Qwen3.5, which
+    # OOMs a B200 on a 4B model) AND mis-indexes, since vortex addresses its
+    # per-layer cache as `layer_id - start_layer`, valid only for a contiguous span.
+    full_ids = in_span(full_ids, runner.start_layer, runner.end_layer)
+    inner = _make_vortex_pool(runner, layer_num=len(full_ids), start_layer=0)
+    return _wrap_hybrid(runner, inner, full_ids)
+
+
+def _make_vortex_pool(runner, *, layer_num: int, start_layer: Optional[int] = None):
+    """The vortex pool itself — MLA (fused latent) or MHA — over ``layer_num`` layers.
+
+    ``start_layer`` defaults to the runner's; hybrid passes 0 because the wrapping
+    ``HybridLinearKVPool`` translates global layer ids to dense full-attention
+    indices before delegating, so the inner pool only ever sees 0..layer_num-1.
+    """
+    from vortex_torch.engine.sgl.compat import get_attention_tp_size
+
+    if start_layer is None:
+        start_layer = runner.start_layer
     common = dict(
         page_size=runner.page_size,
         dtype=runner.kv_cache_dtype,
-        layer_num=runner.num_effective_layers,
+        layer_num=layer_num,
         device=runner.device,
         enable_memory_saver=runner.server_args.enable_memory_saver,
         sparse_attention=runner.sparse_attention,
         model_runner=runner,
-        start_layer=runner.start_layer,
-        end_layer=runner.end_layer,
+        start_layer=start_layer,
+        end_layer=start_layer + layer_num,
     )
     if runner.use_mla_backend:
         from .memory_pool_mla import VortexMLACachePool
@@ -276,6 +337,44 @@ def make_kv_pool(runner, *, max_total_num_tokens=None, layer_info=None,
     )
 
 
+def _wrap_hybrid(runner, inner_pool, full_attention_layer_ids):
+    """Compose ``inner_pool`` with the mamba state pool via HybridLinearKVPool.
+
+    Upstream's pool already does exactly what a hybrid model needs — hold a
+    full-attention KV pool next to a mamba state pool and remap global layer ids
+    onto dense full-attention indices — and accepts an injected ``full_kv_pool``.
+    So vortex supplies the full-attention half and inherits the composition,
+    rather than reimplementing the interleave.
+    """
+    from sglang.srt.mem_cache.memory_pool import HybridLinearKVPool
+
+    mamba_pool = getattr(runner.req_to_token_pool, "mamba_pool", None)
+    if mamba_pool is None:
+        raise ValueError(
+            "vortex sparsity on a hybrid model requires the hybrid "
+            "req-to-token pool (which owns the mamba state pool), but "
+            f"{type(runner.req_to_token_pool).__name__} has no `mamba_pool`. "
+            "This usually means sglang did not recognise the model as hybrid "
+            "while vortex did."
+        )
+    return HybridLinearKVPool(
+        size=runner.max_total_num_tokens,
+        page_size=runner.page_size,
+        dtype=runner.kv_cache_dtype,
+        head_num=inner_pool.head_num,
+        head_dim=inner_pool.head_dim,
+        full_attention_layer_ids=full_attention_layer_ids,
+        device=runner.device,
+        mamba_pool=mamba_pool,
+        enable_memory_saver=runner.server_args.enable_memory_saver,
+        use_mla=runner.use_mla_backend,
+        start_layer=runner.start_layer,
+        # The load-bearing argument: use vortex's sparse pool for the
+        # full-attention layers instead of building a dense MHA one.
+        full_kv_pool=inner_pool,
+    )
+
+
 def kv_cell_size(runner, num_layers: int, kv_size: int) -> int:
     """Vortex KV-cache bytes-per-token for the available-memory estimate.
 
@@ -287,6 +386,13 @@ def kv_cell_size(runner, num_layers: int, kv_size: int) -> int:
         (matches sglang's dense-MLA cell size, which ``flow_mla``'s token_ratio
         is defined against — base_bytes = block_size·latent_dim·elem).
       * **MHA/GQA**: ``num_kv_heads · head_dim`` (``flow``'s token_ratio base).
+
+    ``num_layers`` is supplied by the caller and is already hybrid-correct: for a
+    mambaish model ``DefaultPoolConfigurator`` counts only the full-attention
+    layers in this rank's span (8 of 32 on Qwen3.5), which is exactly the set
+    vortex allocates for. The mamba state cache is sized separately by upstream
+    (it is per-request, not per-token), so it does not belong in this per-token
+    figure.
     """
     tr = runner.sparse_attention.get_token_ratio()
     if getattr(runner, "use_mla_backend", False):

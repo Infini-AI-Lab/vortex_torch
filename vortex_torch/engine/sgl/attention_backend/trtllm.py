@@ -11,7 +11,10 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Optional, Union, Dict
 import torch
-from vortex_torch import is_hopper
+# Import from the defining module, not the package root: these backend
+# modules are imported from inside vortex_torch's own import chain (the
+# sglang hook), where the root package has not yet bound its re-exports.
+from vortex_torch.utils import is_hopper
 from vortex_torch.abs import as_vtensor, FORMAT
 from vortex_torch.indexer import Context, MetaData
 from vortex_torch.indexer.compiler.compile import compile as compile_indexer
@@ -35,6 +38,7 @@ from vortex_torch.engine.sgl.compat import (
     is_draft_extend,
     publish_pools,
     token_to_kv_pool,
+    vortex_cache,
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
 from sglang.srt.utils import is_flashinfer_available
@@ -94,7 +98,14 @@ class VortexTRTLLMBackend(*attention_backend_base()):
         assert model_runner.sliding_window_size is None
         assert not model_runner.model_config.is_encoder_decoder 
         assert not self.skip_prefill
-        assert not self.is_multimodal
+        # NOTE: `is_multimodal` is an architecture-name lookup (the model *can*
+        # take images), not a property of this request. It is not by itself a
+        # reason vortex cannot run: the indexer scores blocks from the K the
+        # model already wrote to the cache, so image tokens and any rope variant
+        # (mrope / partial rotary) are the model's business, not vortex's. What
+        # vortex has NOT been validated against is a batch that actually carries
+        # image tokens, so gate on the inputs rather than on the architecture.
+        # Enforced per-batch in `init_forward_metadata`.
         assert kv_indptr_buf is None
         assert kv_last_page_len_buf is None
 
@@ -297,6 +308,16 @@ class VortexTRTLLMBackend(*attention_backend_base()):
         
         assert not is_draft_extend(forward_batch.forward_mode)
         assert not forward_batch.forward_mode.is_target_verify()
+        # Multimodal architectures are fine (see __init__); a batch that really
+        # carries image tokens is not validated, so reject it explicitly instead
+        # of silently sparsifying attention over image embeddings.
+        assert not (
+            forward_batch.mm_inputs
+            and any(x is not None for x in forward_batch.mm_inputs)
+        ), (
+            "vortex sparsity has not been validated on batches containing image "
+            "tokens; send text-only requests or disable vortex sparsity."
+        )
         
         if forward_batch.forward_mode.is_decode_or_idle():
 
@@ -563,7 +584,7 @@ class VortexTRTLLMBackend(*attention_backend_base()):
                 )
 
         # Read Cache from memory pool
-        cache = token_to_kv_pool(forward_batch).get_cache(layer.layer_id)
+        cache = vortex_cache(forward_batch, layer.layer_id)
 
         # NHD per-tensor cache layout: [num_pages, block_size, 1, head_dim]
         cache_k = cache["k"].view(-1, self.block_size, 1, self.head_dim)

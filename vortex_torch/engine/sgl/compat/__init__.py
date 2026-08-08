@@ -9,6 +9,7 @@ sites and the rest of vortex reads as if the API never moved.
 Each submodule owns one kind of change:
 
 * :mod:`symbols`     — functions/predicates that moved or were renamed.
+* :mod:`hybrid`      — recognizing hybrid (full-attn + linear/RNN) models.
 * :mod:`pools`       — how the KV / req-to-token pools are reached.
 * :mod:`cuda_graph`  — the two cuda-graph metadata ABIs, in both directions.
 * :mod:`runner_view` — a read-only ``ModelRunner`` overlay for pool construction.
@@ -26,7 +27,15 @@ from vortex_torch.engine.sgl.compat.cuda_graph import (
     capture_dense,
     replay_dense,
 )
-from vortex_torch.engine.sgl.compat.pools import publish_pools, token_to_kv_pool
+from vortex_torch.engine.sgl.compat.hybrid import (
+    full_attention_layer_ids,
+    in_span,
+)
+from vortex_torch.engine.sgl.compat.pools import (
+    publish_pools,
+    token_to_kv_pool,
+    vortex_cache,
+)
 from vortex_torch.engine.sgl.compat.runner_view import runner_view
 from vortex_torch.engine.sgl.compat.symbols import (
     get_attention_tp_size,
@@ -38,10 +47,13 @@ __all__ = [
     "LegacyCudaGraphABIMixin",
     "attention_backend_base",
     "capture_dense",
+    "full_attention_layer_ids",
     "get_attention_tp_size",
+    "in_span",
     "is_draft_extend",
     "publish_pools",
     "replay_dense",
     "runner_view",
     "token_to_kv_pool",
+    "vortex_cache",
 ]

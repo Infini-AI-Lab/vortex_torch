@@ -604,9 +604,17 @@ class ModelRunner:
         # Must run after configure_kv_cache_dtype (the flow is initialized with
         # kv_cache_dtype) and before alloc_memory_pool / init_attention_backends,
         # both of which read runner.sparse_attention.
-        import vortex_torch
+        #
+        # Import the submodule directly rather than `import vortex_torch` +
+        # attribute access: the latter goes through vortex_torch's lazy
+        # module-level __getattr__, which is not yet installed if the package is
+        # only partway through its own import (it is imported from several places
+        # during engine startup, including the parent process's ServerArgs
+        # adapter). That failed as a bare AttributeError with the real cause
+        # hidden.
+        from vortex_torch.engine.sgl import integration as vortex_integration
 
-        self.sparse_attention = vortex_torch.integration.build_sparse_flow(self)
+        self.sparse_attention = vortex_integration.build_sparse_flow(self)
 
     def init_memory_saver_adapter(self):
         self.memory_saver_adapter = TorchMemorySaverAdapter.create(

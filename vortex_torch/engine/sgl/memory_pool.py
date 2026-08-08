@@ -205,8 +205,33 @@ class VortexCachePool(KVCache):
         return total_bytes
     
     def get_kv_size_bytes(self):
-        
-        raise NotImplementedError
+        """``(k_bytes, v_bytes)`` summed over layers — sglang's KV accounting.
+
+        Upstream's MHA pools return this pair and callers add them
+        (``HybridLinearKVPool.__init__`` reports ``(k+v)/GB`` as ``mem_usage``).
+
+        Vortex's cache holds more than K/V — the flow's auxiliary per-page fields
+        (centroids / envelopes / Save state). Those are real occupancy, so they
+        are folded into the K side rather than dropped, keeping the reported
+        total equal to :meth:`get_cache_size_bytes`. Splitting them out would
+        need a K-vs-V attribution that no caller uses.
+        """
+        def _nbytes(t):
+            try:
+                return int(t.untyped_storage().nbytes())
+            except AttributeError:
+                return int(t.element_size() * t.numel())
+
+        k_bytes = v_bytes = 0
+        for layer in self.cache:
+            for name, t in layer.items():
+                if not torch.is_tensor(t):
+                    continue
+                if name == "v":
+                    v_bytes += _nbytes(t)
+                else:  # "k" plus every auxiliary field
+                    k_bytes += _nbytes(t)
+        return k_bytes, v_bytes
     
     # for disagg (PD disaggregation, Option B)
     def get_contiguous_buf_infos(self):
@@ -324,12 +349,36 @@ class VortexCachePool(KVCache):
         k_scale: Optional[float] = None,
         v_scale: Optional[float] = None,
         layer_id_override: Optional[int] = None,
+        dcp_kv_mask: Optional[torch.Tensor] = None,
     ):
-        
-        assert layer_id_override is None
-        assert loc.dtype == torch.int64
 
+        assert loc.dtype == torch.int64
+        # Decode context parallel writes a masked subset of the KV rows. vortex's
+        # set_kv launcher writes every row in `loc`, so honouring the mask would
+        # need a masked variant of the kernel. Accept the argument (upstream
+        # passes it unconditionally) but refuse a real mask rather than silently
+        # writing rows this rank does not own.
+        assert dcp_kv_mask is None, (
+            "vortex sparsity does not support decode context parallel "
+            "(dcp_size > 1): its set_kv kernel has no masked write path."
+        )
+
+        # Two different layer numberings meet here, and conflating them is the
+        # whole difficulty of hybrid models:
+        #
+        #   cache_slot — which of OUR per-layer buffers to write. On a hybrid
+        #     model (some layers linear-attention / RNN) this pool covers only
+        #     the full-attention layers, and the wrapping HybridLinearKVPool
+        #     hands us the dense full-attention index via `layer_id_override`
+        #     (global 3,7,11,... -> 0,1,2,...). Without it we would index by
+        #     global id and read the wrong slot or run off the end.
+        #   layer_id — the model's GLOBAL layer id, which is what
+        #     `layers_skip` is expressed in (so `--vortex-layers-skip 3` names
+        #     the same layer regardless of the interleave).
         layer_id = layer.layer_id
+        cache_slot = (
+            layer_id if layer_id_override is None else layer_id_override
+        ) - self.start_layer
 
         # KV scales (mirror sglang's MHATokenToKVPool.set_kv_buffer): the
         # per-tensor k_scale/v_scale only matter when we down-cast the model's
@@ -350,8 +399,8 @@ class VortexCachePool(KVCache):
                 cache_v = cache_v.div(v_scale)
 
         self.set_kv_buffer_func(
-            self.cache[layer_id - self.start_layer]["k"],
-            self.cache[layer_id - self.start_layer]["v"],
+            self.cache[cache_slot]["k"],
+            self.cache[cache_slot]["v"],
             cache_k.contiguous(),
             cache_v.contiguous(),
             loc,
@@ -359,7 +408,7 @@ class VortexCachePool(KVCache):
         )
         if layer_id in self.layers_skip:
             return
-        self.compiled_cache.forward(self.cache[layer_id - self.start_layer], loc, ctx=self.ctx)
+        self.compiled_cache.forward(self.cache[cache_slot], loc, ctx=self.ctx)
         
     def move_kv_cache(self, tgt_loc: torch.Tensor, src_loc: torch.Tensor):
         

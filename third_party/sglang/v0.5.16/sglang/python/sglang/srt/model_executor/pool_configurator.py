@@ -189,9 +189,10 @@ class DefaultPoolConfigurator(MemoryPoolConfigurator):
         # base vs the MHA num_kv_heads*head_dim base, and scales it by the
         # flow's token_ratio (all cache fields / the bare KV base).
         if kvc.server_args.enable_vortex_sparsity:
-            import vortex_torch
+            # Import the submodule directly — see model_runner.initialize().
+            from vortex_torch.engine.sgl import integration as vortex_integration
 
-            return vortex_torch.integration.kv_cell_size(
+            return vortex_integration.kv_cell_size(
                 kvc.model_runner, effective_num_layers, kv_size
             )
 
