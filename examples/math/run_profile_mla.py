@@ -7,7 +7,7 @@ instead of RULER retrieval. Drives a short decode with
 ``attention_backend=cuda_mla_profile`` and renders the per-layer/per-head
 p-coverage + recall@N report the backend writes.
 
-    conda activate vortex_glm          # GLM needs transformers >= 5
+    conda activate vortex_v1           # transformers 5.x loads GLM
     export HF_HOME=/raid/catalyst/models/
     CUDA_VISIBLE_DEVICES=0 python examples/math/run_profile_mla.py --n 4
 

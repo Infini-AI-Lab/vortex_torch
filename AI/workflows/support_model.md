@@ -13,11 +13,12 @@ The backend shims live in
 (`_make_flashinfer_shim`, `_make_trtllm_mla_shim`, `_make_triton_shim`,
 `_create_cuda_mla_backend`). KV pools are in `engine/sgl/memory_pool*.py`.
 
-## Env split
+## Env
 
-GLM-family (`glm4_moe*`) only loads in the **`vortex_glm`** conda env
-(transformers 5.0). Everything else uses **`vortex_v1`**. The static checker
-reports which.
+One env, **`vortex_v1`**, covers every model: GLM-family (`glm4_moe*`) needs
+transformers >= 5, which sglang 0.5.16 pins. (Earlier releases pinned 4.57.1 and
+needed a separate `vortex_glm` env; that split is gone.) The static checker
+reports the recommended env either way.
 
 ## Verify flow (what `/support-model <hf-id>` runs)
 

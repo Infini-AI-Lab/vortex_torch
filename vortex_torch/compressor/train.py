@@ -6,7 +6,7 @@ absorbed query + latent, builds the exact block-mass distillation target, and
 updates only the (tiny) compressor parameters. Only the trained compressor
 weights + config are saved at the end.
 
-    conda activate vortex_glm          # GLM needs transformers >= 5
+    conda activate vortex_v1           # transformers 5.x loads GLM
     export HF_HOME=/raid/catalyst/models/
     CUDA_VISIBLE_DEVICES=0 python -m vortex_torch.compressor.train \
         --model zai-org/GLM-4.7-Flash --num-prompts 32 --epochs 3 \

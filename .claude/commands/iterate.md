@@ -50,7 +50,7 @@ MAX_GPUS=<--max-gpus value>         # your simultaneous-GPU budget (default: all
 **Establish the env first** — don't assume `vortex_v1` (see `/setup-env`). Adopt
 the recommended **run prefix** as `$RUN` and use it for every python call below:
 ```bash
-python algorithm_scientist/detect_env.py            # recommends a run prefix (GLM ⇒ vortex_glm env)
+python algorithm_scientist/detect_env.py            # recommends a run prefix (one env covers GLM too)
 RUN="conda run -n vortex_v1 python"                 # ← the recommended prefix; substitute if different
 $RUN -c "import sys, vortex_torch; print(sys.executable)"
 ```

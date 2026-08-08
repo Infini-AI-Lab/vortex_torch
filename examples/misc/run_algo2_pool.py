@@ -5,7 +5,7 @@ Keeps every usable GPU busy: polls nvidia-smi, launches the next queued config o
 any free GPU (excluding broken / other-user GPUs), reaps finished jobs, re-queues
 device-flake failures, and regenerates examples/misc/algo2_results.md as runs land.
 
-  conda activate vortex_glm
+  conda activate vortex_v1
   ALGO2_GPUS=1,3,4,5 python examples/misc/run_algo2_pool.py            # full matrix
   ALGO2_GPUS=1,3 SMOKE=1 python examples/misc/run_algo2_pool.py        # quick smoke
 

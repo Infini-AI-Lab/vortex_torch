@@ -90,7 +90,7 @@ contexts.
 ## Train
 
 ```bash
-conda activate vortex_glm                 # GLM needs transformers >= 5
+conda activate vortex_v1                  # transformers 5.x loads GLM
 export HF_HOME=/raid/catalyst/models/
 CUDA_VISIBLE_DEVICES=0 python -m vortex_torch.compressor.train \
     --model zai-org/GLM-4.7-Flash \

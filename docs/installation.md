@@ -28,7 +28,7 @@ git submodule update --init --recursive
 ## Reproducible conda environment (recommended)
 
 The repo ships a one-shot script that builds the exact tested environment —
-Python 3.12, torch 2.9.1+cu128, flashinfer 0.6.3, transformers 4.57.1, plus
+Python 3.12, torch 2.11.0+cu130, flashinfer 0.6.14, transformers 5.12.1, plus
 editable SGLang and Vortex:
 
 ```bash
@@ -37,10 +37,10 @@ conda activate vortex_v1
 ```
 
 ```{note}
-For **MLA models** such as GLM-4.7-Flash (HF type `glm4_moe_lite`, which
-requires `transformers >= 5.0`), use `install_vortex_glm.sh` instead — it builds
-a separate `vortex_glm` env that overrides transformers with a GLM-supporting
-build.
+One env covers every model. **MLA models** such as GLM-4.7-Flash (HF type
+`glm4_moe_lite`) need `transformers >= 5`, which sglang 0.5.16 pins, so
+`vortex_v1` loads them directly. The separate `vortex_glm` env that earlier
+releases needed for this is gone.
 ```
 
 ## Verify

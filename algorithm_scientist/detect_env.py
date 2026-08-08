@@ -184,10 +184,17 @@ def main():
         print("** No working vortex_torch env found — build one (see /setup-env): "
               "create from repo specs (" + (", ".join(tooling["repo_specs"]) or "none") +
               ") via conda/uv/venv/docker, then `pip install -e .`.")
-    if glm and glm is not default:
+    # GLM (glm4_moe*) needs transformers>=5. sglang 0.5.16 pins 5.12.1, so the
+    # default env normally satisfies it; a separate env is only a fallback for
+    # older, transformers-4 installs.
+    if glm and glm is default:
+        print("** GLM (glm4_moe*): loads in the env above (transformers>=5).")
+    elif glm:
         print(f"** GLM env (transformers>=5): `{glm['prefix']}` (transformers {glm.get('transformers')})")
-    elif not glm:
-        print("** GLM (glm4_moe*) needs transformers>=5 — none detected; /setup-env can build a separate env.")
+    else:
+        print("** GLM (glm4_moe*) needs transformers>=5 — none detected. Expected "
+              "the default env to have it (sglang 0.5.16 pins 5.12.1); if it "
+              "doesn't, rebuild via /setup-env rather than upgrading in place.")
 
 
 if __name__ == "__main__":

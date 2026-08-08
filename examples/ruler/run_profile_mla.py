@@ -7,7 +7,7 @@ every layer/head, **p-coverage** = fraction of the dense softmax mass captured b
 the selected KV, and **recall@N** = fraction of the exact top-N tokens that were
 selected). The backend writes a JSON report; this script renders it.
 
-    conda activate vortex_glm          # GLM needs transformers >= 5
+    conda activate vortex_v1           # transformers 5.x loads GLM
     export HF_HOME=/raid/catalyst/models/
     CUDA_VISIBLE_DEVICES=0 python examples/ruler/run_profile_mla.py --n 4
 

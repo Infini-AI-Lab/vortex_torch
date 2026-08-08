@@ -15,8 +15,8 @@ RUN="conda run -n vortex_v1 python"   # the recommended prefix (substitute if di
 $RUN algorithm_scientist/support_model.py "$1"
 ```
 This prints the geometry (MLA vs MHA/GQA), recommended backend(s), recommended
-conda env (`vortex_glm` for GLM-family, else `vortex_v1`), and shapes. Activate
-the recommended env now.
+conda env (`vortex_v1` for every family — sglang 0.5.16's transformers 5 pin
+loads GLM too), and shapes. Activate the recommended env now.
 - **exit 0** (known geometry) → go to Step 1.
 - **exit 2** (unknown geometry) → go to Step 3 (wire support).
 

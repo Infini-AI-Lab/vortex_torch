@@ -34,8 +34,8 @@ All paths are anchored to this directory, so the scripts run from any cwd.
 ## Prerequisites
 
 You need an interpreter where `import vortex_torch` (with sglang) works — see the
-repo's `/setup-env`. The snippets below assume `vortex_v1` for MHA; **MLA on GLM
-needs transformers ≥ 5** (the `vortex_glm` env). Models are read from `HF_HOME`
+repo's `/setup-env`. One env (`vortex_v1`) covers both MHA and MLA: GLM needs
+transformers ≥ 5, which sglang 0.5.16 pins. Models are read from `HF_HOME`
 (this cluster: `/raid/catalyst/models/`).
 
 ```bash
@@ -73,7 +73,7 @@ For latent-attention models (DeepSeek-V2 / GLM). Sparse MLA decode runs on the
 `cuda_mla` backend; dense baselines can use `trtllm_mla` or `triton`.
 
 ```bash
-conda activate vortex_glm           # GLM needs transformers >= 5
+conda activate vortex_v1            # transformers 5.x loads GLM
 export HF_HOME=/raid/catalyst/models/
 
 # sparse (default flow rope_aware_block_sparse_mla on GLM-4.7-Flash)
@@ -93,7 +93,7 @@ known-good ~100%-RULER GLM config used `--topk 61`); MLA-specific defaults are
 
 ```bash
 examples/ruler/sweep_mha.sh                                  # 18 MHA runs (9 flows × 2 backends)
-PY="conda run -n vortex_glm python" examples/ruler/sweep_mla.sh   # 2 MLA runs (GLM env)
+examples/ruler/sweep_mla.sh                                      # 2 MLA runs (GLM)
 
 # unified knobs (same env names in both):
 BLOCK=16 TOPK=15 LAYERS_SKIP="0" examples/ruler/sweep_mha.sh
@@ -130,7 +130,7 @@ dense attention and accumulates, per layer and per head:
   (`|topN ∩ S| / N`); `N` is user-specified (comma list).
 
 ```bash
-conda activate vortex_glm          # GLM needs transformers >= 5
+conda activate vortex_v1           # transformers 5.x loads GLM
 export HF_HOME=/raid/catalyst/models/
 CUDA_VISIBLE_DEVICES=0 python examples/ruler/run_profile_mla.py \
     --module rope_aware_block_sparse_mla --n 4 --recall-n 16,64,128

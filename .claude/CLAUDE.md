@@ -102,9 +102,8 @@ modifying the compiler itself, not when writing a submission.
 
 Every python call in this project needs an interpreter where `import
 vortex_torch` works (with sglang for serving). **Do not assume a specific env
-exists** — the host may have a different conda env, a uv/venv, or docker, and
-**GLM models need a newer transformers** (a separate env). The very first action
-of any session is to **establish a working env yourself**:
+exists** — the host may have a different conda env, a uv/venv, or docker. The
+very first action of any session is to **establish a working env yourself**:
 
 ```bash
 python algorithm_scientist/detect_env.py    # probes conda/uv/venv/docker, recommends a run prefix
@@ -120,10 +119,15 @@ $RUN -c "import sys, vortex_torch; print(sys.executable, vortex_torch.__version_
 ```
 
 If no working env is found, **build one** — that's the **`/setup-env`** skill
-(creates/repairs a conda/uv/venv/docker env from the repo specs, and a separate
-`transformers>=5` env for GLM). The `conda activate vortex_v1` snippets in the
-command docs below are the **common default** — substitute your detected prefix
-when it differs. Confirm `import vortex_torch` succeeds before any GPU work.
+(creates/repairs a conda/uv/venv/docker env from the repo specs). One env covers
+every model: the vendored sglang 0.5.16 pins transformers 5.12.1, so GLM
+(`glm4_moe_lite`) loads in the default env — no separate GLM env. Its whole
+stack (torch 2.11 / flashinfer / sglang-kernel / transformers) is mutually
+version-locked, so it must be installed in **one** `pip install` and never
+upgraded package-by-package; see `install_vortex.sh`. The `conda activate
+vortex_v1` snippets in the command docs below are the **common default** —
+substitute your detected prefix when it differs. Confirm `import vortex_torch`
+succeeds before any GPU work.
 
 ## GPU usage — shared cluster, your own budget, TP-aware
 
@@ -397,7 +401,7 @@ so any later session resumes cleanly from the same prompt.
 
 - `/setup-env [--model]` — **run first**: detect/build a working env
   (conda/uv/venv/docker) where `import vortex_torch` works; returns the run
-  prefix; handles the GLM transformers-5 split. Helper: `detect_env.py`.
+  prefix (one env covers GLM too). Helper: `detect_env.py`.
 - `/new-submission <name>` — scaffold a submission pair.
 - `/preflight <name>` — cheap local `check_engine_config`.
 - `/batch-benchmark <n1> <n2> <n3> <n4>` — the sanctioned 4-variant batch

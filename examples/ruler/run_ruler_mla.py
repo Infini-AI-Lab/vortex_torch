@@ -14,10 +14,10 @@ model/module/backend defaults differ.
     rope_aware_block_sparse_mla          -> scores pages by the FULL fused-latent dot
                                             <q_nope,c_kv> + <q_pe,c_pe>, then top-k
 
-GLM-4.7-Flash (model type ``glm4_moe_lite``) requires transformers >= 5.0, so run
-this in the ``vortex_glm`` conda env (NOT ``vortex_v1``, which can't load it):
+GLM-4.7-Flash (model type ``glm4_moe_lite``) requires transformers >= 5.0, which
+sglang 0.5.16 pins, so the default ``vortex_v1`` env loads it:
 
-    conda activate vortex_glm
+    conda activate vortex_v1
     CUDA_VISIBLE_DEVICES=<free-gpu> python examples/ruler/run_ruler_mla.py
     # or pin the GPU / shrink the slice:
     python examples/ruler/run_ruler_mla.py --gpu 3 --n 20 --dump

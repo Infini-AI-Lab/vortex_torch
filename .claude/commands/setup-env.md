@@ -46,8 +46,11 @@ reports (`pyproject.toml`/`setup.py`/`environment.yml`/`requirements.txt`/
 
 Building the C extension may need a CUDA toolchain (`nvcc`) and a torch matching
 the local CUDA — if the build fails, that's `/debug` territory (wrong CUDA/torch,
-missing compiler). For **GLM**, build a *separate* env and upgrade transformers:
-`conda create -n vortex_glm … && conda run -n vortex_glm pip install -e . && conda run -n vortex_glm pip install -U "transformers>=5"`.
+missing compiler). **GLM needs no separate env**: sglang 0.5.16 pins
+transformers 5.12.1, so the default env loads `glm4_moe_lite` directly. Never
+upgrade a single package to fix an import — 0.5.16's stack (torch / flashinfer /
+sglang-kernel / transformers) is mutually version-locked and must be resolved in
+one `pip install`; see `install_vortex.sh`.
 
 ## Step 3 — verify + report
 
