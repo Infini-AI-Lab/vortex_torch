@@ -33,8 +33,8 @@ from vortex_torch.engine.sgl.compat.hybrid import (
 )
 from vortex_torch.engine.sgl.compat.pools import (
     publish_pools,
+    resolve_vortex_cache,
     token_to_kv_pool,
-    vortex_cache,
 )
 from vortex_torch.engine.sgl.compat.runner_view import runner_view
 from vortex_torch.engine.sgl.compat.symbols import (
@@ -54,6 +54,6 @@ __all__ = [
     "publish_pools",
     "replay_dense",
     "runner_view",
+    "resolve_vortex_cache",
     "token_to_kv_pool",
-    "vortex_cache",
 ]

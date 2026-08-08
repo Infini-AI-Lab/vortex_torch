@@ -74,10 +74,15 @@ class GraphMetadataArgs:
 
         vortex only drives single-token decode graphs, so ``num_tokens == bs``
         and there is no padding.
+
+        ``seq_lens_sum`` is forwarded as-is, including ``None``. It must NOT be
+        back-filled from ``seq_lens.sum()``: this runs on every cuda-graph
+        replay, and a ``.sum()`` read into a Python int forces a device sync in
+        the hottest path in the system. Upstream propagates the ``None`` for the
+        same reason (see ``build_replay_fb_view``: "a stale non-None tensor
+        defeats None-guards"), and a backend that needs the total is expected to
+        use ``seq_lens_cpu`` or recompute it on device.
         """
-        seq_lens_sum = self.seq_lens_sum
-        if seq_lens_sum is None and self.seq_lens is not None:
-            seq_lens_sum = int(self.seq_lens.sum())
         return SimpleNamespace(
             batch_size=self.bs,
             forward_mode=self.forward_mode,
@@ -85,7 +90,7 @@ class GraphMetadataArgs:
             req_pool_indices=self.req_pool_indices,
             seq_lens=self.seq_lens,
             seq_lens_cpu=self.seq_lens_cpu,
-            seq_lens_sum=seq_lens_sum,
+            seq_lens_sum=self.seq_lens_sum,
             encoder_lens=self.encoder_lens,
             spec_info=self.spec_info,
             num_padding=0,

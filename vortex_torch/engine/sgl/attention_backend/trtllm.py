@@ -38,7 +38,6 @@ from vortex_torch.engine.sgl.compat import (
     is_draft_extend,
     publish_pools,
     token_to_kv_pool,
-    vortex_cache,
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch, ForwardMode
 from sglang.srt.utils import is_flashinfer_available
@@ -310,14 +309,15 @@ class VortexTRTLLMBackend(*attention_backend_base()):
         assert not forward_batch.forward_mode.is_target_verify()
         # Multimodal architectures are fine (see __init__); a batch that really
         # carries image tokens is not validated, so reject it explicitly instead
-        # of silently sparsifying attention over image embeddings.
-        assert not (
-            forward_batch.mm_inputs
-            and any(x is not None for x in forward_batch.mm_inputs)
-        ), (
-            "vortex sparsity has not been validated on batches containing image "
-            "tokens; send text-only requests or disable vortex sparsity."
-        )
+        # of silently sparsifying attention over image embeddings. Gated on the
+        # init-time flag so text-only models pay nothing per forward, and using
+        # upstream's own predicate (which also looks past audio-only inputs)
+        # rather than re-deriving it.
+        if self.is_multimodal and forward_batch.contains_image_inputs():
+            raise AssertionError(
+                "vortex sparsity has not been validated on batches containing "
+                "image tokens; send text-only requests or disable vortex sparsity."
+            )
         
         if forward_batch.forward_mode.is_decode_or_idle():
 
@@ -584,7 +584,7 @@ class VortexTRTLLMBackend(*attention_backend_base()):
                 )
 
         # Read Cache from memory pool
-        cache = vortex_cache(forward_batch, layer.layer_id)
+        cache = self.vortex_cache(layer.layer_id)
 
         # NHD per-tensor cache layout: [num_pages, block_size, 1, head_dim]
         cache_k = cache["k"].view(-1, self.block_size, 1, self.head_dim)

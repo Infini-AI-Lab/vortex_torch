@@ -45,7 +45,6 @@ from vortex_torch.engine.sgl.compat import (
     publish_pools,
     replay_dense,
     token_to_kv_pool,
-    vortex_cache,
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
@@ -244,7 +243,7 @@ class VortexTritonMLABackend(*attention_backend_base()):
 
         # 2) indexer fills the sparse block table (topk middle); plan_decode
         #    prefilled BOS/EOS + sparse_seqlens.
-        cache = vortex_cache(forward_batch, layer.layer_id)
+        cache = self.vortex_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
         )

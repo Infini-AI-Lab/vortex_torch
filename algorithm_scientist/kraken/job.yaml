@@ -18,7 +18,7 @@
 #     (required by sglang 0.5.16) and python3.12 alongside its default 3.10.
 #   * /scratch is FSx and persists across jobs, so the venv, HF cache and repo
 #     built by `build_env.sh` are reused rather than rebuilt each run.
-jobName: zhuominc-vortex-hybrid
+jobName: zhuominc-vortex-cg
 jobPriority: HIGH
 projectName: green
 resourceConfig:

@@ -257,3 +257,43 @@ model, which is how the bug was first caught), and global→dense mapping
   It works, but the indexer's tile choices were not tuned for it.
 * **Text-only.** Image batches are explicitly rejected, not supported.
 * 4K/16K only; 32K data exists and would be the better stress of the 6% regime.
+
+## Hot-path audit (follow-up)
+
+The first cut of this work put host work in per-step paths. Corrected:
+
+| what | was | now |
+|---|---|---|
+| `GraphMetadataArgs.to_forward_batch` | back-filled `seq_lens_sum` with `int(seq_lens.sum())` — **a device sync on every cuda-graph replay**, for a value vortex only forwards and never reads | forwards `seq_lens_sum` as-is, including `None`, exactly as upstream's `build_replay_fb_view` does |
+| vortex per-layer cache lookup | `vortex_cache(forward_batch, layer_id)` probed 2–3 `getattr`s + a dict lookup **per layer, per forward** (in `forward_decode`) | `resolve_vortex_cache` decides the pool shape **once**; `publish_pools` binds `backend.vortex_cache(layer_id)` at init |
+| image-token guard | scanned `forward_batch.mm_inputs` with a Python `any(...)` on **every** forward, for every model | gated on the init-time `self.is_multimodal` flag, then upstream's own `contains_image_inputs()`; text-only models pay one bool |
+
+Checked and deliberately left alone:
+
+* `runner_view`'s `__getattr__` — pool construction only, ~50 reads once at init.
+* `get_kv_size_bytes`'s Python loop — called from `__init__` / memory reporting
+  only (never per step), and mirrors vortex's existing `get_cache_size_bytes`.
+* `.to(torch.int32)` coercions — a no-op returning `self` when the dtype already
+  matches, so the eager path is unaffected; and they sit in
+  `init_forward_metadata` / `_out_graph`, which run **outside**
+  `graph.capture()` (upstream calls `_out_graph` before the captured `run_once`),
+  so nothing is baked into the graph.
+
+No `.item()` / `.sum()` / `.tolist()` / `.cpu()` remains anywhere in the added code.
+
+### CUDA graph
+
+cudagraph is sglang's default (`disable_cuda_graph=False`) and is **supported**:
+the decode graph path uses the pre-allocated `ctx.metadata` buffers with
+`use_cuda_graph=True` (stable addresses) and never touches `plan_prefill`.
+Re-verified with `cuda_graph=on` after the cleanups:
+
+| run | context | result |
+|---|---|---|
+| Qwen3.5-4B hybrid, vortex sparse | 4K | 100/100 = 100.0% |
+| Qwen3.5-4B hybrid, vortex sparse | 16K | 100/100 = 100.0% |
+| Qwen3-4B homogeneous (regression), flashinfer indexer | 4K | 100/100 = 100.0% |
+| Qwen3-4B homogeneous (regression), trtllm indexer | 4K | 100/100 = 100.0% |
+
+The earlier hybrid probes ran `disable_cuda_graph=True` for boot speed; the
+numbers above are the default path, with capture completing normally.

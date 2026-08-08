@@ -56,7 +56,6 @@ from vortex_torch.engine.sgl.compat import (
     publish_pools,
     replay_dense,
     token_to_kv_pool,
-    vortex_cache,
 )
 from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 
@@ -413,7 +412,7 @@ class VortexCudaMLABackend(*attention_backend_base()):
         # select the active layer's baked weight slice at runtime. The arg
         # defaults to 0 in the generated forward(), so every other flow that
         # doesn't pass it is unaffected.
-        cache = vortex_cache(forward_batch, layer.layer_id)
+        cache = self.vortex_cache(layer.layer_id)
         self.compiled_indexer.forward(
             q=query, o=md.sparse_block_tables, cache=cache, ctx=self.ctx,
             cur_layer=layer.layer_id,
