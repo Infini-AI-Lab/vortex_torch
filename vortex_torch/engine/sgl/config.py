@@ -76,6 +76,40 @@ def split_flat_kwargs(kwargs: Dict[str, Any]) -> Tuple[Optional[VortexConfig], D
     return cfg, kwargs
 
 
+#: Which sglang ``attention_backend`` name vortex should register under, per
+#: vortex backend. These are *sglang creator names* — the slot vortex's shim
+#: hijacks — not the vortex backend itself, which ``VortexConfig.attention_backend``
+#: selects. They are separate concepts that users kept having to reconcile by
+#: hand (asking for vortex's "trtllm" meant typing sglang's "flashinfer"), so
+#: vortex now fills the sglang name in whenever the caller left it unset.
+_SGLANG_BACKEND_FOR: Dict[str, str] = {
+    # MHA/GQA: both vortex MHA backends are registered on sglang's "flashinfer"
+    # slot (and on "trtllm_mha", which hybrid-GDN models require on Blackwell).
+    "flashinfer": "flashinfer",
+    "trtllm": "flashinfer",
+}
+
+
+def _default_sglang_backend(kwargs: Dict[str, Any]) -> None:
+    """Fill in ``attention_backend`` for a vortex run when the caller omitted it.
+
+    Without this, asking for vortex's ``trtllm`` indexer path also required
+    passing sglang's ``attention_backend="flashinfer"`` — the name of the
+    registry slot vortex's shim replaces, which has nothing to do with trtllm and
+    reads like a mistake. An explicit ``attention_backend`` is always respected;
+    MLA runs are left alone because their sglang name (``cuda_mla`` /
+    ``triton`` / ``trtllm_mla``) genuinely selects a different decode kernel.
+    """
+    cfg = kwargs.get("vortex")
+    if not isinstance(cfg, VortexConfig):
+        return
+    if kwargs.get("attention_backend") is not None:
+        return
+    name = _SGLANG_BACKEND_FOR.get(cfg.attention_backend)
+    if name is not None:
+        kwargs["attention_backend"] = name
+
+
 def install_serverargs_adapter() -> bool:
     """Wrap ``ServerArgs.__init__`` so flat ``vortex_*`` kwargs fold into the
     single ``vortex`` field. Idempotent; parent-process only (the spawned worker
@@ -106,6 +140,7 @@ def install_serverargs_adapter() -> bool:
             # Python path: fold flat vortex_* kwargs (gated by enable flag).
             cfg, kwargs = split_flat_kwargs(kwargs)
             kwargs["vortex"] = cfg
+        _default_sglang_backend(kwargs)
         _orig_init(self, *args, **kwargs)
 
     ServerArgs.__init__ = __init__
