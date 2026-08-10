@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vortex_train"
+version = "0.1.0"
+description = "Training system for user-specified sparse attention"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.4", "triton>=3.0"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["vortex_train*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
