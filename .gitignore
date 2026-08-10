@@ -64,7 +64,13 @@ MANIFEST
 !vortex_torch/custom_ops/**/meta.json
 !vortex_torch/custom_ops/**/config.json
 
-tests/
+# Narrowed from `tests/` to the repo root. A blanket rule also matched
+# vortex_train/tests/, silently dropping the 164 tests that are that project's
+# primary correctness evidence -- including the index-equivalence check, the
+# only real defence against a silently-wrong sparse pattern. git cannot
+# re-include a path whose parent directory is excluded, so this is narrowed
+# rather than negated with a `!` line.
+/tests/
 *_backup.py
 # PyInstaller
 #  Usually these files are written by a python script from a template
