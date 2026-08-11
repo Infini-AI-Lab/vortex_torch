@@ -53,7 +53,22 @@ import triton.language as tl
 
 from ..pattern import SparsePattern
 
-#: query blocks per scatter program — the granularity of the chunk prefix.
+#: query blocks per scatter program — also the granularity of the chunk prefix.
+#:
+#: Fixed at 64, and the two passes it feeds want **opposite** things, which is why it is
+#: not tuned per shape:
+#:
+#: * the ``counts`` tensor is ``[B, Hkv, Nkv, ceil(Mq/BLOCK_M)]``, so a *larger* BLOCK_M
+#:   shrinks the chunk axis. At ``block_q=1`` both ``Nkv`` and ``Mq`` grow with sequence
+#:   length, making that product O(T²/BLOCK_M) — 64 MB and 11.9 ms at seqlen 64k;
+#: * but the scatter ranks lanes with a ``BLOCK_M x BLOCK_M`` comparison per slot, which is
+#:   O(BLOCK_M²). Raising BLOCK_M to bound the chunk axis was measured and is far worse:
+#:   scaling it so the chunk count stays under 64 took the transpose from 2.67 ms to
+#:   **32.4 ms** at seqlen 16k (and 350 ms at 64k), because 4096 lane-pairs per slot became
+#:   1M.
+#:
+#: So 64 stays: the chunk axis costs 6-8% of the step at ``block_q=1``, which is the price
+#: of a deterministic O(nnz) build and far below the 45% the O(len²) sort it replaced cost.
 BLOCK_M = 64
 
 

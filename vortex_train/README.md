@@ -1,12 +1,5 @@
 # vortex_train
 
-> Vendored into `vortex_torch` as a sibling of the inference stack. `vortex_torch` serves
-> a sparse-attention flow; `vortex_train` **trains through one**, forward and backward,
-> with the same selection contract. The two meet at the budget convention documented in
-> `application/sparse_finetune_qwen3/README.md` — vortex_torch's reservations are additive
-> (`selected = topk_val + bos + eos`) while `vortex_train`'s `Budget.topk` is the total,
-> and getting that wrong silently trains and serves at different sparsity.
-
 Training-side block-sparse attention: users **declare how each query group selects
 its KV** — selection criteria, BOS/EOS/local reservations, block size, the same
 contract as `vortex_torch` — and the system compiles that into fused Triton kernels
@@ -28,6 +21,9 @@ class MyPolicy(Selection):
     state  = {"centroid": Field(reduce="mean", src="k")}
     # total block budget; reservations are config, not user code
     budget = Budget(topk=16, reserve_bos=1, reserve_local=1)
+    # block_q = query tokens sharing one selection. 64 amortises the scorer; 1 gives
+    # every token its own selection (no averaging) at ~7x the step -- see the block_q
+    # table below.
     block_q = block_kv = 64
 
     def __init__(self):
@@ -103,20 +99,112 @@ bf16 reduction error tracks the largest term summed rather than each output
 element. `test_no_worse_than_dense_bf16` calibrates against a real bf16 SDPA kernel
 instead of a hand-picked constant.
 
-## Measured (B200, torch 2.11.0+cu130, bf16, Hkv=8, D=128, block=64, topk=16)
+## Measured: `block_q` — selection granularity (B200, bf16, Hq=32, Hkv=8, D=128, group 4)
+
+`block_q` is how many query tokens share one KV selection. `block_q=64` amortises the
+scorer over 64 tokens; **`block_q=1` gives every token its own selection**, with no
+averaging of queries into a block — the accuracy reference, and the expensive end of the
+tradeoff. Budget: topk 16 + 1 BOS + 1 local = 18 blocks × 64 = **1152 KV tokens**.
+
+Whole-step fwd+bwd (selection + transpose + attention + backward), ms:
+
+| seqlen | dense fb | `bq=1` | `bq=4` | `bq=16` | `bq=64` |
+|-------:|---------:|-------:|-------:|--------:|--------:|
+|   4096 |     2.00 |   7.55 |   3.76 |    2.81 |    1.80 |
+|  16384 |    23.87 |  35.59 |  17.83 |   10.95 |    6.26 |
+|  32768 |    90.30 |  77.47 |  39.07 |   22.88 |   12.58 |
+|  65536 |   353.43 | 188.13 |  87.25 |   48.45 |   25.67 |
+
+Speedup vs dense SDPA-flash:
+
+| seqlen | `bq=1` | `bq=4` | `bq=16` | `bq=64` |
+|-------:|-------:|-------:|--------:|--------:|
+|   4096 |  0.26× |  0.53× |   0.71× |   1.11× |
+|  16384 |  0.67× |  1.34× |   2.18× |   3.81× |
+|  32768 | 1.17× |  2.31× |   3.95× |   7.18× |
+|  65536 | **1.88×** |  4.05× |   7.29× |  13.77× |
+
+`block_q=1` costs ~7× `block_q=64` and only beats dense past ~32k. It is a correctness
+reference and an accuracy option, not a throughput setting. The whole step is timed
+deliberately: selection cost scales as `1/block_q`, so timing the attention kernel alone
+would flatter small `block_q`.
+
+Peak memory (MB) — note it *drops* below `block_q=16`:
+
+| seqlen | `bq=1` | `bq=4` | `bq=16` | `bq=64` |
+|-------:|-------:|-------:|--------:|--------:|
+|  16384 |    663 |    650 |    1159 |    1158 |
+|  32768 |   1325 |   1300 |    2318 |    2317 |
+|  65536 |   2650 |   2601 |    4636 |    4633 |
+
+That is a dispatch effect, not a `block_q` one: `block_q < 16` uses the packed dk/dv
+kernel, which folds the GQA group into the MMA contraction and writes `dk`/`dv` directly,
+where the general path stages `[B, Hq, Skv, D]` fp32 buffers and reduces them in a second
+pass. The 496 MB drop at 16k matches the 512 MB those two buffers occupy.
+
+### Two optimisations that made `block_q=1` viable
+
+It started at 80.78 ms (seqlen 16k, 0.30× dense). Both wins came from `nsys` profiling,
+and both were invisible at `block_q=64`:
+
+| | before | after |
+|---|---:|---:|
+| CSR segment sort | 37.19 ms (45% of step) | **0** — removed |
+| forward kernel | 14.2 ms | 8.16 ms |
+| dq kernel | 16.3 ms | 12.30 ms |
+| **step** | **80.78 ms** | **35.59 ms** (2.27×) |
+
+1. **An O(len²) segment sort was the single largest cost.** Segment length scales as
+   `1/block_q`, so a sort that is genuinely free at `block_q=64` (0.1 ms over 8-entry
+   segments) turned quadratic at `block_q=1` (1152-entry segments). It had only ever been
+   benchmarked at `block_q=64`. Replaced by a chunked ordered scatter — count per
+   (kv block, query chunk), prefix over chunks, each chunk fills its reserved slice — so
+   segments come out ascending with no atomic and no sort.
+2. **`num_warps` keyed off `head_dim` rather than tile rows.** At `block_q=1` the query
+   tile is 16 rows, so 8 warps left most of the MMA idle. Measured optima: the forward
+   wants 1 warp at a 16-row tile and 4 at 64 rows; dk/dv is the exception and keeps 8,
+   because its long gathered segment loop needs the warps to hide latency.
+
+The transpose is now 2.67 ms at `block_q=1` / 16k (7.6% of the step) and 0.36 ms at
+`block_q=64` — up from 0.08 ms, the price of the extra chunk-prefix pass that buys
+determinism without a sort. `BLOCK_M=64` is fixed rather than tuned because its two
+consumers want opposite things: a larger value shrinks the `[Nkv, chunks]` counts tensor
+but makes the scatter's rank computation O(BLOCK_M²). Scaling it to bound the chunk axis
+was measured at **32.4 ms** — 12× worse — and reverted.
+
+Two designs were built, measured, and **rejected**, recorded in the kernel docstrings so
+they are not retried:
+
+* **Unioning neighbouring query blocks** to fill the tile. The union of 16 consecutive
+  tokens' selections measured 102.7 blocks, not the ~18 that strong overlap would imply,
+  making total work **1.47× worse**. An initial estimate said 0.44× *better* — it had
+  sampled only the first 4096 tokens, which are causally limited to few KV blocks and so
+  have artificially small unions.
+* **A KV-major forward** (as Flash-Sparse-Attention and flash-moba do, gathering scattered
+  query rows into a dense tile). It removes padding entirely but cannot finish the online
+  softmax in one pass, so it needs `nnz × D` fp32 partials — ~4 GB at seqlen 16k across 32
+  heads.
+
+Reproduce with `python benchmarks/bench_block_q.py`.
+
+## Measured: `block_q=64` (B200, torch 2.11.0+cu130, bf16, Hkv=8, D=128, block=64, topk=16)
 
 Forward+backward vs SDPA flash backend, `fb` = fwd+bwd:
 
 | seqlen | group | dense fb (ms) | sparse fb (ms) | speedup | FLOP ratio |
 |-------:|------:|--------------:|---------------:|--------:|-----------:|
-|   4096 |     4 |         1.989 |          1.581 |   1.26× |         2× |
-|  16384 |     4 |        23.834 |          6.312 |   3.78× |         8× |
-|  32768 |     4 |        90.179 |         12.808 |   7.04× |        16× |
-|  65536 |     4 |       353.201 |         26.055 |  13.56× |        32× |
-| 131072 |     4 |      1401.809 |         53.412 |  26.25× |        64× |
+|   4096 |     4 |         1.990 |          1.878 |   1.06× |         2× |
+|  16384 |     4 |        23.855 |          6.592 |   3.62× |         8× |
+|  32768 |     4 |        90.287 |         13.050 |   6.92× |        16× |
+|  65536 |     4 |       353.512 |         26.350 |  13.42× |        32× |
+| 131072 |     4 |      1404.720 |         53.615 |  26.20× |        64× |
 
 The gap between speedup and FLOP ratio is kernel efficiency left on the table.
-The pattern transpose is ~0.08 ms and flat in sequence length.
+
+Re-measured after the `block_q=1` work, which cost `block_q=64` a few percent (3.78× →
+3.62× at 16k): the transpose went 0.08 → 0.36 ms for the chunk-prefix pass that replaced
+the sort. That is a deliberate trade — it removed 37 ms at `block_q=1` — but it is not
+free at the default, and quoting the old numbers would hide it.
 
 **Memory is independent of topk** (S=16384, group 4) — the fusion check:
 
