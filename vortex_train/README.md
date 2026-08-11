@@ -110,19 +110,15 @@ Whole-step fwd+bwd (selection + transpose + attention + backward), ms:
 
 | seqlen | dense fb | `bq=1` | `bq=4` | `bq=16` | `bq=64` |
 |-------:|---------:|-------:|-------:|--------:|--------:|
-|   4096 |     2.00 |   7.55 |   3.76 |    2.81 |    1.80 |
-|  16384 |    23.87 |  35.59 |  17.83 |   10.95 |    6.26 |
-|  32768 |    90.30 |  77.47 |  39.07 |   22.88 |   12.58 |
-|  65536 |   353.43 | 188.13 |  87.25 |   48.45 |   25.67 |
+|  16384 |    23.91 |  28.52 |  11.66 |   10.95 |    6.27 |
+|  65536 |   353.55 | 159.68 |  61.86 |   48.38 |   25.69 |
 
 Speedup vs dense SDPA-flash:
 
 | seqlen | `bq=1` | `bq=4` | `bq=16` | `bq=64` |
 |-------:|-------:|-------:|--------:|--------:|
-|   4096 |  0.26× |  0.53× |   0.71× |   1.11× |
-|  16384 |  0.67× |  1.34× |   2.18× |   3.81× |
-|  32768 | 1.17× |  2.31× |   3.95× |   7.18× |
-|  65536 | **1.88×** |  4.05× |   7.29× |  13.77× |
+|  16384 |  0.84× |  2.05× |   2.18× |   3.81× |
+|  65536 | **2.21×** |  5.72× |   7.31× |  13.76× |
 
 `block_q=1` costs ~7× `block_q=64` and only beats dense past ~32k. It is a correctness
 reference and an accuracy option, not a throughput setting. The whole step is timed
@@ -152,7 +148,8 @@ and both were invisible at `block_q=64`:
 | CSR segment sort | 37.19 ms (45% of step) | **0** — removed |
 | forward kernel | 14.2 ms | 8.16 ms |
 | dq kernel | 16.3 ms | 12.30 ms |
-| **step** | **80.78 ms** | **35.59 ms** (2.27×) |
+| dk/dv kernel | 10.84 ms | 4.04 ms |
+| **step** | **80.78 ms** | **28.52 ms** (2.83×) |
 
 1. **An O(len²) segment sort was the single largest cost.** Segment length scales as
    `1/block_q`, so a sort that is genuinely free at `block_q=64` (0.1 ms over 8-entry
@@ -160,7 +157,16 @@ and both were invisible at `block_q=64`:
    benchmarked at `block_q=64`. Replaced by a chunked ordered scatter — count per
    (kv block, query chunk), prefix over chunks, each chunk fills its reserved slice — so
    segments come out ascending with no atomic and no sort.
-2. **`num_warps` keyed off `head_dim` rather than tile rows.** At `block_q=1` the query
+2. **dk/dv batched far too few CSR entries per iteration.** `BATCH_R` was
+   `ceil(16 / (group*block_q))` — just enough to fill the MMA's 16-row minimum. But the
+   dk/dv grid is only `(Nkv, Hkv)` = 2048 programs on 148 SMs, ~14 per SM, each walking a
+   ~1000-entry segment. Batching more entries per iteration trades loop length for tile
+   width: 38.4 / 20.0 / 10.8 / 7.8 / 5.9 / 4.4 / **4.0** ms at `BATCH_R` 1 / 2 / 4 / 8 /
+   16 / 32 / 64, with 128 exceeding the 232 KB shared-memory budget. Now capped by tile
+   *rows* (`MAX_TILE_P=256`) rather than entries, so it stays correct as `group` and
+   `block_q` vary — verified across 32 (group, block_q, head_dim) combinations at 160 KB
+   peak.
+3. **`num_warps` keyed off `head_dim` rather than tile rows.** At `block_q=1` the query
    tile is 16 rows, so 8 warps left most of the MMA idle. Measured optima: the forward
    wants 1 warp at a 16-row tile and 4 at 64 rows; dk/dv is the exception and keeps 8,
    because its long gathered segment loop needs the warps to hide latency.
@@ -184,6 +190,29 @@ they are not retried:
   query rows into a dense tile). It removes padding entirely but cannot finish the online
   softmax in one pass, so it needs `nnz × D` fp32 partials — ~4 GB at seqlen 16k across 32
   heads.
+
+### Why Gluon / CUTLASS does not help at `block_q=1`
+
+Investigated, measured, and **rejected** — recorded because the reason is a hardware
+constraint, not a missing implementation, so it will not change with more effort:
+
+* **Blackwell's 5th-gen MMA (`tcgen05_mma`) requires `M >= 64` and `num_warps ∈ {4, 8}`**
+  (upstream `tl_dot_mmav5_supported`). The `block_q=1` query tile is 16 rows and measured
+  fastest at 1 warp, so it fails both. Padding M from 16 to 64 to reach the faster
+  instruction means 4× the MMA work — the same trade the union experiment already lost.
+* **A TMA + mbarrier double-buffered pipeline measured 0.82–0.94× of Triton** across every
+  regime tried (18/64/288-block loops, 4 MB and 32 MB working sets, 2/3/4 stages, 4/8
+  warps; bit-exact throughout). The loop is memory-bound with low arithmetic intensity, so
+  there is little latency to hide, and the shared→register round trip costs more than the
+  direct global→register path Triton emits. Triton's scheduler already overlaps these
+  loads across unrolled iterations.
+
+The binding constraint is the 16-row tile, which follows from `block_q=1 × group=4` — not
+from instruction selection. Gluon *is* usable here (verified: kernels compile and run
+bit-exact on sm_100, including in-kernel TMA descriptors, mbarrier phases and TMEM
+allocation), and the dk/dv path at `MAX_TILE_P=256` now satisfies `M >= 64`, so it is the
+one place 5th-gen MMA could apply — but that kernel is currently bound by segment-loop
+length rather than MMA throughput, which is what the `BATCH_R` fix addressed.
 
 Reproduce with `python benchmarks/bench_block_q.py`.
 

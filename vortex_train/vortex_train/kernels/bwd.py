@@ -34,6 +34,12 @@ import triton.language as tl
 from ..pattern import SparsePattern
 from .fwd import warps_for_tile
 
+#: Rows in the packed dk/dv query tile. 256 measured fastest at block_q=1 (4.04 ms vs
+#: 10.84 for a 16-row tile); 512 exceeds the 232 KB shared-memory budget. Also large
+#: enough to satisfy Blackwell's tcgen05 MMA minimum of M >= 64, which a 16-row tile
+#: does not -- so this is the one path where 5th-gen tensor cores are even applicable.
+MAX_TILE_P = 256
+
 
 @triton.jit
 def _delta_kernel(
@@ -478,8 +484,23 @@ def sparse_attn_bwd(
 
     dk = torch.empty_like(k)
     dv = torch.empty_like(v)
+    # BATCH_R: how many CSR entries one program handles per iteration.
+    #
+    # The old rule was `ceil(16 / (group*block_q))` -- just enough to fill the MMA's
+    # 16-row minimum. That badly under-uses the GPU: the grid is only
+    # (Nkv, Hkv) = 2048 programs on 148 SMs, so ~14 per SM, each running a long
+    # segment loop. Batching more entries per iteration trades that loop length for a
+    # wider tile, and measured at block_q=1, seqlen 16k (mean segment 994):
+    #
+    #     BATCH_R    1      2      4      8     16     32     64    128
+    #     ms      38.40  20.04  10.84   7.83   5.85   4.44   4.04   OOM
+    #
+    # 64 is 2.68x the old rule's 4, and 128 exceeds the 232 KB shared-memory budget.
+    # The tile is `BATCH_R * group * block_q` rows, so the cap is expressed in rows
+    # rather than entries to stay correct as `group` and `block_q` vary.
     per_entry = group * pattern.block_q
-    batch_r = max(1, -(-16 // per_entry))       # ceil(16 / per_entry)
+    batch_r = max(1, min(MAX_TILE_P // per_entry,
+                         -(-MAX_TILE_P // per_entry)))
     _bwd_dkv_packed_kernel[(pattern.num_kv_blocks, hkv, b)](
         q, k, v, do, dk, dv, lse, delta, t_offsets, t_indices, scale,
         *q.stride(), *k.stride(), *lse.stride(),
