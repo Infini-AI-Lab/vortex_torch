@@ -64,6 +64,14 @@ Policies
     first-touch fill. This is OneFlow's ``kFull`` policy. It turns the cache into a
     pure prefetch buffer and is the right choice when ``host_kv_gb`` is only
     modestly larger than what fits in HBM.
+``none``
+    **Caching disabled.** The device pool is used purely as per-step staging: the
+    residency fast path is skipped, so every selected block is re-copied from the
+    host every step even if it is already resident. Slower by construction — it is
+    the control that shows what the cache is worth, and the fallback if a caching
+    bug is ever suspected in production. Everything else (set-associative slot
+    allocation, pinning, the reserved zero block) is unchanged, so it isolates
+    *reuse* rather than switching to a different code path.
 
 Adding one means adding a branch in :func:`victim_way` and a name here; the fetch
 kernel does not change.
@@ -82,7 +90,7 @@ import triton.language as tl
 WAYS: int = 32
 
 #: Policy names accepted by ``vortex_host_kv_policy``.
-POLICIES = ("lru", "fifo", "full")
+POLICIES = ("lru", "fifo", "full", "none")
 
 #: ``age`` value marking a way as RESERVED — never a fetch target, never evicted.
 #: One way of the pool carries it: the zero-filled slot that entries the cache
@@ -108,9 +116,10 @@ _AGE_RESERVED_C = tl.constexpr(0x7FFFFFFF)
 POLICY_LRU = tl.constexpr(0)
 POLICY_FIFO = tl.constexpr(1)
 POLICY_FULL = tl.constexpr(2)
+POLICY_NONE = tl.constexpr(3)
 
 #: Plain ints for the launch site (the constexprs above are for kernel code).
-_CODES = {"lru": 0, "fifo": 1, "full": 2}
+_CODES = {"lru": 0, "fifo": 1, "full": 2, "none": 3}
 
 
 def policy_code(name: str) -> int:

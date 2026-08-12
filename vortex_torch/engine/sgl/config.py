@@ -65,12 +65,14 @@ class VortexConfig:
     #: (recommended). Larger raises the hit rate and the HBM cost.
     host_kv_pool_blocks: int = 0
     #: Eviction policy for the GPU cache over the host KV tier — one of
-    #: ``"lru"`` (default), ``"fifo"``, ``"full"``. See
+    #: ``"lru"`` (default), ``"fifo"``, ``"full"``, ``"none"``. See
     #: :mod:`vortex_torch.engine.sgl.cache_policy`. ``lru`` suits the usual case
     #: (a working set larger than the pool, with the sinks and local window
     #: re-selected nearly every step); ``fifo`` is cheaper and cannot be flushed by
     #: one scan-heavy step; ``full`` never evicts and asserts the pool holds
-    #: everything, turning the cache into a pure prefetch buffer.
+    #: everything, turning the cache into a pure prefetch buffer; ``none`` disables
+    #: caching (re-copies every selected block every step) and exists as the control
+    #: for measuring what the cache is worth.
     host_kv_policy: str = "lru"
 
     @classmethod

@@ -109,6 +109,7 @@ import triton.language as tl
 from .cache_policy import (
     AGE_RESERVED,
     POLICIES,
+    POLICY_NONE,
     WAYS,
     n_sets_for,
     policy_code,
@@ -193,7 +194,13 @@ def _fetch_kernel(
         return                                  # not the representative
 
     # --- fast path: already resident, and its slot is ours for this step ---
+    #
+    # ``none`` skips this deliberately: it disables *reuse* while keeping every other
+    # mechanism, so it is the control for "what is the cache buying". Constexpr, so
+    # the branch costs nothing in the caching policies.
     s = tl.load(SLOT_OF + p)
+    if POLICY == POLICY_NONE:
+        s = -1
     if s >= 0:
         if tl.atomic_xchg(PIN_GEN + s, gen) != gen:
             if tl.load(OWNER_OF + s) == p:
