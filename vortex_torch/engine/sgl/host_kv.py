@@ -106,6 +106,17 @@ import torch
 import triton
 import triton.language as tl
 
+from .cache_policy import (
+    AGE_RESERVED,
+    POLICIES,
+    WAYS,
+    n_sets_for,
+    policy_code,
+    set_of,
+    touch_way,
+    victim_way,
+)
+
 logger = logging.getLogger(__name__)
 
 #: Elements per program per copy iteration. The payload of one block is
@@ -127,12 +138,14 @@ def _fetch_kernel(
     HK, HV, DK, DV,
     TBL, ROWLEN, INDPTR,
     SLOT_OF, OWNER_OF, PIN_GEN, CLAIM_GEN,
-    CURSOR, GEN, MISSES, FETCHES,
-    capacity, row_stride, max_per_row, num_blocks,
+    AGE, INS, INS_CTR, GEN, MISSES, FETCHES,
+    n_sets, row_stride, max_per_row, num_blocks,
     BLOCK_NUMEL: tl.constexpr,
     BLOCK_TOKENS: tl.constexpr,
     TILE: tl.constexpr,
     IS_CSR: tl.constexpr,
+    POLICY: tl.constexpr,
+    WAYS_C: tl.constexpr,
 ):
     """Resolve one block-table entry: reuse a resident block, or fetch it.
 
@@ -184,37 +197,57 @@ def _fetch_kernel(
     if s >= 0:
         if tl.atomic_xchg(PIN_GEN + s, gen) != gen:
             if tl.load(OWNER_OF + s) == p:
-                return                          # hit: pinned, so no evictor can take it
+                # Hit. Pinned, so no evictor can take it this step. Record the use
+                # so the policy's recency ordering reflects it — this is the only
+                # thing that makes lru differ from fifo, and it is deliberately the
+                # single extra cost on the hot (hit) path.
+                touch_way(AGE, (s // WAYS_C) * WAYS_C, s % WAYS_C,
+                          INS_CTR, WAYS_C, POLICY)
+                return
 
-    # Bounded victim scan: at most ``capacity`` probes, so it cannot spin, and it
-    # cannot address out of range. It fails only when every slot is already pinned
-    # this step, i.e. the pool is smaller than this step's distinct demand — which
-    # is expected, because sizing for the worst case is unaffordable (see
-    # :meth:`required_capacity`).
-    # ``CURSOR`` is a monotonically increasing int32 that is never reset, so it
-    # eventually overflows to negative (measured: ~178k steps at 47 layers x 8 rows
-    # x 32 blocks). Triton's ``%`` follows C, so a negative ``base`` yields a
-    # NEGATIVE index and the atomics below would address before ``PIN_GEN`` —
-    # out-of-bounds writes into whatever precedes it, plus a scan that finds nothing
-    # and burns all ``capacity`` probes on every miss. Mask to non-negative first;
-    # wrapping the start point is harmless (it is only a probe origin).
-    base = tl.atomic_add(CURSOR, 1) & 0x7FFFFFFF
+    # --- miss: pick a victim inside this block's SET ---
+    #
+    # Set-associative, following OneFlow's one_embedding LRU cache: a block id maps
+    # to one set of WAYS ways and only that set is examined. The previous version
+    # rotated a global cursor over the whole pool, which cost O(capacity) atomics
+    # per miss once every slot was pinned — measured 3.24 ms/step vs 0.10 ms at
+    # twice the capacity, a 32x cliff that could only be dodged by over-provisioning
+    # HBM. Bounded to one set, the miss cost no longer depends on pool size, so the
+    # pool can be sized for hit rate instead.
+    #
+    # Which way to displace is the POLICY's decision (lru / fifo / full); see
+    # cache_policy.victim_way. It is passed as a constexpr so each policy compiles
+    # to its own kernel with no per-entry branching.
+    set_id = set_of(p, n_sets)
+    set_base = set_id * WAYS_C
+    # Claim a way, retrying within the set. Two entries of the same step that map to
+    # one set get the same "best" way from the policy, so without a retry the loser
+    # of the pin race is dropped — measured as exactly half of a 256-block demand
+    # failing on a pool 16x large enough, because ids i and i+n_sets share a set.
+    #
+    # OneFlow serialises this with a per-set warp mutex. A lock would not be
+    # cuda-graph capturable here (and this kernel is scalar per entry, not
+    # warp-cooperative), so instead: re-ask the policy after a lost race. The winner
+    # now reads as pinned, so ``victim_way`` returns a different way and the set
+    # fills one entry per attempt. Bounded by WAYS_C attempts, after which the set
+    # genuinely has no free way for this step.
     slot = -1
-    t = 0
-    while (slot < 0) & (t < capacity):
-        cand = (base + t) % capacity
-        if tl.atomic_xchg(PIN_GEN + cand, gen) != gen:
-            slot = cand
-        t += 1
+    tries = 0
+    while (slot < 0) & (tries < WAYS_C):
+        way = victim_way(AGE, set_base, gen, PIN_GEN, INS, POLICY, WAYS_C)
+        if way < 0:
+            tries = WAYS_C                      # set fully pinned: stop, report below
+        else:
+            cand = set_base + way
+            if tl.atomic_xchg(PIN_GEN + cand, gen) != gen:
+                slot = cand                     # won the way
+            tries += 1
     if slot < 0:
-        # Pool exhausted for this step. Returning here would be a CORRECTNESS bug,
-        # not just a slow path: the remap resolves every entry through ``slot_of``,
-        # so an entry whose block was never staged would silently resolve to a
-        # stale slot now owned by a different block, and attention would read the
-        # wrong KV with no error anywhere. Publish ``-1`` instead; the remap turns
-        # that into a skipped entry (see ``_remap_kernel``), which drops the block
-        # from this step's attention — a real approximation, but a bounded and
-        # counted one rather than silent corruption.
+        # No way in this set is available to this step (or, under ``full``, the pool
+        # is mis-sized). Publishing -1 is REQUIRED: the remap resolves every entry
+        # through ``slot_of``, so a block that was never staged would otherwise
+        # resolve to whatever slot it last occupied — now owned by another block —
+        # and attention would read the wrong KV with no error anywhere.
         tl.atomic_add(MISSES, 1)
         tl.store(SLOT_OF + p, -1)
         return
@@ -222,9 +255,20 @@ def _fetch_kernel(
     tl.atomic_add(FETCHES, 1)                   # one PCIe block copy
     old = tl.atomic_xchg(OWNER_OF + slot, p)
     if old >= 0:
-        # Only retire the old tenant if it still believes it lives here.
+        # Only retire the old tenant if it still believes it lives here: it may
+        # already have been re-homed elsewhere by a concurrent claim.
         tl.atomic_cas(SLOT_OF + old, slot, -1)
     tl.store(SLOT_OF + p, slot)
+    # Policy bookkeeping for the freshly filled way. ``INS`` is a monotonic insert
+    # stamp (fifo's ordering key); ``AGE`` becomes most-recently-used so this way is
+    # the LAST thing lru will evict, which is what stops a cold fill from
+    # immediately displacing itself.
+    # ``INS`` is fifo's key (insert order); ``AGE`` is lru's (last-use order). Both
+    # come from the same monotone counter, so a freshly filled way is the most
+    # recent by either measure and will not immediately evict itself.
+    stamp = tl.atomic_add(INS_CTR, 1) & 0x3FFFFFFF
+    tl.store(INS + slot, stamp)
+    tl.store(AGE + slot, stamp)
 
     src = p * BLOCK_NUMEL
     dst = slot * BLOCK_NUMEL
@@ -238,7 +282,7 @@ def _fetch_kernel(
 @triton.jit
 def _remap_kernel(
     SRC_TBL, DST_TBL, ROWLEN, INDPTR, SLOT_OF,
-    row_stride, max_per_row, num_blocks,
+    row_stride, max_per_row, num_blocks, zero_slot,
     BLOCK_TOKENS: tl.constexpr,
     IS_CSR: tl.constexpr,
 ):
@@ -273,20 +317,28 @@ def _remap_kernel(
     p = tl.load(SRC_TBL + pos)
     if (p >= 0) & (p < num_blocks):
         s = tl.load(SLOT_OF + p)
-        # ``s < 0`` means the fetch could not stage this block (pool exhausted this
-        # step). Emit slot 0 rather than the host block id: an unremapped id would
-        # index the staging pool far out of bounds. Slot 0 holds some other block,
-        # so the entry contributes wrong scores — which is why every occurrence is
-        # counted in ``overflow`` and the pool is sized to keep it at zero. The
-        # alternative, a giant index, is an illegal access.
-        tl.store(DST_TBL + pos, tl.where(s >= 0, s, 0))
+        # ``s < 0`` means the cache could not stage this block for this step (every
+        # way of its set is pinned by live blocks, or ``full`` ran out of room).
+        # Point the entry at the RESERVED ZERO SLOT — the last way of the pool, kept
+        # permanently zero-filled and never a fetch target.
+        #
+        # The obvious alternatives are both wrong. Leaving the host block id is an
+        # out-of-bounds index into the staging pool. Substituting slot 0 (what this
+        # did originally) hands the attention kernel a real but *unrelated* block, so
+        # a refusal silently corrupts the score instead of dropping a contribution —
+        # measured as wrong data served on an over-subscribed pool. A zero K/V block
+        # contributes a constant logit and a zero value, i.e. the entry degrades to
+        # "no information" rather than "wrong information", which is the honest
+        # behaviour for a cache that cannot place a block. Every occurrence is
+        # counted in ``overflow`` so the pool can be resized.
+        tl.store(DST_TBL + pos, tl.where(s >= 0, s, zero_slot))
     else:
         tl.store(DST_TBL + pos, p)
 
 
 @triton.jit
 def _invalidate_locs_kernel(
-    LOC, SLOT_OF, OWNER_OF, n,
+    LOC, SLOT_OF, OWNER_OF, AGE, n,
     NUM_KV_HEAD: tl.constexpr, PAGE_SIZE: tl.constexpr, BLOCK_SIZE: tl.constexpr,
 ):
     """Evict the blocks covering the token positions in ``LOC``.
@@ -310,7 +362,16 @@ def _invalidate_locs_kernel(
         tl.store(SLOT_OF + blk, -1)
         # Only disown the slot if this block still holds it: the block may have
         # been evicted and the slot re-let to someone else between the two loads.
-        tl.atomic_cas(OWNER_OF + s, blk, -1)
+        if tl.atomic_cas(OWNER_OF + s, blk, -1) == blk:
+            # RELEASE the way, not just the ownership. ``full`` treats ``age != 0``
+            # as "permanently taken" (it never evicts), so a way whose tenant was
+            # invalidated but whose age was left set is dead: it owns nothing and can
+            # never be filled again. Decode invalidates the newest block every step
+            # and layer, so those dead ways accumulate until sets fill and ``full``
+            # starts refusing blocks — measured as RULER drifting to 14-80% while
+            # ``lru``/``fifo``, which pick victims by key order rather than by
+            # emptiness, were unaffected and stayed at 100%.
+            tl.store(AGE + s, 0)
 
 
 @triton.jit
@@ -403,6 +464,7 @@ class HostKVCache:
         device: str | torch.device,
         *,
         fused: bool = False,
+        policy: str = "lru",
     ):
         # ``fused``: K and V are the SAME tensor (MLA's single latent field). The
         # V staging buffer is then a duplicate of K, so it is aliased rather than
@@ -424,8 +486,45 @@ class HostKVCache:
         #: Tokens per block — needed to convert trtllm's token-valued
         #: ``sparse_seqlens`` into a per-row block count.
         self.block_tokens = host_k.shape[1]
-        self.capacity = int(capacity)
+        # Capacity is rounded UP to whole sets, mirroring OneFlow's
+        # ``n_set * kWarpSize``: a partial set would leave ways that no block id
+        # maps to, i.e. HBM that can never be used.
+        self.policy = policy
+        self.policy_code = policy_code(policy)
+        self.n_sets = n_sets_for(capacity)
+        self.capacity = self.n_sets * WAYS
+        #: Last slot of the pool, held permanently zero and never used as a fetch
+        #: target, so an entry the cache cannot place resolves to a zero K/V block
+        #: instead of to another block's data (see ``_remap_kernel``). Costs one
+        #: block of HBM; ``usable_slots`` is what eviction may touch.
+        self.zero_slot = self.capacity - 1
+        self.usable_slots = self.capacity - 1
         self.device = device
+
+        # ``full`` promises never to evict, so every host block must have a way it can
+        # occupy permanently. Total capacity is NOT the binding constraint: blocks map
+        # to sets by ``id % n_sets``, so a set must accommodate every block congruent
+        # to it — ``ceil(num_blocks / n_sets)`` of them — within its WAYS ways. A pool
+        # that merely satisfies ``capacity >= num_blocks`` can still have an
+        # over-subscribed set, and ``full`` then refuses those blocks and serves the
+        # reserved zero block instead: measured as RULER 14% where ``lru``/``fifo``
+        # held 100%. Silent degradation is the wrong answer for a mis-set knob, so
+        # this is rejected at construction.
+        if policy == "full":
+            per_set = -(-self.num_blocks // self.n_sets)      # ceil
+            # One way of one set is the reserved zero slot, so that set has WAYS-1.
+            if per_set > WAYS - 1:
+                need_sets = -(-self.num_blocks // (WAYS - 1))
+                raise ValueError(
+                    f"vortex_host_kv_policy='full' never evicts, so every one of the "
+                    f"{self.num_blocks} host blocks needs a permanent way. Blocks map "
+                    f"to sets by id % n_sets, so with {self.n_sets} sets a set would "
+                    f"hold up to {per_set} blocks but only has {WAYS - 1} usable ways "
+                    f"(one is the reserved zero slot). Raise "
+                    f"vortex_host_kv_pool_blocks to >= {need_sets * WAYS}, lower "
+                    f"vortex_host_kv_gb, or use 'lru' / 'fifo', which evict instead "
+                    f"of refusing blocks."
+                )
 
         self.fused = fused
         shape = (self.capacity,) + tuple(host_k.shape[1:])
@@ -440,8 +539,25 @@ class HostKVCache:
         # Generations start below the first step's value so nothing looks claimed.
         self.pin_gen = torch.full((self.capacity,), -1, dtype=i32, device=device)
         self.claim_gen = torch.full((self.num_blocks,), -1, dtype=i32, device=device)
-        self.cursor = torch.zeros((1,), dtype=i32, device=device)
+        # Per-way policy state, laid out set-major so one set is contiguous.
+        #: LRU rank: 0 = empty, 1 = least-recently-used, WAYS = most-recent. Ages
+        #: are a permutation over the occupied ways (OneFlow's scheme), so eviction
+        #: is "the way with rank 1" rather than a search for a minimum timestamp.
+        self.age = torch.zeros((self.capacity,), dtype=i32, device=device)
+        #: Monotonic insert stamp per way — fifo's ordering key. Separate from
+        #: ``age`` because fifo must NOT be perturbed by reads.
+        self.ins = torch.zeros((self.capacity,), dtype=i32, device=device)
+        self.ins_ctr = torch.zeros((1,), dtype=i32, device=device)
         self.gen = torch.zeros((1,), dtype=i32, device=device)
+        # Mark the reserved zero slot so no policy can select it. This is an ``age``
+        # sentinel, not a pin: pinning is tested as ``pin == gen``, so a far-future
+        # pin is never "currently pinned" and left the slot looking like the LRU
+        # rank-1 way — the first victim. Real blocks were staged into it, and
+        # refusals then read that block instead of zeros.
+        self.age[self.zero_slot] = AGE_RESERVED
+        self.dev_k[self.zero_slot].zero_()
+        if not fused:
+            self.dev_v[self.zero_slot].zero_()
         #: Entries the pool could not serve. Non-zero means it is under-sized;
         #: read it off the host between steps, never inside one (a sync would
         #: break capture).
@@ -459,43 +575,29 @@ class HostKVCache:
     # -- sizing ---------------------------------------------------------------
     @staticmethod
     def required_capacity(num_rows: int, blocks_per_row: int) -> int:
-        """Pool size that keeps the victim scan guaranteed to succeed.
+        """Capacity at which a step's whole demand can be resident at once.
 
-        Worst case every one of ``num_rows * blocks_per_row`` requested entries is
-        a distinct block and each pins one slot, so the scan needs at least one
-        unpinned slot beyond that; the doubling provides it (at exactly the demand,
-        a single step could pin every slot and the next miss would find nothing
-        evictable).
+        ``num_rows * blocks_per_row`` is the worst-case distinct demand of one step;
+        each such block pins a way, so this is the point beyond which a step cannot
+        overflow. It is a *hit-rate* target now, not a correctness requirement: with
+        set-associative eviction a smaller pool simply misses more, and per-miss cost
+        no longer grows with capacity.
 
-        The doubling is also a **performance** cliff, not just a correctness
-        margin, and the cliff is steep. Measured at 256 rows x 32 blocks (demand
-        8192) with a 1-block/step drift:
+        The old contract was different and worth recording, because it drove a
+        sizing rule that is now obsolete: victims used to be found by rotating a
+        global cursor, so a pool sized exactly to demand had every slot pinned and
+        each miss probed O(capacity) slots — measured 3.24 ms/step against 0.10 ms
+        at 2x capacity. That forced a 2x margin purely to dodge the scan. Set
+        associativity bounds the probe to one set (:data:`cache_policy.WAYS` ways),
+        so the margin is no longer bought with HBM and this returns the honest
+        figure.
 
-        ==========  =============  =========
-        capacity    ms/step        vs demand
-        ==========  =============  =========
-        8192        3.24           1.0x
-        12288       0.20           1.5x
-        16384       0.10           2.0x
-        24576       0.10           3.0x
-        ==========  =============  =========
-
-        At ``capacity == demand`` almost every slot is already pinned, so each miss
-        probes O(capacity) slots before finding a victim instead of O(1) — 32x
-        slower. Past 2x demand there is nothing more to gain, so this is the right
-        target and extra headroom should go elsewhere.
-
-        **This is usually far more than is affordable, and that is fine.** ``rows``
-        is ``max_running_requests * num_kv_heads``, which sglang derives from the
-        token budget rather than real concurrency — thousands of rows, which for a
-        36-layer model works out to 144 GB of staging at 1024 requests (measured;
-        it OOMs). So callers treat this as an *upper bound* and clamp it to an
-        affordable share of HBM: the pool is a cache, so a smaller one costs hit
-        rate, not correctness. What must hold regardless is that a step whose
-        demand exceeds the pool cannot corrupt attention — see
-        :meth:`fetch`'s overflow handling.
+        Note the residual sensitivity: demand is spread over sets by
+        ``block_id % n_sets``, so a *set* can fill even when the pool as a whole has
+        room. That is the standard associativity trade-off, and it is why overflow
+        is counted rather than assumed impossible.
         """
-        return max(2 * num_rows * blocks_per_row, 1)
+        return max(1, num_rows * blocks_per_row)
 
     @staticmethod
     def affordable_capacity(
@@ -509,7 +611,8 @@ class HostKVCache:
         return max(1, int(budget_bytes) // max(1, per_block * max(1, layers)))
 
     def nbytes_device(self) -> int:
-        bufs = [self.dev_k, self.slot_of, self.owner_of, self.pin_gen, self.claim_gen]
+        bufs = [self.dev_k, self.slot_of, self.owner_of, self.pin_gen,
+                self.claim_gen, self.age, self.ins]
         if not self.fused:                       # fused aliases dev_k; don't double-count
             bufs.append(self.dev_v)
         return sum(t.element_size() * t.numel() for t in bufs)
@@ -556,14 +659,16 @@ class HostKVCache:
             self.host_k, self.host_v, self.dev_k, self.dev_v,
             table, row_lens, indptr,
             self.slot_of, self.owner_of, self.pin_gen, self.claim_gen,
-            self.cursor, self.gen, self.overflow, self.fetches,
-            self.capacity, row_stride, max_per_row, self.num_blocks,
+            self.age, self.ins, self.ins_ctr,
+            self.gen, self.overflow, self.fetches,
+            self.n_sets, row_stride, max_per_row, self.num_blocks,
             BLOCK_NUMEL=self.block_numel, BLOCK_TOKENS=self.block_tokens,
             TILE=_COPY_TILE, IS_CSR=is_csr,
+            POLICY=self.policy_code, WAYS_C=WAYS,
         )
         _remap_kernel[grid](
             table, out, row_lens, indptr, self.slot_of,
-            row_stride, max_per_row, self.num_blocks,
+            row_stride, max_per_row, self.num_blocks, self.zero_slot,
             BLOCK_TOKENS=self.block_tokens, IS_CSR=is_csr,
         )
         return self.dev_k, self.dev_v, out
@@ -686,7 +791,7 @@ class HostKVCache:
             return
         block_size = self.block_tokens
         _invalidate_locs_kernel[(n, num_kv_heads)](
-            loc, self.slot_of, self.owner_of, n,
+            loc, self.slot_of, self.owner_of, self.age, n,
             NUM_KV_HEAD=num_kv_heads, PAGE_SIZE=page_size, BLOCK_SIZE=block_size,
         )
 
@@ -700,11 +805,23 @@ class HostKVCache:
         self.slot_of.fill_(-1)
         self.owner_of.fill_(-1)
         self.pin_gen.fill_(-1)
+        # Ages back to 0 (= empty) so the next fill is a cold one rather than
+        # inheriting a recency order for blocks that are no longer resident.
+        self.age.zero_()
+        self.ins.zero_()
+        # Re-establish the reserved zero slot: the wipes above would otherwise make
+        # it look empty, i.e. a legal fill target.
+        self.age[self.zero_slot] = AGE_RESERVED
+        self.owner_of[self.zero_slot] = -1
 
     def stats(self) -> dict:
         """Host-visible counters. Synchronises — debug/reporting only."""
         return {
+            "policy": self.policy,
+            "n_sets": self.n_sets,
+            "ways": WAYS,
             "capacity": self.capacity,
+            "usable_slots": self.usable_slots,
             "num_host_blocks": self.num_blocks,
             "generation": int(self.gen.item()),
             "overflow": int(self.overflow.item()),

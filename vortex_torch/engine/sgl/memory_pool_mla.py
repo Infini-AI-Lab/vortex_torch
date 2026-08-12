@@ -86,6 +86,7 @@ class VortexMLACachePool(MLATokenToKVPool):
         self.vortex_cfg = _vortex_cfg(model_runner)
         self.host_kv_gb = float(getattr(self.vortex_cfg, "host_kv_gb", 0.0) or 0.0)
         self.host_kv = self.host_kv_gb > 0.0
+        self.host_kv_policy = getattr(self.vortex_cfg, "host_kv_policy", "lru") or "lru"
         self.host_kv_caches: List["HostKVCache"] = []
         self._prefix_src = None
         self._prefix_n = 0
@@ -193,7 +194,8 @@ class VortexMLACachePool(MLATokenToKVPool):
             # redundant, so ``fetch``'s second return value is simply ignored by the
             # MLA backends.
             self.host_kv_caches.append(
-                HostKVCache(flat, flat, pool_blocks, self.device, fused=True)
+                HostKVCache(flat, flat, pool_blocks, self.device, fused=True,
+                            policy=self.host_kv_policy)
             )
         logger.info(
             f"vortex host MLA latent cache: "

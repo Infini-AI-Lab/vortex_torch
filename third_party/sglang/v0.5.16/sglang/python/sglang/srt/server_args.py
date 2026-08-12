@@ -2906,7 +2906,7 @@ class ServerArgs:
         "compilation_cache_dir": None, "schedule_policy": None,
         "attention_backend": "trtllm", "impl_backend": "triton",
         "use_tensor_core": False,
-        "host_kv_gb": 0.0, "host_kv_pool_blocks": 0,
+        "host_kv_gb": 0.0, "host_kv_pool_blocks": 0, "host_kv_policy": "lru",
     }
 
     def __getattr__(self, name):

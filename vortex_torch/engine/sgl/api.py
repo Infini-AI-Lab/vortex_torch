@@ -41,6 +41,7 @@ def get_engine(
     vortex_use_tensor_core: bool = False,
     vortex_host_kv_gb: float = 0.0,
     vortex_host_kv_pool_blocks: int = 0,
+    vortex_host_kv_policy: str = "lru",
     kv_cache_dtype: str = "auto",
     **kwargs,
 ):
@@ -64,6 +65,7 @@ def get_engine(
         vortex_use_tensor_core=vortex_use_tensor_core,
         vortex_host_kv_gb=vortex_host_kv_gb,
         vortex_host_kv_pool_blocks=vortex_host_kv_pool_blocks,
+        vortex_host_kv_policy=vortex_host_kv_policy,
         vortex_dtype="bfloat16",
         vortex_compilation_cache_dir="~/.vortex_compilation_cache",
         enable_vortex_sparsity=True,

@@ -64,6 +64,14 @@ class VortexConfig:
     #: GPU staging blocks. ``0`` = derive from the worst-case per-step demand
     #: (recommended). Larger raises the hit rate and the HBM cost.
     host_kv_pool_blocks: int = 0
+    #: Eviction policy for the GPU cache over the host KV tier — one of
+    #: ``"lru"`` (default), ``"fifo"``, ``"full"``. See
+    #: :mod:`vortex_torch.engine.sgl.cache_policy`. ``lru`` suits the usual case
+    #: (a working set larger than the pool, with the sinks and local window
+    #: re-selected nearly every step); ``fifo`` is cheaper and cannot be flushed by
+    #: one scan-heavy step; ``full`` never evicts and asserts the pool holds
+    #: everything, turning the cache into a pure prefetch buffer.
+    host_kv_policy: str = "lru"
 
     @classmethod
     def from_flat(cls, flat: Dict[str, Any]) -> "VortexConfig":

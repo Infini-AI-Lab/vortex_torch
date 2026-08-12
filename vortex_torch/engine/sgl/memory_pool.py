@@ -121,6 +121,7 @@ class VortexCachePool(KVCache):
         self.vortex_cfg = _vortex_cfg(model_runner)
         self.host_kv_gb = float(getattr(self.vortex_cfg, "host_kv_gb", 0.0) or 0.0)
         self.host_kv = self.host_kv_gb > 0.0
+        self.host_kv_policy = getattr(self.vortex_cfg, "host_kv_policy", "lru") or "lru"
         self.host_kv_caches: List["HostKVCache"] = []
         # Per-step snapshot of the prefill block ids (see snapshot_prefix).
         self._prefix_src: Optional[torch.Tensor] = None
@@ -270,7 +271,8 @@ class VortexCachePool(KVCache):
                         )
             self.cache.append(layer)
             self.host_kv_caches.append(
-                HostKVCache(layer["k"], layer["v"], pool_blocks, self.device)
+                HostKVCache(layer["k"], layer["v"], pool_blocks, self.device,
+                            policy=self.host_kv_policy)
             )
 
         host_gb = sum(
