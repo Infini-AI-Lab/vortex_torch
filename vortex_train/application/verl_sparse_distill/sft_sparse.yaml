@@ -1,0 +1,138 @@
+# verl SFT config for sparse distillation on Nemotron-SFT-Math-v4.
+#
+# Layered on verl's own `sft_trainer_engine` defaults, so only what this experiment
+# changes appears here. Run it with:
+#
+#   python -m verl.trainer.sft_trainer \
+#       --config-path <this dir> --config-name sft_sparse
+#
+# The sparse attention itself is selected by ONE line —
+# `model.override_config.attn_implementation` — which verl carries into
+# `AutoConfig.from_pretrained` and thence to the model. The implementation is registered
+# in the worker by `sparse_hook` (driven by VORTEX_SPARSE_* env vars, which Ray
+# propagates); see run_sft.sh. Set attn_implementation back to flash_attention_2 for the
+# dense control and change nothing else, so the two runs differ only in attention.
+
+defaults:
+  - sft_trainer_engine
+  - _self_
+
+data:
+  # Written by prepare_data.py: a `messages` column verl's MultiTurnSFTDataset reads
+  # directly (the dataset ships that schema already), filtered to a length window.
+  train_files: /scratch/zhuominc/data/nemotron_math/train.parquet
+  val_files: /scratch/zhuominc/data/nemotron_math/val.parquet
+
+  # Sequence packing off, batch of ONE sequence per GPU. Not a throughput choice — a
+  # correctness one. vortex_train's kernels take a block *pattern*, not an attention
+  # mask, so a padded batch falls back to dense (patch.py guards on
+  # `attention_mask is not None`). Padding a 4K row next to a 32K one would therefore
+  # train dense on exactly the long rows this experiment is about. One sequence per
+  # micro-batch needs no padding, so the sparse path runs.
+  micro_batch_size_per_gpu: 1
+
+  pad_mode: no_padding
+
+  # Must be >= the data window's upper bound (prepare_data --max-tokens). `truncation:
+  # error` then turns any overflow into a hard failure, which is the intent: a silently
+  # truncated CoT trains the model to stop reasoning mid-derivation.
+  #
+  # Setting it BELOW the window is not merely lossy, it breaks the run: with
+  # use_dynamic_bsz the batches are regrouped by token count, and rows that do not fit
+  # desynchronise the sampler from the dataset length — surfacing as
+  #   arrow/array/data.cc: Check failed: (off) <= (length) Slice offset (122) > length (63)
+  # rather than as anything mentioning length. Keep max_length >= --max-tokens.
+  max_length: 32768
+
+  truncation: error
+
+  # Dynamic batching is what makes 1-sequence micro-batches affordable: verl groups by
+  # token count rather than row count, so short rows still fill the GPU.
+  use_dynamic_bsz: True
+
+  max_token_len_per_gpu: 32768
+
+  train_batch_size: 32
+
+  messages_key: messages
+
+  tools_key: tools
+
+  # verl defaults to 8 dataloader workers. On a SMALL dataset each worker slices its own
+  # range of the parquet and Arrow rejects the out-of-range offsets:
+  #   arrow/array/data.cc: Check failed: (off) <= (length) Slice offset (84) > length (63)
+  # which names neither the dataloader nor the row count. 2 is safe for smoke datasets;
+  # raise it for the full run, where the dataset is far larger than the worker count.
+  num_workers: 2
+
+  # verl's built-in MultiTurnSFTDataset CANNOT be used for this data. It templates each
+  # turn separately and concatenates ids, but Qwen3 only emits <think> when rendering a
+  # whole conversation and strips a <think> block found inside a turn -- so the reasoning
+  # trace is lost either way. Measured: 13094 tokens whole-conversation vs 1166 per-turn,
+  # <think> absent. verl asserts on the mismatch (correctly); `ignore_input_ids_mismatch`
+  # would silence it and train on ~9% of the tokens with the CoT deleted, which looks like
+  # a working run. So use a dataset that templates once, via verl's own custom_cls hook.
+  custom_cls:
+    path: ${oc.env:VORTEX_TRAIN_REPO}/application/verl_sparse_distill/dataset.py
+    name: ReasoningSFTDataset
+
+model:
+  path: Qwen/Qwen3-4B
+
+  trust_remote_code: True
+
+  override_config:
+    # THE integration point. verl passes this to AutoConfig.from_pretrained, transformers
+    # dispatches every layer through ALL_ATTENTION_FUNCTIONS["vortex_sparse"], which
+    # sparse_hook registered. Verified: invoked once per layer, no verl edit needed.
+    attn_implementation: vortex_sparse
+
+  # Long CoT means large activations; recompute rather than store them.
+  enable_gradient_checkpointing: True
+
+  # Off deliberately. verl's remove-padding path concatenates the batch into one ragged
+  # sequence with cu_seqlens, which only flash-attention understands. The sparse kernels
+  # consume [B, H, T, D] plus a per-sequence pattern, so a packed layout would silently
+  # mix documents inside one attention window.
+  use_remove_padding: False
+
+optim:
+  lr: 1.0e-5
+
+  weight_decay: 0.01
+
+  # A short warmup matters more than usual: the model starts with dense-trained weights
+  # and is being asked to read a restricted context, so the first steps are the largest
+  # distribution shift of the run. (verl's field is `lr_warmup_steps_ratio`; a wrong name
+  # is a hard InstantiationException rather than a silently ignored key, which is the
+  # behaviour you want from a config.)
+  lr_warmup_steps_ratio: 0.03
+
+engine:
+  strategy: fsdp2
+
+  # bf16 throughout, matching what vortex_torch serves. Training in fp32 and serving bf16
+  # would confound the train/serve comparison this pipeline exists to make.
+  ulysses_sequence_parallel_size: 1
+
+trainer:
+  total_epochs: 1
+
+  project_name: vortex_sparse_distill
+
+  experiment_name: qwen3_4b_nemotron_math_sparse
+
+  logger: [console]
+
+  default_local_dir: /scratch/zhuominc/ckpt_verl_sparse
+
+  save_freq: 200
+
+  test_freq: 100
+
+# Save an HF-format copy alongside the FSDP shards. Required, not optional: sglang (and so
+# evaluate_aime.py) loads HF format, and verl writes only config+tokenizer under
+# huggingface/ unless `hf_model` is listed here — which looks loadable and then fails in
+# sglang's loader.
+checkpoint:
+  save_contents: [model, optimizer, extra, hf_model]
