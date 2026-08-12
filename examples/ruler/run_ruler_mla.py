@@ -68,6 +68,10 @@ def parse_args() -> argparse.Namespace:
                    help="sglang attention_backend. Sparse vortex MLA uses 'cuda_mla' "
                         "(default); dense baselines can use 'trtllm_mla' or 'triton'. "
                         "Note: flashinfer MLA does not work for GLM.")
+    p.add_argument("--host-kv-gb", type=float, default=0.0,
+                   help="host (pinned) KV cache size in GiB; 0 = keep KV on the GPU. "
+                        "When set, the latent KV lives in pinned host memory and only "
+                        "the selected blocks are fetched to a GPU staging pool.")
     p.add_argument("--indexer-backend", default="trtllm",
                    help="vortex indexer backend (default: trtllm — the 2D block-table "
                         "page selection the MLA flows are written for).")
@@ -125,6 +129,8 @@ def main() -> None:
             vortex_max_seq_lens=40960,
             vortex_workload_chunk_size=64,
         )
+        if args.host_kv_gb > 0:
+            engine_kwargs["vortex_host_kv_gb"] = args.host_kv_gb
     llm = sgl.Engine(**engine_kwargs)
 
     with open(args.data, encoding="utf-8") as f:

@@ -264,6 +264,19 @@ class VortexFlashInferBackend(VortexBackendBase):
                 "image tokens; send text-only requests or disable vortex sparsity."
             )
         
+        # One staging generation per forward step, bumped before any layer runs.
+        # Per-step (not per-layer) because the generation is what pins a slot for
+        # the duration of a step: ticking inside a layer would unpin blocks that a
+        # later layer of the same step still needs.
+        #
+        # Read the pool off ``self`` (published by ``publish_pools``), NOT via
+        # ``token_to_kv_pool(forward_batch)``: this runs during metadata init,
+        # before sglang enters the forward context that accessor requires, and
+        # would assert "no forward context active".
+        pool = self.vortex_pool()
+        if getattr(pool, "host_kv", False):
+            pool.host_kv_tick(self.ctx.metadata.sparse_kv_indices)
+
         if forward_batch.forward_mode.is_decode_or_idle():
             
             bs = len(forward_batch.req_pool_indices)
@@ -335,6 +348,17 @@ class VortexFlashInferBackend(VortexBackendBase):
                 q_data_type=self.q_data_type,
             )
             
+            # Host KV: snapshot the prefix block ids before any layer rewrites
+            # them (fetch_prefix remaps this same buffer in place, so layer 1
+            # would otherwise read layer 0's output as its input).
+            _pool = self.vortex_pool()             # see the tick note above
+            if getattr(_pool, "host_kv", False):
+                _pool.snapshot_prefix(
+                    self.kv_indices_prefill,
+                    self.kv_indptr_prefill,
+                    bs * self.num_kv_heads,
+                )
+
             self.prefill_wrapper_paged.plan(
                 self.qo_indptr[1][:bs*self.num_kv_heads+1],
                 self.kv_indptr_prefill[:bs*self.num_kv_heads+1],
@@ -459,7 +483,19 @@ class VortexFlashInferBackend(VortexBackendBase):
         seq_lens_cpu: Optional[torch.Tensor],
     ):
         assert forward_mode.is_decode_or_idle()
-        
+
+        # Advance the host-KV staging generation. Required HERE as well as in
+        # init_forward_metadata: on a cuda-graph replay sglang calls this hook
+        # *instead of* init_forward_metadata, so ticking only there leaves the
+        # generation frozen at its captured value. Every replay then reuses one
+        # generation, so no program can win a pin, every block reports overflow and
+        # attention reads slot 0 — measured as RULER 0/20 with graphs on versus
+        # 100% with --disable-cuda-graph. This hook runs outside the captured
+        # region, so the launch here is eager and safe.
+        pool = self.vortex_pool()
+        if getattr(pool, "host_kv", False):
+            pool.host_kv_tick(self.ctx.metadata.sparse_kv_indices)
+
         self.plan_decode(
                 cached_seq_lens=seq_lens.to(torch.int32),
                 req_to_token=self.req_to_token,
@@ -542,7 +578,16 @@ class VortexFlashInferBackend(VortexBackendBase):
             )
             
             
-            k_cache, v_cache = token_to_kv_pool(forward_batch).get_kv_buffer(layer.layer_id)
+            # Host KV: promote the dense radix prefix (this branch is a prefix
+            # HIT, so it reads every cached block, not a sparse selection) and
+            # remap the prefill indices to the staging buffer.
+            _pool = token_to_kv_pool(forward_batch)
+            if getattr(_pool, "host_kv", False):
+                k_cache, v_cache = _pool.fetch_prefix(
+                    layer.layer_id, self.kv_indices_prefill
+                )
+            else:
+                k_cache, v_cache = _pool.get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
             v_cache = v_cache.view(-1, self.page_size, 1, self.head_dim)
             o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
@@ -626,15 +671,46 @@ class VortexFlashInferBackend(VortexBackendBase):
                 ctx=self.ctx
             )
 
+            # Host-resident KV: stage the selected blocks into the GPU pool and
+            # rewrite the CSR indices to staging slots. Must run AFTER the indexer
+            # (which names the blocks) and BEFORE the wrapper's forward (which
+            # dereferences them). Rewriting the wrapper's own
+            # ``_paged_kv_indices_buf`` in place is required — that buffer's
+            # address was baked in at plan/capture time.
+            wrapper = self.forward_metadata.decode_wrappers[1]
+            saved_indices = None
+            pool = token_to_kv_pool(forward_batch)
+            if getattr(pool, "host_kv", False):
+                bs = self.ctx.metadata.batch_size * self.num_kv_heads
+                cache_k, cache_v, remapped = pool.fetch_kv(
+                    layer.layer_id, wrapper._paged_kv_indices_buf,
+                    indptr=self.ctx.metadata.sparse_kv_indptr[: bs + 1],
+                    num_rows=bs,
+                    max_per_row=self.ctx.max_num_blocks_per_request,
+                )
+                cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
+                cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
+                # The wrapper reads its own ``_paged_kv_indices_buf``, so swap in
+                # the remapped table for this call and restore it after. The
+                # indexer's table must survive intact: it is shared across layers
+                # (the planner writes BOS/EOS once per step) and remapping it in
+                # place makes every later layer remap already-remapped ids.
+                saved_indices = wrapper._paged_kv_indices_buf
+                wrapper._paged_kv_indices_buf = remapped
+
             # Sparse attention compute
-            o = self.forward_metadata.decode_wrappers[1].forward(
-                q,
-                (cache_k, cache_v),
-                sm_scale=layer.scaling,
-                logits_soft_cap=layer.logit_cap,
-                k_scale=k_scale,
-                v_scale=v_scale,
-            )
+            try:
+                o = wrapper.forward(
+                    q,
+                    (cache_k, cache_v),
+                    sm_scale=layer.scaling,
+                    logits_soft_cap=layer.logit_cap,
+                    k_scale=k_scale,
+                    v_scale=v_scale,
+                )
+            finally:
+                if saved_indices is not None:
+                    wrapper._paged_kv_indices_buf = saved_indices
 
         else:
             # Dense attention path

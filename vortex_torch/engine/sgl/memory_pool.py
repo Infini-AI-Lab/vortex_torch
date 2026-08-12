@@ -35,8 +35,18 @@ from vortex_torch.cache import (
 )
 from vortex_torch.cache.compiler.compile import compile as compile_cache
 from vortex_torch.flow import vFlow
+from .config import cfg as _vortex_cfg
+from .host_kv import HostKVCache
 logger = logging.getLogger(__name__)
 GB = 1024 * 1024 * 1024
+
+#: Share of currently-free HBM the host-KV staging pools may take, summed over
+#: layers. Deliberately well under 1.0: the aux cache, cuda-graph pools, attention
+#: workspaces and activations are all still to be allocated when the pool is
+#: built, and a staging pool that consumed the remainder would OOM the engine
+#: later at a much more confusing point. Raise it via ``host_kv_pool_blocks`` if a
+#: workload is dominated by staging misses.
+_HOST_KV_STAGING_FRACTION = 0.25
 _is_cuda = is_cuda()
 
 _SET_KV_LAUNCHERS = {
@@ -105,7 +115,44 @@ class VortexCachePool(KVCache):
         self.block_size = model_runner.block_size
         assert self.page_size % self.block_size == 0, "Page size must be a multiple of block size for block-sparse attention"
         self.num_blocks_per_page = self.page_size // self.block_size
-        self._create_buffers()
+
+        # Host-resident KV: K/V in pinned host memory, aux cache on the GPU,
+        # selected blocks fetched per step (see engine/sgl/host_kv.py).
+        self.vortex_cfg = _vortex_cfg(model_runner)
+        self.host_kv_gb = float(getattr(self.vortex_cfg, "host_kv_gb", 0.0) or 0.0)
+        self.host_kv = self.host_kv_gb > 0.0
+        self.host_kv_caches: List["HostKVCache"] = []
+        # Per-step snapshot of the prefill block ids (see snapshot_prefix).
+        self._prefix_src: Optional[torch.Tensor] = None
+        self._prefix_n = 0
+
+        if self.host_kv:
+            # ``size`` is decided upstream, before this pool exists: sglang turns a
+            # KV byte budget into a token count via ``integration.kv_cell_size``,
+            # then sizes the allocator and ``req_to_token_pool`` from the same
+            # number. Under host KV that hook already excludes K/V from the HBM
+            # cell size (only the aux fields are device-resident), so ``size`` is
+            # correct on arrival and must NOT be rewritten here — doing so would
+            # leave the allocator and req pool sized for a different token count,
+            # and the runner is deliberately read-only during pool construction
+            # (``compat/runner_view``) to prevent exactly that.
+            #
+            # What is enforced here is the user's ``host_kv_gb`` as a *cap*: the
+            # host buffer is bounded by what they asked for, whatever HBM-derived
+            # budget upstream computed.
+            budget = self._host_kv_token_budget()
+            if budget < self.size:
+                logger.info(
+                    "vortex host KV: clamping %d tokens to %d to fit host_kv_gb=%.2f",
+                    self.size, budget, self.host_kv_gb,
+                )
+                self.size = budget
+                self.num_pages = (
+                    ((self.size + self.page_size) * self.head_num + self.page_size - 1)
+                    // self.page_size + 1
+                )
+
+        self._create_buffers(model_runner)
         self._compile(model_runner)
         self.layer_transfer_counter = None
         self.device_module = torch.get_device_module(self.device)
@@ -152,37 +199,300 @@ class VortexCachePool(KVCache):
 
 
 
-    def _create_buffers(self):
-        
+    def _create_buffers(self, model_runner):
+
         self.cache_meta_info = self.sparse_attention.get_cache_meta_info()
+        num_blocks = self.num_pages * self.num_blocks_per_page
+
+        if self.host_kv:
+            self._create_host_kv_buffers(num_blocks, model_runner)
+            return
+
         with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
             with (
                 torch.cuda.use_mem_pool(self.custom_mem_pool)
                 if self.enable_custom_mem_pool
                 else nullcontext()
-            ):  
+            ):
                 self.cache = [
                     {
                         cache_name:  torch.zeros(
-                                (self.num_pages * self.num_blocks_per_page, cache_shape[0], cache_shape[1]),
+                                (num_blocks, cache_shape[0], cache_shape[1]),
                                 dtype=cache_dtype,
                                 device=self.device,
                             )
-                        
+
                         for (cache_name, (cache_shape, cache_dtype)) in self.cache_meta_info.items()
                     }
-                    
+
                     for _ in range(self.layer_num)
                 ]
-        
+
+    def _create_host_kv_buffers(self, num_blocks: int, model_runner):
+        """Split the cache: ``k``/``v`` into pinned host memory, the rest on GPU.
+
+        The split is per-*key* inside each layer's dict, not per layer, because
+        the two halves are read by different consumers with opposite access
+        patterns:
+
+        * the **auxiliary** fields (centroids / envelopes / Save state) are read
+          by the indexer for *every* cached block on every step — that is the
+          whole point of block scoring — so streaming them would move more data
+          than the KV it is trying to avoid. They stay in HBM;
+        * the **KV** blocks are read only for the blocks the indexer *selects*,
+          a small fraction of the context, so they can live on the host and be
+          fetched on demand.
+
+        ``self.cache[layer]["k"]`` therefore holds a *pinned host* tensor after
+        this, and every device consumer must go through
+        :meth:`fetch_kv` instead of reading it directly.
+        """
+        self.cache = []
+        self.host_kv_caches = []
+        pool_blocks = self._host_kv_pool_blocks(model_runner)
+
+        for _ in range(self.layer_num):
+            layer = {}
+            for name, (shape, dtype) in self.cache_meta_info.items():
+                if name in ("k", "v"):
+                    # pin_memory=True is mandatory, not an optimisation: a kernel
+                    # cannot read pageable host memory, and the addresses here are
+                    # dereferenced on the device.
+                    layer[name] = torch.zeros(
+                        (num_blocks, shape[0], shape[1]),
+                        dtype=dtype, device="cpu", pin_memory=True,
+                    )
+                else:
+                    with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
+                        layer[name] = torch.zeros(
+                            (num_blocks, shape[0], shape[1]),
+                            dtype=dtype, device=self.device,
+                        )
+            self.cache.append(layer)
+            self.host_kv_caches.append(
+                HostKVCache(layer["k"], layer["v"], pool_blocks, self.device)
+            )
+
+        host_gb = sum(
+            t.element_size() * t.numel()
+            for layer in self.cache for n, t in layer.items() if n in ("k", "v")
+        ) / GB
+        dev_gb = (
+            sum(t.element_size() * t.numel()
+                for layer in self.cache for n, t in layer.items() if n not in ("k", "v"))
+            + sum(c.nbytes_device() for c in self.host_kv_caches)
+        ) / GB
+        logger.info(
+            f"vortex host KV cache: {host_gb:.2f} GB pinned host (K/V for "
+            f"{num_blocks} blocks x {self.layer_num} layers), {dev_gb:.2f} GB on "
+            f"GPU (aux cache + {pool_blocks}-block staging pool per layer)"
+        )
+
+    def _host_kv_pool_blocks(self, model_runner) -> int:
+        """Size the per-layer GPU staging pool.
+
+        Sized from the **per-step selection budget**, *not* the context length.
+        This distinction is the whole feature: a row of the block table is
+        ``max_num_blocks_per_request`` wide (the full context in blocks), but only
+        the first ``sparse_seqlens[row]`` entries are live, and that count is the
+        sparse budget — ``topk_val + bos + eos``, a few dozen blocks. Sizing the
+        pool on the row *width* would put the entire KV back in HBM and buy
+        nothing.
+
+        ``topk_ratio > 0`` makes the budget grow with context
+        (``max(static, cached_blocks * ratio)``, see ``DEFAULT_SCHEDULE_POLICY``),
+        so that case is accounted for and then clamped to the row width — beyond
+        which a row cannot ask for more.
+        """
+        override = int(getattr(self.vortex_cfg, "host_kv_pool_blocks", 0) or 0)
+        if override > 0:
+            return override
+
+        sa = model_runner.server_args
+        rows = int(model_runner.req_to_token_pool.size) * self.head_num
+        static = (
+            int(sa.vortex_topk_val)
+            + int(sa.vortex_block_reserved_bos)
+            + int(sa.vortex_block_reserved_eos)
+        )
+        max_topk = getattr(sa, "vortex_max_topk_val", None)
+        if max_topk:
+            static = max(static, int(max_topk) + int(sa.vortex_block_reserved_bos)
+                         + int(sa.vortex_block_reserved_eos))
+
+        max_blocks_per_req = self._max_blocks_per_request(model_runner)
+        ratio = float(getattr(sa, "vortex_topk_ratio", 0.0) or 0.0)
+        per_row = min(max(static, int(max_blocks_per_req * ratio)), max_blocks_per_req)
+
+        want = HostKVCache.required_capacity(rows, per_row)
+        # ``want`` covers every schedulable request at full budget simultaneously,
+        # which is unaffordable: sglang sets max_running_requests from the token
+        # budget, so ``rows`` is in the thousands and ``want`` reaches 144 GB of
+        # staging on a 36-layer model (measured — it OOMs). Clamp it to a share of
+        # the HBM freed by hosting K/V. The pool is a cache, so the clamp trades hit
+        # rate, not correctness; overflow is counted and reported.
+        block_numel = self.block_size * self.head_dim
+        elt = torch._utils._element_size(self.dtype)
+        budget = int(_HOST_KV_STAGING_FRACTION * self._free_device_bytes())
+        afford = HostKVCache.affordable_capacity(
+            block_numel, elt, self.layer_num, budget,
+        )
+        # Never go below one full-budget request per KV head, or a single-sequence
+        # decode — the common case — would overflow on every step.
+        floor = HostKVCache.required_capacity(self.head_num, per_row)
+        cap = max(floor, min(want, afford))
+        if cap < want:
+            # Report the concurrency the pool actually keeps fast, not just the
+            # byte figures. ``required_capacity``'s 2x factor is a *performance*
+            # threshold as well as a safety one: at 1x demand every slot is pinned
+            # and each miss probes O(capacity) slots, measured 32x slower (3.24 vs
+            # 0.10 ms/step). So the useful statement is how many concurrent
+            # requests stay on the fast side of that, which is what an operator
+            # needs to size `host_kv_pool_blocks` against.
+            fast_rows = max(1, cap // (2 * max(1, per_row)))
+            logger.info(
+                "vortex host KV staging pool: %d blocks/layer = %.1f GB across %d "
+                "layers (worst case %d blocks / %.1f GB for all %d rows). Keeps "
+                "~%d concurrent rows (~%d requests x %d KV heads) miss-bound; "
+                "beyond that misses cost extra probing. Raise "
+                "vortex_host_kv_pool_blocks if decode is staging-bound.",
+                cap, cap * block_numel * elt * 2 * self.layer_num / GB,
+                self.layer_num,
+                want, want * block_numel * elt * 2 * self.layer_num / GB, rows,
+                fast_rows, max(1, fast_rows // max(1, self.head_num)), self.head_num,
+            )
+        return cap
+
+    def _free_device_bytes(self) -> int:
+        """Free HBM right now, as the budget the staging pool is carved from."""
+        free, _total = torch.cuda.mem_get_info()
+        return int(free)
+
+    def _host_kv_token_budget(self) -> int:
+        """Tokens that fit in ``host_kv_gb`` of pinned host memory.
+
+        Only K and V are hosted, so the budget is set by their bytes per token:
+        ``2 (K,V) * layers * head_num * head_dim * elt``. The auxiliary fields do
+        not appear — they stay in HBM, and folding them in here would silently
+        shrink the host budget to pay for device memory.
+
+        Rounded **down** to a whole page: a partial page cannot be allocated, and
+        rounding up would exceed the size the user asked for.
+        """
+        elt = torch._utils._element_size(self.dtype)
+        bytes_per_token = 2 * self.layer_num * self.head_num * self.head_dim * elt
+        tokens = int(self.host_kv_gb * GB) // bytes_per_token
+        tokens = (tokens // self.page_size) * self.page_size
+        if tokens < self.page_size:
+            raise ValueError(
+                f"host_kv_gb={self.host_kv_gb} is too small for this model: one "
+                f"page of {self.page_size} tokens needs "
+                f"{bytes_per_token * self.page_size / GB:.3f} GB of host KV "
+                f"({self.layer_num} layers x {self.head_num} KV heads x "
+                f"{self.head_dim} dim x 2 for K/V)."
+            )
+        return tokens
+
+    @staticmethod
+    def _max_blocks_per_request(model_runner) -> int:
+        """Blocks in the longest request — mirrors ``Context.create``'s derivation."""
+        sa = model_runner.server_args
+        if sa.vortex_max_seq_lens < 0:
+            seq = model_runner.model_config.context_len
+        else:
+            seq = sa.vortex_max_seq_lens
+        return (seq + sa.vortex_block_size - 1) // sa.vortex_block_size
+
+    def fetch_kv(
+        self,
+        layer_id: int,
+        table: torch.Tensor,
+        *,
+        row_lens: Optional[torch.Tensor] = None,
+        indptr: Optional[torch.Tensor] = None,
+        num_rows: int,
+        max_per_row: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Stage the blocks named by ``table``, translated to staging slots.
+
+        Returns ``(k, v, table_to_use)``. ``table`` is not modified: the caller's
+        table is shared across layers, so the translated ids go to a pool-owned
+        table which the caller must pass to the attention call instead. With host
+        KV off this returns the GPU buffers and the table unchanged, so the
+        backends can call it unconditionally.
+        """
+        if not self.host_kv:
+            k, v = self.get_kv_buffer(layer_id)
+            return k, v, table
+        return self.host_kv_caches[layer_id - self.start_layer].fetch(
+            table, row_lens=row_lens, indptr=indptr,
+            num_rows=num_rows, max_per_row=max_per_row,
+        )
+
+    def snapshot_prefix(self, indices: torch.Tensor, indptr: torch.Tensor,
+                        num_rows: int) -> int:
+        """Snapshot the prefill block ids once per step; returns the block count.
+
+        Called from the prefill planner, before any layer runs. The snapshot is
+        needed because :meth:`fetch_prefix` rewrites ``indices`` in place (the
+        attention wrapper holds that exact tensor), so after the first layer the
+        original ids are gone — every later layer would stage the wrong blocks.
+        Taking it once per step rather than per layer also means one copy, not
+        ``layer_num`` copies.
+
+        The single host sync here is on the prefill path only, which is not
+        cuda-graph captured (capture asserts ``is_decode_or_idle``), so it costs
+        nothing per decode step.
+        """
+        if not self.host_kv:
+            return 0
+        n = int(indptr[num_rows].item())
+        if n == 0:
+            self._prefix_n = 0
+            return 0
+        if self._prefix_src is None or self._prefix_src.numel() < n:
+            self._prefix_src = torch.empty(
+                max(n, 2 * (0 if self._prefix_src is None else self._prefix_src.numel())),
+                dtype=indices.dtype, device=indices.device,
+            )
+        self._prefix_src[:n].copy_(indices[:n])
+        self._prefix_n = n
+        return n
+
+    def fetch_prefix(self, layer_id: int, indices: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Promote the snapshotted dense prefix to device (prefill-with-prefix)."""
+        if not self.host_kv:
+            return self.get_kv_buffer(layer_id)
+        return self.host_kv_caches[layer_id - self.start_layer].fetch_prefix(
+            indices, self._prefix_src, self._prefix_n,
+        )
+
+    def host_kv_tick(self, block_tables=None) -> None:
+        """Advance the staging generation once per forward step (all layers).
+
+        Also reserves the remap buffer when given the full block table: doing it
+        here (per-step planner, outside capture) keeps ``fetch`` allocation-free,
+        since a lazy allocation inside a captured region becomes part of the graph.
+        """
+        if not self.host_kv:
+            return
+        for c in self.host_kv_caches:
+            c.tick()
+            if block_tables is not None:
+                c.reserve_remap(block_tables)
+
     def _clear_buffers(self):
         del self.cache
        
 
     def get_cache_size_bytes(self) -> int:
-        """
-        Return total bytes occupied by all tensors in `self.cache`.
-        Works even if some entries are not tensors.
+        """Bytes of **device** memory occupied by the cache.
+
+        Device, not total: the value feeds ``self.mem_usage``, which sglang treats
+        as HBM occupancy when reporting and fitting memory. Under host KV the
+        pinned K/V tensors are host-resident, so counting them would overstate GPU
+        use by the entire KV cache — the opposite of what the feature does. The
+        GPU-side staging pools are counted instead, since those are real HBM.
         """
         total_bytes = 0
 
@@ -191,9 +501,11 @@ class VortexCachePool(KVCache):
                 # Be tolerant to unexpected structures
                 continue
 
-            for t in layer_cache.values():
+            for name, t in layer_cache.items():
                 if not torch.is_tensor(t):
                     continue
+                if self.host_kv and name in ("k", "v"):
+                    continue                       # host-resident; not HBM
 
                 # Prefer accurate allocated size if available (includes padding/strides)
                 try:
@@ -202,8 +514,23 @@ class VortexCachePool(KVCache):
                     # Fallback: logical size in bytes
                     total_bytes += int(t.element_size() * t.numel())
 
+        # The staging pools and their metadata are device allocations that exist
+        # only in host-KV mode, and are what the hosted K/V is traded for.
+        total_bytes += sum(c.nbytes_device() for c in self.host_kv_caches)
         return total_bytes
-    
+
+    def get_host_cache_size_bytes(self) -> int:
+        """Bytes of pinned **host** memory holding K/V (0 when host KV is off)."""
+        if not self.host_kv:
+            return 0
+        return sum(
+            int(t.element_size() * t.numel())
+            for layer in self.cache
+            for name, t in layer.items()
+            if name in ("k", "v") and torch.is_tensor(t)
+        )
+
+
     def get_kv_size_bytes(self):
         """``(k_bytes, v_bytes)`` summed over layers — sglang's KV accounting.
 
@@ -398,6 +725,12 @@ class VortexCachePool(KVCache):
             if v_scale is not None:
                 cache_v = cache_v.div(v_scale)
 
+        # Under host KV, ``cache[slot]["k"]`` is a *pinned host* tensor. The
+        # launcher writes through the pointer it is given, and a kernel can write
+        # pinned host memory as well as read it (verified bit-exact in both
+        # directions), so the write lands where the fetch kernel will look for it.
+        # No staging copy is needed and none must be added: writing to the GPU
+        # pool instead would leave the host copy stale, and the pool is evictable.
         self.set_kv_buffer_func(
             self.cache[cache_slot]["k"],
             self.cache[cache_slot]["v"],
@@ -408,8 +741,35 @@ class VortexCachePool(KVCache):
         )
         if layer_id in self.layers_skip:
             return
+        # ``forward_cache`` reads the K/V just written to build this block's
+        # auxiliary fields. It reads over the host tensor for the same reason —
+        # correct, and only for the handful of tokens in ``loc``, not the whole
+        # context. It also means the block whose K/V just changed may be resident
+        # in the staging pool holding pre-write contents, so invalidate it.
+        if self.host_kv:
+            self.host_kv_caches[cache_slot].invalidate_locs(loc, self.page_size,
+                                                            self.head_num)
         self.compiled_cache.forward(self.cache[cache_slot], loc, ctx=self.ctx)
-        
+
     def move_kv_cache(self, tgt_loc: torch.Tensor, src_loc: torch.Tensor):
-        
-        raise NotImplementedError
+        """Relocate KV between slots. **Not supported, on either KV placement.**
+
+        Upstream only calls this from the sliding-window (SWA) and
+        speculative-decoding paths, and vortex already refuses both
+        (``assert model_runner.sliding_window_size is None`` and the
+        ``is_draft_extend`` / ``is_target_verify`` asserts in every backend). It is
+        therefore unreachable, and hosting KV does not change that: the plain
+        prefix-radix cache reached in normal serving never moves a page, it only
+        re-references one — which is why host KV works with the radix cache
+        without this.
+
+        A host-KV implementation was written and removed rather than shipped: it
+        would be dead code whose only effect is to suggest the SWA/spec paths are
+        supported when the asserts above reject them earlier, and an in-place block
+        copy also needs overlap handling that nothing exercises. Implement it
+        alongside whichever feature first needs it, with a test that reaches it.
+        """
+        raise NotImplementedError(
+            "vortex does not support move_kv_cache (SWA / speculative decoding "
+            "paths only; both are rejected earlier by the attention backends)"
+        )

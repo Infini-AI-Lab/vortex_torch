@@ -182,9 +182,21 @@ class VortexMLABackendBase(VortexBackendBase):
     def _after_plan_decode(self, seq_lens: torch.Tensor) -> None:
         """Extra per-batch step, run right after the block tables are filled.
 
-        Default no-op. ``cuda_mla`` overrides it to build its load-balanced work
-        queue, which needs the ``sparse_seqlens`` ``plan_decode`` just wrote.
+        Subclasses may override (``cuda_mla`` builds its load-balanced work queue
+        here, which needs the ``sparse_seqlens`` ``plan_decode`` just wrote) —
+        **but must call ``super()._after_plan_decode(seq_lens)``**, because the
+        host-KV staging generation is advanced here.
         """
+        # One staging generation per forward step, before any layer runs. It lives
+        # in the BASE (not in cuda_mla's override) so every MLA backend gets it:
+        # putting it only in the override left ``triton_mla`` — which inherits the
+        # default — with a frozen generation, so no program could claim a pin, every
+        # entry fell through to the overflow path, and RULER read 0/20 versus 20/20
+        # with KV on the GPU. Reached from both the eager and the cuda-graph replay
+        # paths via ``_plan_sparse``.
+        pool = self.vortex_pool()
+        if getattr(pool, "host_kv", False):
+            pool.host_kv_tick(self.ctx.metadata.sparse_block_tables)
 
     def init_forward_metadata(self, forward_batch) -> None:
         self._dense.init_forward_metadata(forward_batch)

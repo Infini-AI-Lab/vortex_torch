@@ -296,7 +296,8 @@ And the matching config:
   "vortex_layers_skip":         [0],
   "vortex_dtype":               "bfloat16",
   "kv_cache_dtype":             "auto",
-  "mem_fraction_static":        0.8
+  "mem_fraction_static":        0.8,
+  "vortex_host_kv_gb":          0.0
 }
 ```
 
@@ -316,6 +317,9 @@ values that suit your flow. The ones that need special care:
 | `vortex_dtype` | dtype for **intermediate** tensors. **Recommended: `"bfloat16"`.** Other accepted values: `"float16"`, `"float32"`, `"fp8_e5m2"`, `"fp8_e4m3"` — use only if you have a specific reason; bf16 is the tested default. |
 | `kv_cache_dtype` | dtype for the **K/V cache itself**. Choose from: `"auto"` (resolves to bfloat16), `"fp8_e4m3"`, or `"fp8_e5m2"`. Using fp8 halves cache memory at the cost of numerical precision; bf16 via `"auto"` is the safe default. |
 | `mem_fraction_static` | fraction of GPU memory sglang reserves for KV cache + model weights. Float. **Default 0.8** (lives in `get_engine`). Higher values usually raise throughput by enabling larger decode batches, but raise the risk of CUDA OOM mid-run. **Sweet spot 0.8-0.9.** Try `0.85` first; if it runs cleanly, push toward `0.9` / `0.95`. If you OOM, drop back by 0.05. |
+| `vortex_host_kv_gb` | float GiB of **pinned host memory** to hold the K/V cache in, instead of HBM. **Default `0.0` = KV stays on the GPU** (the tested-by-default path). When set, only the *selected* blocks are fetched to a small GPU staging pool by a Triton kernel, so context length is bounded by host RAM rather than HBM — host memory is both larger and cheaper. The vortex auxiliary cache (centroids / envelopes / `Save` state) always stays in HBM, because the indexer scores every cached block every step. Cost: PCIe traffic on cache misses; free in steady-state decode (measured 0% miss, 0.07 ms/step when the selection is stable) and ~47 GB/s when blocks do move. Compatible with cuda graphs and the radix cache. |
+| `vortex_host_kv_gb` **backend support** | MHA: both indexer backends (`flashinfer`, `trtllm`). MLA: **`cuda_mla` only** — which is the default. The `triton` MLA backend raises `NotImplementedError`: it delegates prefill to sglang's dense `TritonAttnBackend`, which reads the latent directly, so a host-resident latent would be streamed per layer over PCIe (observed: GLM prefill exceeding sglang's 300 s forward watchdog, while the same flow passes with KV on the GPU). Its *decode* staging is verified working (20/20 with cuda graphs); wiring it fully means giving it `cuda_mla`'s `MLAPrefill`-based `forward_extend`. `cuda_mla_profile` also refuses, by design — it reads the whole latent for its coverage stats. |
+| `vortex_host_kv_pool_blocks` | int. **Default `0` = derive automatically.** Size of the per-layer GPU staging pool, in blocks. The automatic value is the per-step selection budget clamped to an affordable share of free HBM; raise it if the engine log reports a small "concurrent rows" figure and decode is staging-bound. Aim for at least **2x** the per-step demand: at exactly 1x every slot is pinned and each miss probes the whole pool, measured **32x** slower (3.24 vs 0.10 ms/step). Only meaningful with `vortex_host_kv_gb > 0`. |
 | `disable_radix_cache` | bool. **Default `false`.** **REQUIRED `true` if your `forward_indexer` uses `Save(...)`** (i.e. persistent per-request state via `Save`/`Load`). sglang's prefix-radix cache otherwise reuses KV across requests sharing a prompt prefix — for normal flows that's free throughput, but for `Save`/`Load` flows it shares per-request state across requests and corrupts your Save'd values. Pre-flight rejects the violation. Don't set it for non-`Save` flows: leaving it `false` lets the prefix cache help you. |
 
 ### Budget semantics (`vortex_topk_val`, `vortex_topk_ratio`)

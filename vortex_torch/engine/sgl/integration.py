@@ -394,7 +394,23 @@ def kv_cell_size(runner, num_layers: int, kv_size: int) -> int:
     (it is per-request, not per-token), so it does not belong in this per-token
     figure.
     """
-    tr = runner.sparse_attention.get_token_ratio()
+    # Host-resident KV (``vortex_host_kv_gb``): K/V live in pinned host memory, so
+    # only the auxiliary fields consume HBM and the *device* cell size shrinks
+    # accordingly. That alone is not enough, though — sglang computes
+    # ``tokens = hbm_budget // cell_size``, and aux is only ~1.5% of the cache
+    # (token_ratio 2.031 vs aux 0.031 for gqa_block_sparse), so a cell size
+    # counting aux alone grants ~65x more tokens than the host buffer can back.
+    # Measured: it OOMs allocating aux for a context nothing holds the KV for.
+    #
+    # So the token count is *also* capped by ``host_kv_gb`` — see
+    # :func:`host_kv_token_cap`, applied where sglang applies its other external
+    # token limits so the allocator and req_to_token_pool are re-derived from the
+    # capped value rather than desynced from it.
+    from vortex_torch.engine.sgl.config import cfg as _vcfg
+    if float(getattr(_vcfg(runner), "host_kv_gb", 0.0) or 0.0) > 0.0:
+        tr = runner.sparse_attention.get_aux_token_ratio()
+    else:
+        tr = runner.sparse_attention.get_token_ratio()
     if getattr(runner, "use_mla_backend", False):
         base_elems = (
             runner.model_config.kv_lora_rank + runner.model_config.qk_rope_head_dim
@@ -406,3 +422,39 @@ def kv_cell_size(runner, num_layers: int, kv_size: int) -> int:
             * runner.model_config.head_dim
         )
     return int(base_elems * num_layers * tr * kv_size)
+
+
+def host_kv_token_cap(runner, num_layers: int, kv_size: int) -> Optional[int]:
+    """Max tokens the user's ``vortex_host_kv_gb`` of pinned host memory can hold.
+
+    ``None`` when host KV is off, so the caller leaves the budget untouched.
+
+    This is a **second, independent** bound on the token count. ``kv_cell_size``
+    reports only the HBM-resident (auxiliary) bytes under host KV, because that is
+    what actually occupies the device — but sglang derives tokens by dividing the
+    HBM budget by the cell size, so that alone would grant a context far larger
+    than the host buffer can back (~65x for gqa_block_sparse: aux is 1.5% of the
+    cache). The host buffer is the other resource, and it is the one the user
+    sized, so it caps the result.
+
+    Only K/V (or the fused MLA latent) are charged here: the aux fields stay in
+    HBM and are already accounted for by the cell size. Counting them twice would
+    silently shrink the context the user paid host memory for.
+    """
+    from vortex_torch.engine.sgl.config import cfg as _vcfg
+
+    host_gb = float(getattr(_vcfg(runner), "host_kv_gb", 0.0) or 0.0)
+    if host_gb <= 0.0:
+        return None
+    if getattr(runner, "use_mla_backend", False):
+        # One fused latent per token per layer (no separate K and V).
+        per_token = (
+            runner.model_config.kv_lora_rank + runner.model_config.qk_rope_head_dim
+        ) * num_layers * kv_size
+    else:
+        from vortex_torch.engine.sgl.compat import get_attention_tp_size
+        per_token = 2 * (
+            runner.model_config.get_num_kv_heads(get_attention_tp_size())
+            * runner.model_config.head_dim
+        ) * num_layers * kv_size
+    return max(1, int(host_gb * (1024 ** 3)) // per_token)

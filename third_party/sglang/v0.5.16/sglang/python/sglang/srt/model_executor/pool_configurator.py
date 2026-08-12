@@ -192,6 +192,13 @@ class DefaultPoolConfigurator(MemoryPoolConfigurator):
             # Import the submodule directly — see model_runner.initialize().
             from vortex_torch.engine.sgl import integration as vortex_integration
 
+            # Host-resident KV: the cell size counts only the HBM-resident aux
+            # fields, so the HBM division would grant a context the pinned host
+            # buffer cannot back. Record the host-side token cap for
+            # calculate_pool_sizes to apply.
+            self._vortex_host_token_cap = vortex_integration.host_kv_token_cap(
+                kvc.model_runner, effective_num_layers, kv_size
+            )
             return vortex_integration.kv_cell_size(
                 kvc.model_runner, effective_num_layers, kv_size
             )
@@ -300,12 +307,24 @@ class DefaultPoolConfigurator(MemoryPoolConfigurator):
         self, available_bytes: int, page_size: int
     ) -> MemoryPoolConfig:
         max_total_num_tokens = available_bytes // self._cell_size
+        # [VORTEX HOOK] host-resident KV is bounded by the pinned host buffer, not
+        # by HBM; see _compute_cell_size.
+        cap = getattr(self, "_vortex_host_token_cap", None)
+        if cap is not None:
+            max_total_num_tokens = min(max_total_num_tokens, cap)
         max_total_num_tokens = max_total_num_tokens // page_size * page_size
         return MemoryPoolConfig(max_total_num_tokens=max_total_num_tokens)
 
     def calculate_pool_sizes_from_max_tokens(
         self, max_total_num_tokens: int, page_size: int
     ) -> MemoryPoolConfig:
+        # [VORTEX HOOK] apply the host-KV cap on this path too. sglang takes the
+        # constraint path (not calculate_pool_sizes) whenever an external limit
+        # such as --max-total-tokens re-runs the configurator, so capping in only
+        # one of the two would let that flag silently restore an oversized budget.
+        cap = getattr(self, "_vortex_host_token_cap", None)
+        if cap is not None:
+            max_total_num_tokens = min(max_total_num_tokens, cap)
         max_total_num_tokens = max_total_num_tokens // page_size * page_size
         return MemoryPoolConfig(max_total_num_tokens=max_total_num_tokens)
 

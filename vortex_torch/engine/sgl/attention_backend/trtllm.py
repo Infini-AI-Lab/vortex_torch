@@ -263,6 +263,19 @@ class VortexTRTLLMBackend(VortexBackendBase):
                 "image tokens; send text-only requests or disable vortex sparsity."
             )
         
+        # One staging generation per forward step, bumped before any layer runs.
+        # Per-step (not per-layer) because the generation is what pins a slot for
+        # the duration of a step: ticking inside a layer would unpin blocks that a
+        # later layer of the same step still needs.
+        #
+        # Read the pool off ``self`` (published by ``publish_pools``), NOT via
+        # ``token_to_kv_pool(forward_batch)``: this runs during metadata init,
+        # before sglang enters the forward context that accessor requires, and
+        # would assert "no forward context active".
+        pool = self.vortex_pool()
+        if getattr(pool, "host_kv", False):
+            pool.host_kv_tick(self.ctx.metadata.sparse_block_tables)
+
         if forward_batch.forward_mode.is_decode_or_idle():
 
             bs = len(forward_batch.req_pool_indices)
@@ -328,6 +341,21 @@ class VortexTRTLLMBackend(VortexBackendBase):
                 q_data_type=self.q_data_type,
             )
             
+            # Effective rows for the prefill CSR (one per (req, kv head)). Recorded
+            # so forward_extend can bound the host-KV prefix staging without
+            # re-deriving it from a possibly-changed batch size.
+            self.forward_metadata_bs_eff = bs * self.num_kv_heads
+
+            # Host KV: snapshot the prefix block ids before any layer rewrites
+            # them (fetch_prefix remaps this same buffer in place).
+            _pool = self.vortex_pool()             # see the tick note above
+            if getattr(_pool, "host_kv", False):
+                _pool.snapshot_prefix(
+                    self.kv_indices_prefill,
+                    self.kv_indptr_prefill,
+                    bs * self.num_kv_heads,
+                )
+
             self.prefill_wrapper_paged.plan(
                 self.qo_indptr[1][:bs*self.num_kv_heads+1],
                 self.kv_indptr_prefill[:bs*self.num_kv_heads+1],
@@ -410,6 +438,18 @@ class VortexTRTLLMBackend(VortexBackendBase):
     ):
         assert forward_mode.is_decode_or_idle()
 
+        # Advance the host-KV staging generation. Required HERE as well as in
+        # init_forward_metadata: on a cuda-graph replay sglang calls this hook
+        # *instead of* init_forward_metadata, so ticking only there leaves the
+        # generation frozen at its captured value. Every replay then reuses one
+        # generation, so no program can win a pin, every block reports overflow and
+        # attention reads slot 0 — measured as RULER 0/20 with graphs on versus
+        # 100% with --disable-cuda-graph. This hook runs outside the captured
+        # region, so the launch here is eager and safe.
+        pool = self.vortex_pool()
+        if getattr(pool, "host_kv", False):
+            pool.host_kv_tick(self.ctx.metadata.sparse_block_tables)
+
         # trtllm planner fills block_tables[0] / seq_lens[0] and the BOS+EOS
         # slots of block_tables[1] / seq_lens[1]; topk fills the middle of
         # path 1 inside forward_decode.
@@ -473,7 +513,21 @@ class VortexTRTLLMBackend(VortexBackendBase):
             )
             
             
-            k_cache, v_cache = token_to_kv_pool(forward_batch).get_kv_buffer(layer.layer_id)
+            # This branch runs only on a radix-cache prefix HIT, and it reads the
+            # cached prefix DENSELY — every block, not a sparse selection. Under
+            # host KV that means promoting the whole prefix to the device, so the
+            # blocks are staged through the same pool and the CSR indices rewritten.
+            # The staging buffer is sized to the prefix (prefill is not
+            # cuda-graph captured, so it may allocate), rather than reusing the
+            # decode eviction pool — a dense prefix would thrash it, evicting
+            # blocks before the attention kernel reads them.
+            _pool = token_to_kv_pool(forward_batch)
+            if getattr(_pool, "host_kv", False):
+                k_cache, v_cache = _pool.fetch_prefix(
+                    layer.layer_id, self.kv_indices_prefill
+                )
+            else:
+                k_cache, v_cache = _pool.get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
             v_cache = v_cache.view(-1, self.page_size, 1, self.head_dim)
             o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
@@ -565,11 +619,35 @@ class VortexTRTLLMBackend(VortexBackendBase):
                 cache=cache,
                 ctx=self.ctx,
             )
+            # Host-resident KV: stage the blocks the indexer just selected into
+            # the GPU pool and rewrite the block table to point at staging slots.
+            # Must run AFTER the indexer (it names the blocks) and BEFORE the
+            # attention call (which dereferences the table). A no-op when KV lives
+            # on the GPU, so there is only one code path to reason about.
+            block_tables = self.forward_metadata.block_tables[1]
+            pool = token_to_kv_pool(forward_batch)
+            if getattr(pool, "host_kv", False):
+                # Pass the FULL (max-batch) table, not this batch's slice, and
+                # bound the work with num_rows. The pool's remap buffer is sized
+                # from the tensor it is given and its address must be stable across
+                # every captured batch size — sizing it from a slice would
+                # reallocate on the next capture and leave earlier graphs holding a
+                # freed pointer (cudaErrorIllegalAddress at decode time).
+                eff_bs = block_tables.shape[0]
+                cache_k, cache_v, full_remapped = pool.fetch_kv(
+                    layer.layer_id, self.ctx.metadata.sparse_block_tables,
+                    row_lens=self.forward_metadata.seq_lens[1],
+                    num_rows=eff_bs,
+                    max_per_row=block_tables.shape[1],
+                )
+                block_tables = full_remapped[:eff_bs]
+                cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
+                cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
             o = trtllm_batch_decode_with_kv_cache(
                 query=q,
                 kv_cache=(cache_k, cache_v),
                 workspace_buffer=self.trtllm_workspace_buffer,
-                block_tables=self.forward_metadata.block_tables[1],
+                block_tables=block_tables,
                 seq_lens=self.forward_metadata.seq_lens[1],
                 max_seq_len=self.max_context_len,
                 bmm1_scale=bmm1_scale,

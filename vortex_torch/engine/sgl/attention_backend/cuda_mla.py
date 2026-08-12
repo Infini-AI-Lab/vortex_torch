@@ -218,11 +218,15 @@ class VortexCudaMLABackend(VortexMLABackendBase):
         """Build the load-balanced work queue for this decode step.
 
         Runs after plan_decode, which is what fills the ``sparse_seqlens`` the
-        queue is balanced over.
+        queue is balanced over. The base also advances the host-KV staging
+        generation -- once per step, before any layer, because the generation is
+        what pins a staging slot for the whole step.
         """
+        super()._after_plan_decode(seq_lens)     # advances the host-KV generation
         self._plan(seq_lens)
 
     def _init_extend_metadata(self, forward_batch) -> None:
+
         """Plan the flashinfer prefill wrappers once per extend batch.
 
         Shared by every layer; ``forward_extend`` then just ``run()``s per layer.
@@ -295,12 +299,26 @@ class VortexCudaMLABackend(VortexMLABackendBase):
         #    was built once for this step by _plan() (in init_forward_metadata); run()
         #    just consumes it with this layer's block table => one plan, all layers.
         bs = query.shape[0]
-        latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
-            -1, self.kv_cache_dim
-        )
+        block_tables = md.sparse_block_tables[:bs]
+        _pool = token_to_kv_pool(forward_batch)
+        if getattr(_pool, "host_kv", False):
+            # Host-resident latent: stage the blocks the indexer just selected into
+            # the GPU pool and rewrite the block table to staging slots. Between the
+            # indexer (which names the blocks) and the decoder (which reads them).
+            # Full table, sliced after — see the trtllm note: the remap buffer's
+            # address must not change between captured batch sizes.
+            latent, full_remapped = _pool.fetch_latent(
+                layer.layer_id, md.sparse_block_tables,
+                row_lens=md.sparse_seqlens[:bs],
+                num_rows=bs, max_per_row=block_tables.shape[1],
+            )
+            block_tables = full_remapped[:bs]
+            latent = latent.view(-1, self.kv_cache_dim)
+        else:
+            latent = _pool.get_key_buffer(layer.layer_id).view(-1, self.kv_cache_dim)
         o = query.new_empty((bs, self.num_qo_heads, self.kv_lora_rank))
         self._cur_decoder.run(
-            query, latent, md.sparse_block_tables[:bs], o, layer.scaling,
+            query, latent, block_tables, o, layer.scaling,
         )
         return o.view(-1, layer.tp_q_head_num * self.kv_lora_rank)
 
@@ -308,6 +326,43 @@ class VortexCudaMLABackend(VortexMLABackendBase):
     # prefill — dense (no sparsity). Fast flashinfer path (FA3/cutlass sm100)
     # via MLAPrefill, functionally identical to TritonAttnBackend's extend; the
     # Triton helper is the fallback when the fast path is unavailable.
+
+    def _host_prefix(self, key_buffer, kv_indices):
+        """Gather the host-resident prefix tokens onto the device.
+
+        The reconstruction gathers TOKENS out of the latent with ``index_select``,
+        which cannot mix a device index with a host source. So copy the needed
+        tokens over first and return ``(compacted_buffer, 0..P-1 indices)``.
+
+        **Not cached.** A previous version cached the gather per extend batch, keyed
+        on the prefix length, to avoid repeating it for each of the 47 layers. That
+        is wrong: ``forward_extend`` is called per layer *and* per request, so two
+        requests whose prefixes happen to be the same length reused the first one's
+        gathered KV — no error, just plausible output and RULER accuracy collapsing
+        from 100% to ~25%. Keying on the contents instead would need a ``.item()``
+        read (a device sync per layer), which costs more than the gather it saves.
+        The gather itself is cheap: measured 0.10 ms for a 4k-token prefix, ~4.9 ms
+        across all 47 layers, against a step budget of hundreds of ms.
+
+        The destination buffer *is* reused across calls, which is where the
+        allocation cost went; only the copy repeats.
+        """
+        from ..host_kv import gather_host_tokens
+
+        n = kv_indices.numel()
+        flat = key_buffer.view(key_buffer.shape[0], -1)
+        out = getattr(self, "_host_prefix_buf", None)
+        if out is None or out.shape[0] < n or out.shape[1] != flat.shape[1]:
+            out = torch.empty((max(n, 1), flat.shape[1]),
+                              dtype=flat.dtype, device=kv_indices.device)
+            self._host_prefix_buf = out
+        gathered = gather_host_tokens(flat, kv_indices, out=out[:n])
+        ar = getattr(self, "_host_prefix_ar", None)
+        if ar is None or ar.numel() < n:
+            ar = torch.arange(max(n, 1), device=kv_indices.device, dtype=kv_indices.dtype)
+            self._host_prefix_ar = ar
+        return gathered.unsqueeze(1), ar[:n]
+
     # ------------------------------------------------------------------ #
     def forward_extend(
         self,
@@ -320,12 +375,32 @@ class VortexCudaMLABackend(VortexMLABackendBase):
         **kwargs,
     ):
         fm = self._dense.forward_metadata
+        kv_indices = getattr(fm, "kv_indices", None)
+        key_buffer = None
+        if self._prefill_has_prefix:
+            _pool = token_to_kv_pool(forward_batch)
+            key_buffer = _pool.get_key_buffer(layer.layer_id)
+            if getattr(_pool, "host_kv", False):
+                # The prefix reconstruction gathers TOKENS out of the latent with
+                # index_select, which cannot mix a device index with a host source
+                # ("index is on cuda:0, different from other tensors on cpu"). Copy
+                # just those tokens to the device first and hand the reconstruction
+                # a compacted buffer, with the indices rewritten to 0..P-1.
+                #
+                # Token-granular, so this does NOT go through the block staging
+                # pool: a radix prefix is read once here, and promoting whole blocks
+                # would move more data than the tokens actually needed.
+                #
+                # Cached PER STEP, not per layer. The reconstruction runs once per
+                # layer over the SAME prefix tokens, so gathering inside the layer
+                # loop re-copies the whole prefix 47x on GLM-4.7-Flash (measured
+                # 7-21 ms and 0.1-0.4 GB of redundant PCIe traffic per prefill) and
+                # allocates two tensors each time. The gather is keyed on the
+                # indices' identity + length, which is what changes between steps.
+                key_buffer, kv_indices = self._host_prefix(key_buffer, kv_indices)
         return self._prefill.run(
             q, k, v,
-            kv_indices_prefix=getattr(fm, "kv_indices", None),
-            key_buffer=(
-                token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id)
-                if self._prefill_has_prefix else None
-            ),
+            kv_indices_prefix=kv_indices,
+            key_buffer=key_buffer,
             kv_b_proj=getattr(layer, "kv_b_proj", None),
         )

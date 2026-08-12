@@ -352,6 +352,10 @@ class vFlow(ABC):
         
         return self.token_ratio
 
+    def get_aux_token_ratio(self) -> float:
+        """Token ratio counting only HBM-resident cache fields (host-KV mode)."""
+        return self.aux_token_ratio
+
     def initialize(self,
         block_size: int,
         head_dim: int,
@@ -400,6 +404,7 @@ class vFlow(ABC):
         raw_cache_meta_info["v"] = (block_size, head_dim)
 
         total_bytes = 0
+        aux_bytes = 0
         # convert to a format that maps key -> ((r, c), dtype) for easier access during indexing and cache updates
         self.cache_meta_info = {}
         for key, (r, c) in raw_cache_meta_info.items():
@@ -407,7 +412,17 @@ class vFlow(ABC):
                 dtype = self.kv_cache_dtype
             else:
                 dtype = self.intermediate_dtype  # default dtype for auxiliary tensors; can be customized as needed
-            total_bytes += r * c * torch._utils._element_size(dtype)
+            nbytes = r * c * torch._utils._element_size(dtype)
+            total_bytes += nbytes
+            if key not in ("k", "v"):
+                aux_bytes += nbytes
             self.cache_meta_info[key] = ((r, c), dtype)
-        
-        self.token_ratio = total_bytes / (block_size * head_dim * torch._utils._element_size(self.kv_cache_dtype))
+
+        base_bytes = block_size * head_dim * torch._utils._element_size(self.kv_cache_dtype)
+        self.token_ratio = total_bytes / base_bytes
+        #: Same ratio counting only the fields that stay in HBM when KV is hosted
+        #: in pinned host memory (``vortex_host_kv_gb``): the auxiliary
+        #: centroid/envelope/Save fields, without K and V. Used to size the *device*
+        #: token budget in that mode — using ``token_ratio`` there would reserve HBM
+        #: for a KV cache that is not on the device.
+        self.aux_token_ratio = aux_bytes / base_bytes

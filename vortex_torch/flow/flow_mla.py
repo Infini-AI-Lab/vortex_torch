@@ -113,6 +113,10 @@ class vFlowMLA(ABC):
     def get_token_ratio(self) -> float:
         return self.token_ratio
 
+    def get_aux_token_ratio(self) -> float:
+        """Token ratio counting only HBM-resident cache fields (host-KV mode)."""
+        return self.aux_token_ratio
+
     def initialize(
         self,
         block_size: int,
@@ -144,8 +148,15 @@ class vFlowMLA(ABC):
         base_bytes = block_size * self.latent_dim * torch._utils._element_size(self.kv_cache_dtype)
         self.cache_meta_info = {}
         total_bytes = 0
+        aux_bytes = 0
         for key, (r, c) in raw.items():
             dtype = self.kv_cache_dtype if key == "latent" else self.intermediate_dtype
-            total_bytes += r * c * torch._utils._element_size(dtype)
+            nbytes = r * c * torch._utils._element_size(dtype)
+            total_bytes += nbytes
+            if key != "latent":
+                aux_bytes += nbytes
             self.cache_meta_info[key] = ((r, c), dtype)
         self.token_ratio = total_bytes / base_bytes
+        #: Ratio counting only the HBM-resident fields, for the host-KV mode where
+        #: the fused latent lives in pinned host memory (see flow.py).
+        self.aux_token_ratio = aux_bytes / base_bytes

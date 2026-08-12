@@ -39,6 +39,8 @@ def get_engine(
     vortex_schedule_policy: str | None = None,
     vortex_impl_backend: str = "triton",
     vortex_use_tensor_core: bool = False,
+    vortex_host_kv_gb: float = 0.0,
+    vortex_host_kv_pool_blocks: int = 0,
     kv_cache_dtype: str = "auto",
     **kwargs,
 ):
@@ -60,6 +62,8 @@ def get_engine(
         vortex_schedule_policy=policy,
         vortex_impl_backend=vortex_impl_backend,
         vortex_use_tensor_core=vortex_use_tensor_core,
+        vortex_host_kv_gb=vortex_host_kv_gb,
+        vortex_host_kv_pool_blocks=vortex_host_kv_pool_blocks,
         vortex_dtype="bfloat16",
         vortex_compilation_cache_dir="~/.vortex_compilation_cache",
         enable_vortex_sparsity=True,

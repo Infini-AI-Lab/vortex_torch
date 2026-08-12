@@ -34,6 +34,7 @@ import torch
 from vortex_torch.indexer.utils_sglang import get_decode_planner_trtllm
 
 from vortex_torch.engine.sgl.compat import token_to_kv_pool
+from ..config import cfg as _vortex_cfg
 from .base import VortexMLABackendBase
 
 
@@ -70,6 +71,31 @@ class VortexTritonMLABackend(VortexMLABackendBase):
         # cuda-graph. It also owns the dense MLA metadata (token-level kv_indices).
         from sglang.srt.layers.attention.triton_backend import TritonAttnBackend
         self._dense = TritonAttnBackend(model_runner)
+
+        # Host-resident KV is not supported on this backend. Unlike ``cuda_mla``,
+        # this one delegates PREFILL to sglang's stock ``TritonAttnBackend``
+        # (``base.forward_extend`` -> ``self._dense.forward_extend``), which reads
+        # the latent buffer directly with no staging. With the latent in pinned host
+        # memory that becomes a full per-layer prefix gather over PCIe inside the
+        # attention kernel, and GLM-4.7-Flash prefills then stall past sglang's
+        # 300 s forward watchdog — reproducibly, while the same flow passes at
+        # n=20 and passes at n=100 with KV on the GPU (98%).
+        #
+        # Refusing is deliberate rather than a stopgap: decode staging alone was
+        # verified correct here (20/20 with cuda graphs, 10/10 eager), so a
+        # half-wired path would look like it works and fail only under load. Fixing
+        # it means giving this backend the same ``MLAPrefill``-based extend override
+        # cuda_mla has; until then ``cuda_mla`` (the default) is the supported
+        # host-KV MLA backend.
+        if float(getattr(_vortex_cfg(model_runner), "host_kv_gb", 0.0) or 0.0) > 0.0:
+            raise NotImplementedError(
+                "vortex_host_kv_gb is not supported with the triton MLA backend: "
+                "its prefill is sglang's dense TritonAttnBackend, which reads the "
+                "latent directly and would stream it from host memory per layer "
+                "(observed: GLM prefill exceeding the 300 s forward watchdog). Use "
+                "the default vortex_attention_backend/attn-backend 'cuda_mla' for "
+                "host-resident KV, or set vortex_host_kv_gb=0 to keep KV on the GPU."
+            )
 
         self._compile_indexer(model_runner)
 
@@ -116,13 +142,19 @@ class VortexTritonMLABackend(VortexMLABackendBase):
 
         # 3) block-sparse MLA decode in Triton over the fused latent.
         bs = query.shape[0]
+        # No host-KV staging here: this backend refuses ``vortex_host_kv_gb`` at
+        # construction (see __init__), because its prefill is sglang's dense
+        # TritonAttnBackend and would stream the latent from host memory per layer.
+        # Decode staging was verified working, so re-enabling it is a matter of
+        # giving this backend cuda_mla's MLAPrefill-based extend override.
+        block_table = md.sparse_block_tables[:bs]
         latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
             -1, self.kv_cache_dim
         )
         o = decode_blocktable_mla(
             q=query,
             latent=latent,
-            block_table=md.sparse_block_tables[:bs],
+            block_table=block_table,
             seqlens=md.sparse_seqlens[:bs],
             sm_scale=layer.scaling,
             block_size=self.block_size,

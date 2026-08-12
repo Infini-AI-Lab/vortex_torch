@@ -46,6 +46,24 @@ class VortexConfig:
     attention_backend: str = "trtllm"
     impl_backend: str = "triton"
     use_tensor_core: bool = False
+    #: Host (pinned) KV cache size in GiB. ``0`` (default) keeps KV on the GPU.
+    #:
+    #: When set, the **KV blocks** live in pinned host memory and only the
+    #: *selected* blocks are fetched to a small GPU staging pool by a Triton
+    #: kernel; the vortex auxiliary cache (centroids / envelopes / Save state)
+    #: always stays on the GPU, since the indexer scores every block every step
+    #: and streaming that would defeat the purpose. This buys context length —
+    #: host memory is both larger and far cheaper than HBM — at the cost of PCIe
+    #: traffic on cache misses. See :mod:`vortex_torch.engine.sgl.host_kv`.
+    #:
+    #: The value sizes the *host* buffer, which is what bounds context. The GPU
+    #: staging pool is sized from the per-step selection budget instead (see
+    #: ``host_kv_pool_blocks``), because that is what determines how much must be
+    #: resident at once.
+    host_kv_gb: float = 0.0
+    #: GPU staging blocks. ``0`` = derive from the worst-case per-step demand
+    #: (recommended). Larger raises the hit rate and the HBM cost.
+    host_kv_pool_blocks: int = 0
 
     @classmethod
     def from_flat(cls, flat: Dict[str, Any]) -> "VortexConfig":

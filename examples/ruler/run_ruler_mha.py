@@ -77,6 +77,10 @@ def parse_args() -> argparse.Namespace:
                    help="sglang kv_cache_dtype (auto|fp8_e4m3|bfloat16).")
     p.add_argument("--attn-backend", default="flashinfer",
                    help="sglang attention_backend (default: flashinfer).")
+    p.add_argument("--host-kv-gb", type=float, default=0.0,
+                   help="host (pinned) KV cache size in GiB; 0 = keep KV on the GPU. "
+                        "When set, K/V live in pinned host memory and only the "
+                        "selected blocks are fetched to a GPU staging pool.")
     p.add_argument("--indexer-backend", default="flashinfer",
                    help="vortex indexer backend: flashinfer (default) or trtllm. "
                         "TopK/Union ops are trtllm-only; topK/approxTopK flows run under either.")
@@ -160,6 +164,8 @@ def main() -> None:
                 vortex_workload_chunk_size=32,
                 vortex_compilation_cache_dir=os.path.expanduser("~/.vortex_compilation_cache"),
             )
+            if args.host_kv_gb > 0:
+                engine_kwargs["vortex_host_kv_gb"] = args.host_kv_gb
         llm = sgl.Engine(**engine_kwargs)
 
     with open(args.data, encoding="utf-8") as f:

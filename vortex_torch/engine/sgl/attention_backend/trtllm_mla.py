@@ -144,7 +144,30 @@ class VortexTRTLLMMLABackend(VortexMLABackendBase):
 
         # 3) MLA decode over the selected pages, on the fused latent.
         bs = q.shape[0]  # decode batch (one token/request); slice the preallocated metadata
-        kv_cache = token_to_kv_pool(forward_batch).get_fused_latent_buffer(layer.layer_id)
+        block_tables = md.sparse_block_tables[:bs]
+        _pool = token_to_kv_pool(forward_batch)
+        if getattr(_pool, "host_kv", False):
+            # Host-resident latent: stage the selected blocks first. Reading the
+            # pinned host latent directly does not fail, it just runs slowly enough
+            # to trip sglang's 300 s forward watchdog. Full table in, sliced after,
+            # so the remap buffer keeps one address across captured batch sizes.
+            latent, full_remapped = _pool.fetch_latent(
+                layer.layer_id, md.sparse_block_tables,
+                row_lens=md.sparse_seqlens[:bs],
+                num_rows=bs, max_per_row=block_tables.shape[1],
+            )
+            # The staging pool is BLOCK-granular ([capacity, block_size, dim]) while
+            # this kernel indexes pages, so the two must coincide. base.py only
+            # asserts page_size % block_size == 0, which is weaker.
+            assert self.page_size == self.block_size, (
+                f"vortex_host_kv_gb with trtllm_mla needs page_size == "
+                f"vortex_block_size (staging is block-granular but the trtllm MLA "
+                f"kernel indexes pages); got {self.page_size} vs {self.block_size}"
+            )
+            kv_cache = latent.view(-1, self.block_size, self.kv_cache_dim)
+            block_tables = full_remapped[:bs]
+        else:
+            kv_cache = _pool.get_fused_latent_buffer(layer.layer_id)
         k_scale = layer.k_scale_float if layer.k_scale_float is not None else 1.0
         bmm1_scale = layer.scaling * k_scale
         o = trtllm_batch_decode_with_kv_cache_mla(
@@ -154,7 +177,7 @@ class VortexTRTLLMMLABackend(VortexMLABackendBase):
             qk_nope_head_dim=self.decode_qk_nope_head_dim,
             kv_lora_rank=self.kv_lora_rank,
             qk_rope_head_dim=self.qk_rope_head_dim,
-            block_tables=md.sparse_block_tables[:bs],
+            block_tables=block_tables,
             seq_lens=md.sparse_seqlens[:bs],
             max_seq_len=self.max_context_len,
             bmm1_scale=bmm1_scale,

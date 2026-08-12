@@ -87,6 +87,20 @@ def publish_pools(backend, model_runner) -> None:
     backend.token_to_kv_pool = pool
     backend.req_to_token_pool = getattr(model_runner, "req_to_token_pool", None)
 
+    # The pool may not be attached to the runner yet when a backend is built, so
+    # ``backend.token_to_kv_pool`` can be None here. ``vortex_pool()`` re-reads it
+    # from the runner on demand, for the hooks that run *outside* a forward context
+    # (metadata init / planning) and therefore cannot use
+    # ``token_to_kv_pool(forward_batch)``.
+    def vortex_pool():
+        pool = backend.token_to_kv_pool
+        if pool is None:
+            pool = getattr(model_runner, "token_to_kv_pool", None)
+            backend.token_to_kv_pool = pool
+        return pool
+
+    backend.vortex_pool = vortex_pool
+
     bound = {}
 
     def vortex_cache(layer_id: int):

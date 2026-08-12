@@ -153,7 +153,19 @@ class VortexCudaMLAProfileBackend(VortexCudaMLABackend):
         md = self.ctx.metadata
         block_tables = md.sparse_block_tables          # [bs, max_blocks] page ids
         seqlens = md.sparse_seqlens                    # [bs] selected token count
-        latent = token_to_kv_pool(forward_batch).get_key_buffer(layer.layer_id).view(
+        _pool = token_to_kv_pool(forward_batch)
+        if getattr(_pool, "host_kv", False):
+            # The profiling twin reads the whole latent to compute per-head
+            # p-coverage / recall stats, which is the one access pattern host KV
+            # cannot serve cheaply — every step would stream the entire pinned
+            # buffer over PCIe (slow enough to trip the forward watchdog). Refuse
+            # rather than produce numbers nobody should trust the timing of.
+            raise NotImplementedError(
+                "cuda_mla_profile does not support vortex_host_kv_gb: it reads the "
+                "full latent for its coverage statistics, which defeats the "
+                "selective staging host KV depends on. Profile with KV on the GPU."
+            )
+        latent = _pool.get_key_buffer(layer.layer_id).view(
             -1, self.kv_cache_dim
         )
         bsz = self.block_size
