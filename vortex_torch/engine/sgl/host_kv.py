@@ -109,6 +109,7 @@ import triton.language as tl
 from .cache_policy import (
     AGE_RESERVED,
     POLICIES,
+    POLICY_BLOCK_LRU,
     POLICY_NONE,
     WAYS,
     n_sets_for,
@@ -139,7 +140,7 @@ def _fetch_kernel(
     HK, HV, DK, DV,
     TBL, ROWLEN, INDPTR,
     SLOT_OF, OWNER_OF, PIN_GEN, CLAIM_GEN,
-    AGE, INS, INS_CTR, GEN, MISSES, FETCHES,
+    AGE, INS, INS_CTR, GEN, MISSES, FETCHES, REQUESTS,
     n_sets, row_stride, max_per_row, num_blocks,
     BLOCK_NUMEL: tl.constexpr,
     BLOCK_TOKENS: tl.constexpr,
@@ -191,7 +192,33 @@ def _fetch_kernel(
     # the cache existed to avoid. Deduping first means one pin attempt per block;
     # everyone else is resolved by the remap through ``slot_of``.
     if tl.atomic_xchg(CLAIM_GEN + p, gen) == gen:
-        return                                  # not the representative
+        # Not the representative: the block is already being handled this step, so this
+        # entry must NOT fetch or pin (that is the dedup's whole purpose -- see above).
+        #
+        # ``block_lru`` still records the reference. That is the difference from ``lru``:
+        # recency belongs to the BLOCK, and a block selected by many rows is hotter than
+        # one selected by a single row, so every reference promotes it. Reserved BOS/sink
+        # blocks are the motivating case -- every row selects them each step, and under
+        # slot-LRU they are promoted exactly once, same as a block one row touched.
+        # Promotion is a lone atomic_max on the block's own way, so it cannot race the
+        # representative's fetch: worst case the stamp lands slightly out of order, which
+        # only perturbs recency ordering, never residency or correctness.
+        if POLICY == POLICY_BLOCK_LRU:
+            s_dup = tl.load(SLOT_OF + p)
+            if s_dup >= 0:
+                if tl.load(OWNER_OF + s_dup) == p:
+                    touch_way(AGE, (s_dup // WAYS_C) * WAYS_C, s_dup % WAYS_C,
+                              INS_CTR, WAYS_C, POLICY)
+        return
+
+    # Count the DEMAND, once per distinct block per step -- deliberately after the dedup so
+    # it is the same denominator FETCHES is a numerator of: hit_rate = 1 - fetches/requests.
+    # Counting before the dedup would instead measure table entries, inflating the denominator
+    # by however many rows happen to select the same block and making the hit rate look better
+    # the more the batch shares blocks. `overflow` (the kernel's MISSES) is NOT this: it counts
+    # staging *failures* when no way in the set is free, which is a pool-sizing pathology, not
+    # a cache miss.
+    tl.atomic_add(REQUESTS, 1)
 
     # --- fast path: already resident, and its slot is ours for this step ---
     #
@@ -572,6 +599,11 @@ class HostKVCache:
         #: Cumulative count of blocks actually copied over PCIe. Compare against
         #: the number of table entries to see the hit rate the cache is buying.
         self.fetches = torch.zeros((1,), dtype=i32, device=device)
+        #: Distinct blocks the indexer asked for, counted once per block per step (after the
+        #: dedup in ``_fetch_kernel``). Pairs with ``fetches`` -- which counts the PCIe copies
+        #: an actual miss triggers -- to give the cache hit rate. Without it there is no
+        #: denominator: ``fetches`` alone cannot distinguish "few misses" from "few requests".
+        self.requests = torch.zeros((1,), dtype=i32, device=device)
         #: Dense prefix staging (prefill-with-prefix only), grown on demand. See
         #: :meth:`fetch_prefix` for why allocating here is safe.
         self._prefix_k: Optional[torch.Tensor] = None
@@ -667,7 +699,7 @@ class HostKVCache:
             table, row_lens, indptr,
             self.slot_of, self.owner_of, self.pin_gen, self.claim_gen,
             self.age, self.ins, self.ins_ctr,
-            self.gen, self.overflow, self.fetches,
+            self.gen, self.overflow, self.fetches, self.requests,
             self.n_sets, row_stride, max_per_row, self.num_blocks,
             BLOCK_NUMEL=self.block_numel, BLOCK_TOKENS=self.block_tokens,
             TILE=_COPY_TILE, IS_CSR=is_csr,
@@ -833,8 +865,36 @@ class HostKVCache:
             "generation": int(self.gen.item()),
             "overflow": int(self.overflow.item()),
             "fetches": int(self.fetches.item()),
+            "requests": int(self.requests.item()),
+            "hit_rate": self.hit_rate(),
             "resident": int((self.owner_of >= 0).sum().item()),
         }
+
+    def hit_rate(self) -> float:
+        """Fraction of requested blocks genuinely served from the GPU pool.
+
+        ``(requests - fetches - overflow) / requests``.
+
+        The ``overflow`` term is essential and was missing in the first version, which
+        computed ``1 - fetches/requests``. An overflow is a **refusal**: no way in the
+        block's set was free, so ``_fetch_kernel`` publishes slot ``-1`` and the entry reads
+        the reserved zero block. A refusal copies nothing, so it is not a fetch -- and the
+        naive formula therefore scored it as a *hit*. That inverted the metric: measured on a
+        48x31 decode trace, an undersized pool (256 blocks, 0.17x demand) reported a "hit
+        rate" of 0.95 while 81% of its requests were refusals; the corrected rate is 0.14, and
+        it now rises with capacity (0.14 -> 0.60 from 256 -> 1024 blocks) as it must.
+
+        A pool that overflows is also serving WRONG data to those entries -- zeros instead of
+        KV -- so a non-trivial ``overflow`` is a correctness alarm, not just a perf note.
+        Report it alongside the rate.
+
+        Returns 0.0 before any request, so a cold cache needs no special-casing at call sites.
+        """
+        req = int(self.requests.item())
+        if req <= 0:
+            return 0.0
+        served = req - int(self.fetches.item()) - int(self.overflow.item())
+        return max(0.0, served / req)
 
 
 

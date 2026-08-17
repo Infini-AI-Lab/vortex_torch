@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import logging
+import os
 from typing import List, Optional, Tuple, Union, Dict
 
 import numpy as np
@@ -36,6 +37,7 @@ from vortex_torch.cache import (
 from vortex_torch.cache.compiler.compile import compile as compile_cache
 from vortex_torch.flow import vFlow
 from .config import cfg as _vortex_cfg
+from .cache_policy import WAYS
 from .host_kv import HostKVCache
 logger = logging.getLogger(__name__)
 GB = 1024 * 1024 * 1024
@@ -251,6 +253,13 @@ class VortexCachePool(KVCache):
         self.cache = []
         self.host_kv_caches = []
         pool_blocks = self._host_kv_pool_blocks(model_runner)
+        # Unconditional: three "policy comparison" runs produced bit-identical
+        # requests/fetches, and without this there was no way to tell whether the
+        # host_kv_pool_blocks override was reaching the sizer or the workload simply never
+        # pressured the pool. Print the realised geometry once per engine build.
+        print(f"[vortex host-kv] pool_blocks={pool_blocks} policy={self.host_kv_policy} "
+              f"n_sets={max(1, pool_blocks // WAYS)} ways={WAYS} "
+              f"host_gb={self.host_kv_gb}", flush=True)
 
         for _ in range(self.layer_num):
             layer = {}
@@ -482,6 +491,42 @@ class VortexCachePool(KVCache):
             c.tick()
             if block_tables is not None:
                 c.reserve_remap(block_tables)
+        self._maybe_log_hit_rate()
+
+    #: Steps between host-KV hit-rate log lines. 0 disables. Read from the environment
+    #: because the pools live in sglang's *scheduler subprocess* -- an in-process
+    #: ``engine.stats()`` call from the launcher cannot reach them, so reporting has to
+    #: originate here and travel out through the log.
+    _HIT_LOG_EVERY = int(os.environ.get("VORTEX_HOST_KV_LOG_EVERY", "0") or 0)
+
+    def _maybe_log_hit_rate(self) -> None:
+        """Periodically print the aggregate cache hit rate across layers.
+
+        Aggregated over layers rather than per-layer: every layer sees the same block
+        selection for a given step, so per-layer rates are near-identical and the sum is
+        the number that matters for PCIe traffic. ``stats()`` synchronises, which is why
+        this is gated off by default and sampled every N steps rather than every step.
+        """
+        n = self._HIT_LOG_EVERY
+        if n <= 0:
+            return
+        self._hit_log_step = getattr(self, "_hit_log_step", 0) + 1
+        if self._hit_log_step % n:
+            return
+        req = fet = ovf = 0
+        for c in self.host_kv_caches:
+            s = c.stats()
+            req += s["requests"]
+            fet += s["fetches"]
+            ovf += s["overflow"]
+        if req <= 0:
+            return
+        # See HostKVCache.hit_rate: overflows are REFUSALS (zero block served), not hits.
+        # Printed explicitly because a non-zero value means those entries read zeros instead
+        # of KV -- a correctness alarm that a bare hit rate would hide.
+        rate = max(0.0, (req - fet - ovf) / req)
+        print(f"[vortex host-kv] step={self._hit_log_step} policy={self.host_kv_policy} "
+              f"requests={req} fetches={fet} overflow={ovf} hit_rate={rate:.4f}", flush=True)
 
     def _clear_buffers(self):
         del self.cache

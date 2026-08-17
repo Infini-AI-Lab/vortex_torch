@@ -80,6 +80,19 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--host-kv-policy", default="lru",
                    help="GPU-cache eviction policy over the host KV tier: "
                         "lru (default) | fifo | full.")
+    p.add_argument("--max-batch", type=int, default=0,
+                   help="Cap sglang's max_running_requests. This bounds the host-KV pool's "
+                        "per-step demand (max_batch * selected_blocks_per_row), which is what "
+                        "the staging pool must exceed to stop thrashing: with an unbounded "
+                        "batch, demand can exceed any pool and the hit rate collapses "
+                        "regardless of eviction policy. 0 = leave sglang's default.")
+    p.add_argument("--host-kv-pool-blocks", type=int, default=0,
+                   help="GPU staging-pool size in BLOCKS (0 = derive automatically). This is "
+                        "the 'GPU cache size' knob: pool_blocks * block_size * n_kv_heads * "
+                        "head_dim * 2 (K+V) * dtype_bytes bytes per layer.")
+    p.add_argument("--report-cache-stats", action="store_true",
+                   help="After the run, print per-layer host-KV cache hit rate "
+                        "(1 - fetches/requests) plus fetch/request totals.")
     p.add_argument("--host-kv-gb", type=float, default=0.0,
                    help="host (pinned) KV cache size in GiB; 0 = keep KV on the GPU. "
                         "When set, K/V live in pinned host memory and only the "
@@ -167,9 +180,13 @@ def main() -> None:
                 vortex_workload_chunk_size=32,
                 vortex_compilation_cache_dir=os.path.expanduser("~/.vortex_compilation_cache"),
             )
+            if args.max_batch > 0:
+                engine_kwargs["max_running_requests"] = args.max_batch
             if args.host_kv_gb > 0:
                 engine_kwargs["vortex_host_kv_gb"] = args.host_kv_gb
                 engine_kwargs["vortex_host_kv_policy"] = args.host_kv_policy
+                if args.host_kv_pool_blocks > 0:
+                    engine_kwargs["vortex_host_kv_pool_blocks"] = args.host_kv_pool_blocks
         llm = sgl.Engine(**engine_kwargs)
 
     with open(args.data, encoding="utf-8") as f:

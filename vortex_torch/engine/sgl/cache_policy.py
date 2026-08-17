@@ -54,6 +54,16 @@ Policies
     Set-associative LRU, the OneFlow design above. Best when the working set is
     larger than the pool but has temporal locality — the normal case, since sparse
     attention re-selects sinks and the local window nearly every step.
+``block_lru``
+    Same sets and the same ordering key as ``lru``, but recency is keyed on the
+    **block** and promoted on *every* reference rather than once per step. This is
+    OneFlow's granularity: its cache promotes a key each time it is looked up, whereas
+    our ``lru`` sees each block at most once per step because ``_fetch_kernel``'s
+    CLAIM_GEN dedup returns early for the non-representative entries. The difference is
+    the batch-sharing signal — a block selected by 40 rows and a block selected by 1 get
+    the same stamp under ``lru``, while ``block_lru`` ranks the shared one hotter.
+    Reserved BOS/sink blocks are the motivating case, since every row selects them.
+    Costs one extra ``atomic_max`` per duplicate reference and nothing on the miss path.
 ``fifo``
     Same sets, but a per-set insert counter picks the victim, so a way's residency
     does not depend on how often it is read. Cheaper than LRU (no rank shuffle on
@@ -90,7 +100,7 @@ import triton.language as tl
 WAYS: int = 32
 
 #: Policy names accepted by ``vortex_host_kv_policy``.
-POLICIES = ("lru", "fifo", "full", "none")
+POLICIES = ("lru", "block_lru", "fifo", "full", "none")
 
 #: ``age`` value marking a way as RESERVED — never a fetch target, never evicted.
 #: One way of the pool carries it: the zero-filled slot that entries the cache
@@ -117,9 +127,16 @@ POLICY_LRU = tl.constexpr(0)
 POLICY_FIFO = tl.constexpr(1)
 POLICY_FULL = tl.constexpr(2)
 POLICY_NONE = tl.constexpr(3)
+#: ``block_lru`` — OneFlow's granularity. ``lru`` above keys recency on the SLOT and is
+#: promoted at most once per step, because ``_fetch_kernel``'s CLAIM_GEN dedup returns
+#: early for every non-representative entry. ``block_lru`` instead promotes on **every
+#: reference**, so a block selected by many rows in one step outranks a block selected by
+#: one — the sharing signal the dedup otherwise discards. Reserved BOS/sink blocks are the
+#: clearest case: every row selects them, so they should be the last thing evicted.
+POLICY_BLOCK_LRU = tl.constexpr(4)
 
 #: Plain ints for the launch site (the constexprs above are for kernel code).
-_CODES = {"lru": 0, "fifo": 1, "full": 2, "none": 3}
+_CODES = {"lru": 0, "fifo": 1, "full": 2, "none": 3, "block_lru": 4}
 
 
 def policy_code(name: str) -> int:
@@ -258,7 +275,7 @@ def touch_way(AGE, set_base, way, TICK, WAYS_C: tl.constexpr, POLICY: tl.constex
     residency, which is what makes ``fifo`` immune to one scan-heavy step flushing
     the whole pool.
     """
-    if POLICY == POLICY_LRU:
+    if (POLICY == POLICY_LRU) or (POLICY == POLICY_BLOCK_LRU):
         # Promote with a single monotone stamp instead of OneFlow's rank shuffle.
         #
         # OneFlow can renumber a set's ranks (decrement everything above the hit way,
@@ -278,6 +295,7 @@ def touch_way(AGE, set_base, way, TICK, WAYS_C: tl.constexpr, POLICY: tl.constex
 
 
 __all__ = [
-    "WAYS", "POLICIES", "AGE_RESERVED", "POLICY_LRU", "POLICY_FIFO", "POLICY_FULL",
+    "WAYS", "POLICIES", "AGE_RESERVED", "POLICY_LRU", "POLICY_BLOCK_LRU",
+    "POLICY_FIFO", "POLICY_FULL",
     "policy_code", "n_sets_for", "set_of", "victim_way", "touch_way",
 ]
