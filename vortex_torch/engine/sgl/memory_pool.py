@@ -38,7 +38,7 @@ from vortex_torch.cache.compiler.compile import compile as compile_cache
 from vortex_torch.flow import vFlow
 from .config import cfg as _vortex_cfg
 from .cache_policy import WAYS
-from .host_kv import HostKVCache
+from .host_kv import HostKVCache, tick_all
 logger = logging.getLogger(__name__)
 GB = 1024 * 1024 * 1024
 
@@ -487,9 +487,12 @@ class VortexCachePool(KVCache):
         """
         if not self.host_kv:
             return
-        for c in self.host_kv_caches:
-            c.tick()
-            if block_tables is not None:
+        # One launch for all layers instead of one per layer: 64 launches x 0.0117 ms was
+        # ~0.75 ms/step of pure overhead on a 64-layer model, >10x the entire all-hit fetch
+        # path. reserve_remap stays per-cache (it is a no-op once the buffer exists).
+        tick_all(self.host_kv_caches)
+        if block_tables is not None:
+            for c in self.host_kv_caches:
                 c.reserve_remap(block_tables)
         self._maybe_log_hit_rate()
 
