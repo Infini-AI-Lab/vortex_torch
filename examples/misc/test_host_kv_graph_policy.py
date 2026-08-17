@@ -15,8 +15,9 @@ produces *plausible* output):
 
 Run: python examples/misc/test_host_kv_graph_policy.py
 """
-import sys, torch
-sys.path.insert(0, "/scratch/zhuominc/vortex_torch")
+import os, sys, torch
+# The tree this file lives in — see the note in test_host_kv_policy.py.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from vortex_torch.engine.sgl.host_kv import HostKVCache
 from vortex_torch.engine.sgl.cache_policy import POLICIES, WAYS
 

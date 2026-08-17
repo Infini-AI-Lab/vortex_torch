@@ -1025,6 +1025,18 @@ def tick_all(caches) -> None:
     the pointer array lazily inside a captured region would be a bug (the allocation becomes
     part of the graph), which is why it is built on the FIRST call -- callers already invoke
     tick outside capture, from the per-step planner.
+
+    The cached array is keyed on the caches' **identities**, not on ``len(caches)``. Keying
+    on the length alone is silently wrong when a caller passes a same-length list holding
+    DIFFERENT cache objects: the stale array then ticks the generations of the old caches
+    and leaves the new ones at 0 forever. A cache whose ``gen`` never advances sees every
+    pin as still held from a previous step, so ``victim_way`` refuses every way and the
+    pool degenerates into permanent refusals -- no exception, just wrong KV.
+
+    Today's callers rebuild ``host_kv_caches`` wholesale, so the length key happened to be
+    adequate; the identity key removes the trap rather than documenting it. Verified: with
+    the length key, swapping 3 of 4 caches while reusing ``caches[0]`` left the new caches
+    at gen 0 while the discarded ones advanced to 2.
     """
     if not caches:
         return
@@ -1033,11 +1045,20 @@ def tick_all(caches) -> None:
         caches[0].tick()
         return
     holder = caches[0]
+    key = tuple(id(c) for c in caches)
     ptrs = getattr(holder, "_tick_ptrs", None)
-    if ptrs is None or ptrs.numel() != n:
+    if ptrs is None or getattr(holder, "_tick_key", None) != key:
         ptrs = torch.tensor([c.gen.data_ptr() for c in caches],
                             dtype=torch.int64, device=caches[0].gen.device)
         holder._tick_ptrs = ptrs
+        holder._tick_key = key
+        # Hold the caches alive alongside their ids. ``id()`` is only unique among LIVE
+        # objects: if a cached cache were collected, a later allocation could reuse its id
+        # and the key would match while ``ptrs`` still pointed at freed memory -- the same
+        # bug the identity key exists to prevent, just harder to hit. The strong reference
+        # makes id reuse impossible. It pins one generation of caches (a self-reference via
+        # holder, which the cycle collector handles), and the pool holds them anyway.
+        holder._tick_refs = tuple(caches)
     block = triton.next_power_of_2(n)
     _tick_many_kernel[(1,)](ptrs, n, BLOCK=block)
 

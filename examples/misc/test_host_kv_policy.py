@@ -12,8 +12,11 @@ Three things must hold, and they are separable:
 
 Run: python examples/misc/test_host_kv_policy.py
 """
-import sys, time, torch
-sys.path.insert(0, "/scratch/zhuominc/vortex_torch")
+import os, sys, time, torch
+# Import the tree this file lives in, not a hardcoded path: the previous
+# "/scratch/zhuominc/vortex_torch" silently imported one developer's checkout, so the test
+# could pass while exercising a different tree than the one under test.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from vortex_torch.engine.sgl.host_kv import HostKVCache
 from vortex_torch.engine.sgl.cache_policy import WAYS, POLICIES
 
