@@ -270,6 +270,9 @@ def _fetch_kernel(
     s = tl.load(SLOT_OF + p)
     if POLICY == POLICY_NONE:
         s = -1
+    # ``won_slot`` carries a pin this program acquired but did not consume, so the miss path
+    # below can adopt it instead of leaking it. See the note there.
+    won_slot = -1
     if s >= 0:
         if tl.atomic_xchg(PIN_GEN + s, gen) != gen:
             if tl.load(OWNER_OF + s) == p:
@@ -280,6 +283,30 @@ def _fetch_kernel(
                 touch_way(AGE, (s // WAYS_C) * WAYS_C, s % WAYS_C,
                           INS_CTR, WAYS_C, POLICY)
                 return
+            # ZOMBIE PIN. ``slot_of[p]`` was read before the exchange, so a concurrent
+            # evictor may have re-homed ``s`` in between, leaving this program holding a
+            # pin on a slot it neither owns nor will use. Left unconsumed that pin is a
+            # leak, not merely waste: ``victim_way`` refuses any way with
+            # ``pin_gen == gen``, so it withdraws a way from its own set for the whole
+            # step, and a set stripped of ways starts refusing blocks.
+            #
+            # Adopting the slot both closes the leak and is the cheap path: the pin is
+            # already ours, so this program may legitimately evict whatever now lives
+            # there, and the code below publishes ownership and copies exactly as it
+            # would for a fresh claim. Releasing it instead (xchg back to gen-1) would be
+            # wrong -- another program could pin it between the release and the retry.
+            #
+            # HOW OFTEN: never, so far. A counter placed on this branch stayed at 0 over
+            # 270 steps x 1488 entries with the pool at 1/12 of demand (constant
+            # eviction, i.e. the most re-home-prone setting there is) across lru /
+            # block_lru / fifo. The window is real but extremely narrow -- an evictor must
+            # land between this program's load and its exchange. Kept because it is
+            # branch-free on the hit path and turns a silent capacity leak into correct
+            # work, but do NOT read it as a fix for an observed corruption: the payload
+            # mismatches that were originally blamed on it were the multi-warp tearing
+            # described at the launch site, and they persist at ~1300/30 steps with
+            # ``num_warps=4`` even with this adoption in place.
+            won_slot = s
 
     # --- miss: pick a victim inside this block's SET ---
     #
@@ -307,7 +334,9 @@ def _fetch_kernel(
     # now reads as pinned, so ``victim_way`` returns a different way and the set
     # fills one entry per attempt. Bounded by WAYS_C attempts, after which the set
     # genuinely has no free way for this step.
-    slot = -1
+    # Start from any pin already won above rather than searching for a second one. This both
+    # fixes the leak and skips the victim scan entirely in that case.
+    slot = won_slot
     tries = 0
     while (slot < 0) & (tries < WAYS_C):
         way = victim_way(AGE, set_base, gen, PIN_GEN, INS, POLICY, WAYS_C)
@@ -751,6 +780,36 @@ class HostKVCache:
             BLOCK_NUMEL=self.block_numel, BLOCK_TOKENS=self.block_tokens,
             TILE=_COPY_TILE, IS_CSR=is_csr,
             POLICY=self.policy_code, WAYS_C=WAYS, N_SHARD=_REQ_SHARDS,
+            # num_warps=1 is a CORRECTNESS requirement, not a tuning choice.
+            #
+            # Triton single-lanes a scalar atomic **per warp**, not per CTA. With the
+            # default 4 warps, all four run the claim loop independently: one warp's
+            # ``atomic_xchg(PIN_GEN + cand, gen)`` returns != gen and wins the way, the
+            # other three see == gen, treat it as lost, and go on to claim DIFFERENT
+            # ways. ``slot`` is then a different scalar in each warp, so the copy loop
+            # below tears one block's payload across several slots at warp granularity
+            # while every slot's ``owner_of`` still says it holds a whole block.
+            #
+            # Measured on one cold 8x32 fetch, 60 trials (constant-valued host blocks,
+            # so every element names the program that wrote it):
+            #     num_warps=1 -> 0/60 trials corrupt,   0 bad slots
+            #     num_warps=2 -> 3/60,   8 bad slots  (4 with two writers)
+            #     num_warps=4 -> 8/60,  18 bad slots  (9 with two writers)
+            #     num_warps=8 -> 57/60, 344 bad slots (172 with two writers)
+            # The signature is unmistakable: a block's 4096 elements split e.g. 3072 /
+            # 1024 across two adjacent ways of ONE set, divided exactly along the
+            # element ranges Triton assigns to warp 0 vs warps 1-3.
+            #
+            # One warp is also the FASTEST choice, so the fix is free. The hit path is
+            # launch-bound (flat in program count), and the copy path is bus-bound: 32
+            # threads already saturate PCIe, and extra warps only add scheduling
+            # overhead. Measured on the copy path, 1488 blocks of K+V (0.39 GB/launch):
+            #     TILE=2048: 1 warp 11.41 GB/s | 2 -> 11.23 | 4 -> 11.16 | 8 -> 11.34
+            # num_warps=1 was fastest at every TILE in {1024, 2048, 4096}.
+            #
+            # Anything that reintroduces multiple warps must also make the claimed slot
+            # warp-uniform, which Triton gives no primitive for.
+            num_warps=1,
         )
         _remap_kernel[grid](
             table, out, row_lens, indptr, self.slot_of,
@@ -879,6 +938,14 @@ class HostKVCache:
         _invalidate_locs_kernel[(n, num_kv_heads)](
             loc, self.slot_of, self.owner_of, self.age, n,
             NUM_KV_HEAD=num_kv_heads, PAGE_SIZE=page_size, BLOCK_SIZE=block_size,
+            # Scalar kernel with a scalar atomic, so one warp — same reason as the
+            # ``_fetch_kernel`` launch above. This kernel would in fact survive
+            # several warps (each warp derives the same ``blk``/``s`` and both writes
+            # are idempotent, so a warp losing the ``atomic_cas`` simply skips a store
+            # another warp already made), but the distinction is far too subtle to
+            # leave resting on a default: any future edit that made a write
+            # order-dependent would reintroduce the tearing bug silently.
+            num_warps=1,
         )
 
     def invalidate(self) -> None:

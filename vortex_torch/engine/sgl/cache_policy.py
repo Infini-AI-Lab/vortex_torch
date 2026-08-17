@@ -200,6 +200,13 @@ def victim_way(
       *inserted*; reads never change it.
     * ``full`` — never evicts. Reaching this code with a full set means the pool was
       mis-sized for the ``full`` policy, so it returns -1 and the miss is counted.
+
+    .. warning::
+       The caller must launch with ``num_warps=1``. This function and the claim loop
+       that consumes it are written as *scalar* code, but Triton single-lanes a scalar
+       atomic per **warp**, so with several warps each one claims its own way and the
+       caller's ``slot`` stops being uniform across the program. See the note at the
+       ``_fetch_kernel`` launch in :mod:`vortex_torch.engine.sgl.host_kv`.
     """
     if POLICY == POLICY_FULL:
         # Cold fill only: never evict a live block. A way is available iff it has
