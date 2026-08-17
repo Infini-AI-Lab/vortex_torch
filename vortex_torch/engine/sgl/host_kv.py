@@ -127,6 +127,11 @@ logger = logging.getLogger(__name__)
 #: pass and a 32x128 block in two.
 _COPY_TILE = 2048
 
+#: Shards for the REQUESTS counter. 32 spreads the hit path's atomic over a full warp's
+#: worth of distinct addresses, which is enough to remove the serialisation without making
+#: the host-side sum meaningful work (stats() already synchronises).
+_REQ_SHARDS = 32
+
 
 @triton.jit
 def _tick_kernel(GEN):
@@ -169,6 +174,7 @@ def _fetch_kernel(
     IS_CSR: tl.constexpr,
     POLICY: tl.constexpr,
     WAYS_C: tl.constexpr,
+    N_SHARD: tl.constexpr,
 ):
     """Resolve one block-table entry: reuse a resident block, or fetch it.
 
@@ -221,15 +227,24 @@ def _fetch_kernel(
         # one selected by a single row, so every reference promotes it. Reserved BOS/sink
         # blocks are the motivating case -- every row selects them each step, and under
         # slot-LRU they are promoted exactly once, same as a block one row touched.
-        # Promotion is a lone atomic_max on the block's own way, so it cannot race the
-        # representative's fetch: worst case the stamp lands slightly out of order, which
-        # only perturbs recency ordering, never residency or correctness.
+        # The promotion MUST be gated on the slot being pinned to this step. My first version
+        # promoted whenever ``owner_of[s] == p`` and served 6 wrong blocks in
+        # examples/misc/test_host_kv_policy.py: an unpinned slot can be concurrently claimed
+        # as a victim by another program, and bumping its age mid-eviction makes the *stale*
+        # tenant look most-recently-used. That both protects the wrong block and lets the
+        # entry resolve through ``slot_of`` to a slot whose payload is being overwritten.
+        #
+        # ``pin_gen[s] == gen`` means the representative (or an earlier reference) already
+        # pinned this slot for this step, so no evictor can take it and the promotion is
+        # safe. Reading the pin instead of claiming it is deliberate: claiming would steal
+        # the pin from the representative and turn its hit into a miss.
         if POLICY == POLICY_BLOCK_LRU:
             s_dup = tl.load(SLOT_OF + p)
             if s_dup >= 0:
-                if tl.load(OWNER_OF + s_dup) == p:
-                    touch_way(AGE, (s_dup // WAYS_C) * WAYS_C, s_dup % WAYS_C,
-                              INS_CTR, WAYS_C, POLICY)
+                if tl.load(PIN_GEN + s_dup) == gen:
+                    if tl.load(OWNER_OF + s_dup) == p:
+                        touch_way(AGE, (s_dup // WAYS_C) * WAYS_C, s_dup % WAYS_C,
+                                  INS_CTR, WAYS_C, POLICY)
         return
 
     # Count the DEMAND, once per distinct block per step -- deliberately after the dedup so
@@ -239,7 +254,13 @@ def _fetch_kernel(
     # the more the batch shares blocks. `overflow` (the kernel's MISSES) is NOT this: it counts
     # staging *failures* when no way in the set is free, which is a pool-sizing pathology, not
     # a cache miss.
-    tl.atomic_add(REQUESTS, 1)
+    # Sharded: one address per program-block rather than one global counter. This is the
+    # only global atomic on the HIT path, which every program of every step reaches, so a
+    # single address serialises the whole step's ~1500 programs. The shard index is derived
+    # from the block id (not program_id) so it stays stable under cuda-graph replay, and the
+    # host sums the shards in stats(). MISSES/FETCHES/INS_CTR are deliberately NOT sharded:
+    # they only fire on a miss, which at a 95% hit rate is 1-in-20 traffic.
+    tl.atomic_add(REQUESTS + (p % N_SHARD), 1)
 
     # --- fast path: already resident, and its slot is ours for this step ---
     #
@@ -624,7 +645,9 @@ class HostKVCache:
         #: dedup in ``_fetch_kernel``). Pairs with ``fetches`` -- which counts the PCIe copies
         #: an actual miss triggers -- to give the cache hit rate. Without it there is no
         #: denominator: ``fetches`` alone cannot distinguish "few misses" from "few requests".
-        self.requests = torch.zeros((1,), dtype=i32, device=device)
+        #: Sharded across ``_REQ_SHARDS`` addresses so the hit path's atomic_add does not
+        #: serialise a whole step on one location; ``stats()`` sums them.
+        self.requests = torch.zeros((_REQ_SHARDS,), dtype=i32, device=device)
         #: Dense prefix staging (prefill-with-prefix only), grown on demand. See
         #: :meth:`fetch_prefix` for why allocating here is safe.
         self._prefix_k: Optional[torch.Tensor] = None
@@ -727,7 +750,7 @@ class HostKVCache:
             self.n_sets, row_stride, max_per_row, self.num_blocks,
             BLOCK_NUMEL=self.block_numel, BLOCK_TOKENS=self.block_tokens,
             TILE=_COPY_TILE, IS_CSR=is_csr,
-            POLICY=self.policy_code, WAYS_C=WAYS,
+            POLICY=self.policy_code, WAYS_C=WAYS, N_SHARD=_REQ_SHARDS,
         )
         _remap_kernel[grid](
             table, out, row_lens, indptr, self.slot_of,
@@ -889,7 +912,7 @@ class HostKVCache:
             "generation": int(self.gen.item()),
             "overflow": int(self.overflow.item()),
             "fetches": int(self.fetches.item()),
-            "requests": int(self.requests.item()),
+            "requests": int(self.requests.sum().item()),
             "hit_rate": self.hit_rate(),
             "resident": int((self.owner_of >= 0).sum().item()),
         }
@@ -914,7 +937,7 @@ class HostKVCache:
 
         Returns 0.0 before any request, so a cold cache needs no special-casing at call sites.
         """
-        req = int(self.requests.item())
+        req = int(self.requests.sum().item())
         if req <= 0:
             return 0.0
         served = req - int(self.fetches.item()) - int(self.overflow.item())
