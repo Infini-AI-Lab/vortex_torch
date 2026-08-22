@@ -138,6 +138,88 @@ def _padded_inner_mask_expr(local_tensor_id: int, t) -> str:
     return " & ".join(parts) if parts else ""
 
 
+#: Name of the kernel argument holding the request domain's ``block_id -> slot`` map. It is ONE
+#: argument for the whole subgraph, not one per tensor, because the map is a property of the
+#: DOMAIN: every SLOTTED field of a request cache is addressed by the same key, so per-tensor maps
+#: would be N copies that can silently disagree.
+SLOT_MAP_ARG = "slot_of_ptr"
+
+
+def has_slotted(sub_graph) -> bool:
+    """Does this subgraph touch the request domain (and so need the slot map threaded in)?"""
+    for local_tensor_id in list(sub_graph.input_tensor_ids) + list(sub_graph.output_tensor_ids):
+        if sub_graph.tensor_list[local_tensor_id]._format == FORMAT.SLOTTED:
+            return True
+    return False
+
+
+def _offset_lines(local_tensor_id: int, t, what: str) -> List[str]:
+    """Emit the per-format leading-axis offset for one tensor. Shared by load and store.
+
+    Shared deliberately: an earlier version had the two sites compute the offset independently,
+    which is exactly how a domain ends up loading from one row and storing to another.
+    """
+    lines: List[str] = []
+    if t._format == FORMAT.PAGED:
+        # Block-major addressing: read block_id (page_id * NUM_BLOCKS_PER_PAGE + block-in-page).
+        lines.append(
+            f"tensor_{local_tensor_id}_off = block_id * {t.shape[1] * t.shape[2]}"
+        )
+    elif t._format == FORMAT.RAGGED:
+        # Token-major addressing: read token-tile (token_id, head_id).
+        lines.append(
+            f"tensor_{local_tensor_id}_off = (token_id * NUM_KV_HEAD + head_id) "
+            f"* {t.shape[1] * t.shape[2]}"
+        )
+    elif t._format == FORMAT.SLOTTED:
+        # REQUEST domain: one indirection through the domain's key->slot map. ``block_id`` is the
+        # key (globally unique from sglang's page pool -- see int4_arena on why request slots
+        # cannot be used). Residency was already tested at the top of the kernel, so ``slot >= 0``
+        # here; ``max(slot, 0)`` is kept as a second line of defence, not as the guard.
+        lines.append(
+            f"tensor_{local_tensor_id}_off = tl.maximum({SLOT_VAR}, 0) "
+            f"* {t.shape[1] * t.shape[2]}"
+        )
+    else:
+        raise NotImplementedError(
+            f"cache.kernel_gen: {what} for format {t._format} not implemented yet"
+        )
+    return lines
+
+
+def _access_mask_expr(local_tensor_id: int, t) -> str:
+    """Access mask for one tensor: inner-dim padding only.
+
+    Residency is NOT masked per tensor, it is an early ``return`` at the top of the kernel -- see
+    :func:`_slot_prologue_lines`. Masking it here was the first implementation and is wrong: a
+    SLOTTED miss would zero the request-domain read while the *page-domain* store still ran, so a
+    non-resident block got the reduction of zeros written over its real envelope. A miss must mean
+    "this program has nothing to do", which is a property of the program, not of one operand.
+    """
+    return _padded_inner_mask_expr(local_tensor_id, t)
+
+
+#: The single slot variable, shared by every SLOTTED tensor in the subgraph. One variable rather
+#: than one per tensor because the map is per-DOMAIN: all SLOTTED fields of a request cache are
+#: addressed by the same key, so per-tensor lookups would be N identical loads that can only differ
+#: if something is wrong.
+SLOT_VAR = "request_slot"
+
+
+def _slot_prologue_lines() -> List[str]:
+    """Resolve ``block_id -> slot`` once, and drop the program entirely on a miss.
+
+    A miss means the block is not in the request domain -- for INT4 staging, a block that has
+    already been quantized and released. Returning is both the correct semantics (see
+    :func:`_access_mask_expr`) and the cheap one: no loads, no stores, no reduction.
+    """
+    return [
+        f"{SLOT_VAR} = tl.load({SLOT_MAP_ARG} + block_id)",
+        f"if {SLOT_VAR} < 0:",
+        f"{INDENT}return",
+    ]
+
+
 def generate_initialization_str(sub_graph: Graph, ctx: Context) -> str:
     """Per-tensor index pointer setup (used by load/store snippets).
 
@@ -167,22 +249,7 @@ def _block_load_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
     of either inner axis read as zero. Memory strides stay anchored to
     the real ``shape``.
     """
-    lines: List[str] = []
-    if t._format == FORMAT.PAGED:
-        # Block-major addressing: read block_id (page_id * NUM_BLOCKS_PER_PAGE + block-in-page).
-        lines.append(
-            f"tensor_{local_tensor_id}_off = block_id * {t.shape[1] * t.shape[2]}"
-        )
-    elif t._format == FORMAT.RAGGED:
-        # Token-major addressing: read token-tile (token_id, head_id).
-        lines.append(
-            f"tensor_{local_tensor_id}_off = (token_id * NUM_KV_HEAD + head_id) "
-            f"* {t.shape[1] * t.shape[2]}"
-        )
-    else:
-        raise NotImplementedError(
-            f"cache.kernel_gen: load for format {t._format} not implemented yet"
-        )
+    lines = _offset_lines(local_tensor_id, t, "load")
 
     lines.append(
         f"tensor_{local_tensor_id}_ptr_2d = "
@@ -190,7 +257,7 @@ def _block_load_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
         f"+ tensor_{local_tensor_id}_dim1_ptr[:, None] * {t.shape[2]} "
         f"+ tensor_{local_tensor_id}_dim2_ptr[None, :]"
     )
-    mask_expr = _padded_inner_mask_expr(local_tensor_id, t)
+    mask_expr = _access_mask_expr(local_tensor_id, t)
     if mask_expr:
         load_expr = _load_cast_expr_masked(
             f"tensor_{local_tensor_id}_ptr_2d", mask_expr, t,
@@ -215,20 +282,7 @@ def _block_store_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
     inner dims pick up an explicit mask so the synthetic lanes don't
     bleed into the next slot.
     """
-    lines: List[str] = []
-    if t._format == FORMAT.PAGED:
-        lines.append(
-            f"tensor_{local_tensor_id}_off = block_id * {t.shape[1] * t.shape[2]}"
-        )
-    elif t._format == FORMAT.RAGGED:
-        lines.append(
-            f"tensor_{local_tensor_id}_off = (token_id * NUM_KV_HEAD + head_id) "
-            f"* {t.shape[1] * t.shape[2]}"
-        )
-    else:
-        raise NotImplementedError(
-            f"cache.kernel_gen: store for format {t._format} not implemented yet"
-        )
+    lines = _offset_lines(local_tensor_id, t, "store")
 
     lines.append(
         f"tensor_{local_tensor_id}_ptr_2d = "
@@ -237,7 +291,7 @@ def _block_store_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
         f"+ tensor_{local_tensor_id}_dim2_ptr[None, :]"
     )
     store_expr = _store_cast_expr(f"tensor_{local_tensor_id}_block", t)
-    mask_expr = _padded_inner_mask_expr(local_tensor_id, t)
+    mask_expr = _access_mask_expr(local_tensor_id, t)
     if mask_expr:
         lines.append(
             f"tl.store(tensor_{local_tensor_id}_ptr_2d, {store_expr}, "
@@ -281,6 +335,11 @@ def generate_triton_kernel(sub_graph: Graph, sub_graph_id: int, ctx: Context) ->
     for local_tensor_id in sub_graph.output_tensor_ids:
         kernel_arg_list.append(f"tensor_{local_tensor_id}_ptr,")
 
+    # The request domain's key->slot map: ONE argument for the subgraph, appended only when some
+    # tensor is SLOTTED so that no existing single-domain flow changes signature.
+    if has_slotted(sub_graph):
+        kernel_arg_list.append(f"{SLOT_MAP_ARG},")
+
     kernel_arg_list.extend([
         "NUM_KV_HEAD: tl.constexpr,",
         "PAGE_SIZE: tl.constexpr,",
@@ -290,6 +349,9 @@ def generate_triton_kernel(sub_graph: Graph, sub_graph_id: int, ctx: Context) ->
 
     kernel_args = "\n".join(f"{INDENT}{arg}" for arg in kernel_arg_list)
 
+    slot_prologue_str = (
+        indent_block("\n".join(_slot_prologue_lines()), 1) if has_slotted(sub_graph) else ""
+    )
     initialization_str = indent_block(generate_initialization_str(sub_graph, ctx), 1)
     load_tensor_str = indent_block(generate_load_tensor_str(sub_graph, ctx), 1)
     store_tensor_str = indent_block(generate_store_tensor_str(sub_graph, ctx), 1)
@@ -314,6 +376,8 @@ def {ctx.sparse_attention_name}_subgraph_{sub_graph_id}_kernel(
 
     page_id = (token_position // PAGE_SIZE) * NUM_KV_HEAD + head_id
     block_id = page_id * NUM_BLOCKS_PER_PAGE + (token_position % PAGE_SIZE) // BLOCK_SIZE
+
+{slot_prologue_str}
 
 {initialization_str}
 
@@ -365,6 +429,14 @@ def generate_triton_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> s
 
         arg_list.append("loc")
         arg_list.append("ctx")
+        if has_slotted(sub_graph):
+            # In the KERNEL the map sits right after the tensors, matching the signature above. In
+            # the WRAPPER it has to come after ``loc``/``ctx``, because a defaulted parameter
+            # cannot precede positional ones. Defaulted (rather than required) so the emitted
+            # module stays importable and callable by shape-agnostic tooling; the assert below is
+            # what turns a forgotten map into an error instead of silently addressing row 0.
+            arg_list.append(f"{SLOT_MAP_ARG}=None")
+            kernel_input_list.append(SLOT_MAP_ARG)
 
         kernel_input_list.extend([
             "NUM_KV_HEAD=ctx.head_num",
@@ -374,6 +446,13 @@ def generate_triton_impl(sub_graph: Graph, sub_graph_id: int, ctx: Context) -> s
             "num_warps=4",
             "num_stages=1",
         ])
+
+        if has_slotted(sub_graph):
+            fp8_rebind_lines.append(
+                f"assert {SLOT_MAP_ARG} is not None, ("
+                f"'this flow declares a request-domain (SLOTTED) field, so forward() must be "
+                f"passed the domain\\'s block_id->slot map')"
+            )
 
         args_def = ",\n".join(f"{INDENT}{arg}" for arg in arg_list)
         kernel_inputs = ",\n".join(f"{INDENT * 2}{arg}" for arg in kernel_input_list)

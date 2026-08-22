@@ -103,8 +103,8 @@ class MaskSlice(vOp):
         assert output.dim() == 3, (
             f"{prefix}output must be 3D, got {tuple(output.shape)}"
         )
-        assert output._format in (FORMAT.PAGED, FORMAT.RAGGED), (
-            f"{prefix}output._format must be PAGED or RAGGED, got {output._format}"
+        assert output._format in (FORMAT.PAGED, FORMAT.RAGGED, FORMAT.SLOTTED), (
+            f"{prefix}output._format must be PAGED, RAGGED or SLOTTED, got {output._format}"
         )
         self.output_format = output._format
         # Shape-preserving op; check only the inner dims since the leading

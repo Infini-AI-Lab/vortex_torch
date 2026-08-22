@@ -124,8 +124,8 @@ class Reshape(vOp):
             f"{prefix}output inner shape must be ({self.x2}, {self.y2}), "
             f"got {tuple(output.shape)}"
         )
-        assert output._format in (FORMAT.PAGED, FORMAT.RAGGED), (
-            f"{prefix}output._format must be PAGED or RAGGED, got {output._format}"
+        assert output._format in (FORMAT.PAGED, FORMAT.RAGGED, FORMAT.SLOTTED), (
+            f"{prefix}output._format must be PAGED, RAGGED or SLOTTED, got {output._format}"
         )
         self.output_format = output._format
 

@@ -55,12 +55,35 @@ class FORMAT(Enum):
             that receives a PARAMETER operand (e.g. ``GeMM``) runs as a
             standalone ``Schedule.S`` ``torch.matmul`` instead of the fused
             per-workload kernel (so a large weight never enters the tiled kernel).
+        SLOTTED: Like PAGED in shape — ``[n_slots, r, c]`` — but addressed
+            through a device-side ``block_id -> slot`` map instead of by
+            ``block_id`` directly, and sized by **concurrency** rather than by
+            context length. This is the REQUEST-bound cache domain: state that
+            belongs to a request in flight rather than to a stored page (the
+            motivating case is INT4's bf16 staging area for blocks whose scale
+            is not yet computable).
+
+            It is a *format*, not a separate set of kernels, and that is the
+            whole point: a SLOTTED tensor is an ordinary compiler operand, so a
+            flow can read both domains in **one fused kernel** with no extra
+            launch. The generated addressing differs by exactly one indirection::
+
+                PAGED    ->  off = block_id * (r * c)
+                SLOTTED  ->  slot = load(slot_of_ptr + block_id)
+                             off  = max(slot, 0) * (r * c)
+
+            The ``max(slot, 0)`` keeps a miss (``slot == -1``) in bounds; the
+            load/store is separately masked so a miss reads zeros and writes
+            nothing. Only ``shape[0]`` differs between the two domains, so every
+            inner-axis codegen path (padding, masks, dtype casts) is shared
+            verbatim.
     """
 
     BATCHED = 0
     RAGGED = 1
     PAGED = 2
     PARAMETER = 3
+    SLOTTED = 4
 
 
 def _next_pow2(n: int) -> int:
