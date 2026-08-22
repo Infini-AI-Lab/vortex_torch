@@ -166,8 +166,8 @@ def quantize_into(dst_k, dst_v, dst_ks, dst_vs, src_k, src_v) -> None:
 @triton.jit
 def _gather_unpack_kernel(
     PK, PV, SCALE_K, SCALE_V, TABLE, OUT_TBL,
-    STAGE_K_PTR, STAGE_V_PTR, SLOT_OF_BLOCK, OK, OV,
-    n_entries, n_blocks,
+    STAGE_K_PTR, STAGE_V_PTR, SLOT_OF_BLOCK, OK, OV, INDPTR,
+    n_entries, n_blocks, n_rows,
     HEAD_DIM: tl.constexpr, HALF_DIM: tl.constexpr,
     BLOCK_T: tl.constexpr, N_TOK: tl.constexpr,
 ):
@@ -192,6 +192,15 @@ def _gather_unpack_kernel(
     i = tl.program_id(0)
     if i >= n_entries:
         return
+    # Device-side live bound. The block table is CSR, so its live entries are contiguous and their
+    # count is ``indptr[n_rows]`` -- but reading that on the host is a device->host sync, which
+    # cudagraph capture forbids. So the GRID is a static upper bound (the per-step selection budget)
+    # and the true length is applied here. Passing the static bound as the count instead means
+    # unpacking the padded table, which for a full row width is 2.6M entries / 20 GiB of scratch.
+    if INDPTR is not None:
+        if i >= tl.load(INDPTR + n_rows):
+            tl.store(OUT_TBL + i, i)
+            return
     blk = tl.load(TABLE + i)
     tl.store(OUT_TBL + i, i)
     if (blk < 0) | (blk >= n_blocks):
@@ -243,12 +252,18 @@ def _gather_unpack_kernel(
 
 
 def gather_unpack(packed_k, packed_v, scale_k, scale_v, table, out_table,
-                  stage_k, stage_v, slot_of_block, out_k, out_v) -> None:
+                  stage_k, stage_v, slot_of_block, out_k, out_v,
+                  indptr=None, n_rows: int = 0) -> None:
     """Selective INT4 read for GPU-only KV: unpack just the selected blocks, compacted.
 
     ``table`` is the indexer's block table; ``out_table`` receives the identity mapping so the
     attention wrapper reads scratch row i for entry i. Grid is the number of table entries, so cost
     tracks the SELECTION, not the pool.
+
+    ``indptr``/``n_rows`` (optional) give the CSR row offsets. When passed, the kernel reads
+    ``indptr[n_rows]`` on the DEVICE and skips entries beyond it -- so the caller may pass a static
+    upper bound as ``out_k``'s length without a host sync, which is what makes this usable inside a
+    captured step.
     """
     n = table.numel()
     if n == 0:
@@ -257,8 +272,8 @@ def gather_unpack(packed_k, packed_v, scale_k, scale_v, table, out_table,
     head_dim = out_k.shape[2]
     _gather_unpack_kernel[(n,)](
         packed_k, packed_v, scale_k, scale_v, table, out_table,
-        stage_k, stage_v, slot_of_block, out_k, out_v,
-        n, packed_k.shape[0],
+        stage_k, stage_v, slot_of_block, out_k, out_v, indptr,
+        n, packed_k.shape[0], int(n_rows),
         HEAD_DIM=head_dim, HALF_DIM=head_dim // 2,
         BLOCK_T=triton.next_power_of_2(block_tokens), N_TOK=block_tokens,
         num_warps=4,

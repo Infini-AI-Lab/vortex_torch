@@ -65,6 +65,12 @@ class PrefillMetadata:
 # Reuse this workspace buffer across all flashinfer wrappers
 global_workspace_buffer = None
 
+#: Share of currently-free HBM the INT4 dequant scratch may take. Deliberately small: it is claimed
+#: during cuda-graph setup, when the graph pools and attention workspaces are still to be allocated,
+#: and a scratch that took the remainder would OOM the engine at a much more confusing point --
+#: which is exactly what an unclamped whole-pool scratch did.
+_INT4_SCRATCH_FRACTION = 0.10
+
 
 class VortexFlashInferBackend(VortexBackendBase):
     """Flashinfer attention kernels."""
@@ -139,6 +145,9 @@ class VortexFlashInferBackend(VortexBackendBase):
         self.page_size = model_runner.server_args.page_size
         self.block_size = model_runner.server_args.vortex_block_size
         self.layers_skip = model_runner.server_args.vortex_layers_skip
+        # Kept for the INT4 scratch sizing, which needs the selection-budget knobs. Held rather than
+        # re-fetched because the pool accessor is unavailable during metadata init.
+        self.server_args_for_int4 = model_runner.server_args
         self.num_blocks_per_page = self.page_size // self.block_size
         assert self.page_size % self.block_size == 0, "Page size must be a multiple of block size."
         # ===========================
@@ -249,16 +258,56 @@ class VortexFlashInferBackend(VortexBackendBase):
 
     
     def _int4_scratch_entries(self) -> int:
-        """Widest block table the INT4 dequant scratch must cover.
+        """Block-table entries the INT4 dequant scratch must cover.
 
-        Sized from the cuda-graph CAPTURE CEILING, not from ``req_to_token_pool.size``. That
-        derivation was tried and gave **0% accuracy** -- sglang sets the req pool from the token
-        budget, so it reaches the thousands and the scratch becomes unaffordable, and undersizing it
-        the other way is silent. The ceiling is what capture actually allocates for, and the scratch
-        must be at least that or a replayed step reads past the end.
+        Sized from the per-step SELECTION BUDGET, not from the block-table row width. A row is
+        ``max_num_blocks_per_request`` wide -- the whole context in blocks -- but only the first
+        ``sparse_seqlens[row]`` entries are live, and that count is ``topk_val + bos + eos``, a few
+        dozen. Sizing on the row width instead asked for **20 GiB and OOM'd the engine** (256 rows x 8
+        heads x 1280 blocks x 8 KiB x 2 for K and V), which is how this was found rather than
+        reasoned. The same distinction is what makes the host-KV staging pool affordable.
+
+        Rows come from the cuda-graph CAPTURE CEILING rather than ``req_to_token_pool.size``: the
+        latter is derived from the token budget and reaches the thousands, and it is the derivation
+        that gave 0% accuracy when used to size the staging arena.
+
+        ``topk_ratio > 0`` makes the budget grow with context, so it is accounted for and then
+        clamped to the row width, beyond which a row cannot ask for more.
         """
+        sa = self.server_args_for_int4
+        # Rows the scratch must cover. Uses the CUDAGRAPH batch size when sglang gives one, because
+        # that is the widest batch a captured step can present -- the arena's own 256-row ceiling is
+        # about slots for in-flight blocks and is far larger than any real decode batch here, so
+        # reusing it inflated the request to 2.6M entries and tripped the guard below. Falls back to
+        # the arena ceiling only when the graph size is unset.
         from ..int4_arena import CAPTURE_CEILING
-        return CAPTURE_CEILING * self.num_kv_heads * self.ctx.max_num_blocks_per_request
+        graph_bs = getattr(sa, "cuda_graph_max_bs_decode", None)
+        rows = int(graph_bs) if graph_bs else CAPTURE_CEILING
+        static = (int(sa.vortex_topk_val)
+                  + int(sa.vortex_block_reserved_bos)
+                  + int(sa.vortex_block_reserved_eos))
+        max_topk = getattr(sa, "vortex_max_topk_val", None)
+        if max_topk:
+            static = max(static, int(max_topk) + int(sa.vortex_block_reserved_bos)
+                         + int(sa.vortex_block_reserved_eos))
+        width = self.ctx.max_num_blocks_per_request
+        ratio = float(getattr(sa, "vortex_topk_ratio", 0.0) or 0.0)
+        per_row = min(max(static, int(width * ratio)), width)
+        sparse = rows * self.num_kv_heads * per_row
+
+        # Two paths read the whole context rather than a selection, and neither can be chunked (the
+        # attention call needs every block resident at once): a DENSE layer in ``layers_skip``, and a
+        # prefill prefix HIT. Both are bounded by the POOL's block count -- a table cannot name more
+        # distinct blocks than exist -- which is the honest ceiling and is cheap: ~12288 blocks is
+        # ~0.2 GB, against the 20 GiB that rows x width asked for. Applied unconditionally, because
+        # the prefill path exists whether or not any layer is skipped, and undersizing it was an
+        # illegal memory access inside BatchPrefillWithPagedKVCache rather than a clean error.
+        # Only the SPARSE path is sized here. The two full-context readers -- a dense layer in
+        # ``layers_skip`` and a prefill prefix hit -- use ``int4_unpack_pool`` instead, whose buffer
+        # is one row per BLOCK rather than per table entry. That distinction is the whole reason the
+        # numbers work: bounding a compacting scratch by the table asked for 2.6M entries / 20 GiB,
+        # while the pool-shaped buffer is 12288 rows / 0.19 GB for the same read.
+        return sparse
 
     def init_forward_metadata(self, forward_batch: ForwardBatch):
         
@@ -625,20 +674,12 @@ class VortexFlashInferBackend(VortexBackendBase):
                     layer.layer_id, self.kv_indices_prefill
                 )
             elif getattr(_pool, "kv_int4", False):
-                # A prefix HIT reads every cached block of the prefix, not a sparse selection, so
-                # this unpacks the whole prefix. It runs once per prefill rather than per decode
-                # step, and the prefill path is not cuda-graph captured, so the extra pass is off
-                # the per-token path entirely.
-                n_entries = int(self.kv_indptr_prefill[
-                    self.ctx.metadata.batch_size * self.num_kv_heads].item())
-                k_cache, v_cache, remapped = _pool.int4_unpack_selection(
-                    layer.layer_id, self.kv_indices_prefill, n_entries,
-                )
-                # The wrapper was planned against ``kv_indices_prefill``, so the identity table has
-                # to land in that same buffer. Save and restore it: it is shared across layers, and
-                # overwriting it permanently would make layer 1 read layer 0's remapped ids.
-                saved_prefix = self.kv_indices_prefill[:n_entries].clone()
-                self.kv_indices_prefill[:n_entries].copy_(remapped)
+                # A prefix HIT reads every cached block of the prefix, not a sparse selection, so the
+                # pool-shaped unpack applies here too and the planned ``kv_indices_prefill`` stays
+                # valid untouched -- block ids already index the scratch. Runs once per prefill
+                # rather than per decode step, and prefill is not cuda-graph captured, so the extra
+                # pass is off the per-token path entirely.
+                k_cache, v_cache = _pool.int4_unpack_pool(layer.layer_id)
             else:
                 k_cache, v_cache = _pool.get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
@@ -701,8 +742,16 @@ class VortexFlashInferBackend(VortexBackendBase):
         # Read Cache from memory pool
         cache = self.vortex_cache(layer.layer_id)
         
-        cache_k = cache["k"].view(-1, self.block_size, 1, self.head_dim)
-        cache_v = cache["v"].view(-1, self.block_size, 1, self.head_dim)
+        # Under INT4 the pool's K/V are packed uint8 at head_dim//2, so this view does not divide
+        # (`shape '[-1, 32, 1, 128]' is invalid for input of size 736741376`). Both INT4 branches
+        # below rebind cache_k/cache_v from the dequant scratch before use, so there is nothing to
+        # view here; binding them to the packed tensors anyway would hand a wrongly-strided pointer
+        # to any path that forgot to rebind, which is worse than the None.
+        if getattr(token_to_kv_pool(forward_batch), "kv_int4", False):
+            cache_k = cache_v = None
+        else:
+            cache_k = cache["k"].view(-1, self.block_size, 1, self.head_dim)
+            cache_v = cache["v"].view(-1, self.block_size, 1, self.head_dim)
 
         # Use the *_float scalars (not layer.k_scale / layer.v_scale, which are
         # GPU tensors): the flashinfer decode wrapper expects python-float
@@ -765,9 +814,15 @@ class VortexFlashInferBackend(VortexBackendBase):
                 # sm_80 a uint8 cache falls into the generic decode template and fails to compile.
                 # So on pre-Blackwell the win is capacity, not decode speed.
                 bs = self.ctx.metadata.batch_size * self.num_kv_heads
-                n_entries = bs * self.ctx.max_num_blocks_per_request
+                # ``n_entries`` is the STATIC bound the scratch was reserved for; the kernel applies
+                # the true live length from the CSR indptr on the DEVICE. Reading the live length here
+                # would be a host sync, which capture forbids -- and passing the padded row width as
+                # the count is what asked for 2.6M entries.
+                n_entries = min(self._int4_scratch_entries(),
+                                pool._int4_scratch_k.shape[0])
                 cache_k, cache_v, remapped = pool.int4_unpack_selection(
                     layer.layer_id, wrapper._paged_kv_indices_buf, n_entries,
+                    indptr=self.ctx.metadata.sparse_kv_indptr, n_rows=bs,
                 )
                 cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
                 cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
@@ -794,22 +849,17 @@ class VortexFlashInferBackend(VortexBackendBase):
             saved_dense = None
             pool = token_to_kv_pool(forward_batch)
             if getattr(pool, "kv_int4", False):
-                # No selection to exploit here: a skipped layer reads the whole context, so the
-                # unpack is over every cached block. That is the cost measured at 2.6 ms/layer for a
-                # 12288-block pool, and unlike the sparse path there is no cheaper option -- the
-                # layer genuinely needs all of it. Acceptable because ``layers_skip`` is normally a
-                # handful of layers; making EVERY layer dense (which is how INT4's payload accuracy
-                # was isolated: 4K 100%, 16K 97%, 32K 99%) is a measurement configuration, not a
-                # serving one.
-                bs = self.ctx.metadata.batch_size * self.num_kv_heads
-                n_entries = bs * self.ctx.max_num_blocks_per_request
-                cache_k, cache_v, remapped = pool.int4_unpack_selection(
-                    layer.layer_id, dense_wrapper._paged_kv_indices_buf, n_entries,
-                )
+                # A skipped layer reads the WHOLE context, so there is no selection to compact and
+                # the POOL-shaped unpack is the right one: block b lands in row b, the table needs no
+                # rewrite, and the buffer is sized by blocks (0.19 GB at 12288) instead of by table
+                # entries (2.6M, i.e. 20 GiB -- which the selection path's guard refuses).
+                # Cost is proportional to the pool, measured 2.6 ms/layer, and there is nothing
+                # cheaper for a read that genuinely needs every block. Fine because ``layers_skip``
+                # is normally a handful of layers; making EVERY layer dense (how INT4's payload
+                # accuracy was isolated -- 4K 100%, 16K 97%, 32K 99%) is a measurement config.
+                cache_k, cache_v = pool.int4_unpack_pool(layer.layer_id)
                 cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
                 cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
-                saved_dense = dense_wrapper._paged_kv_indices_buf
-                dense_wrapper._paged_kv_indices_buf = remapped
             try:
                 o = dense_wrapper.forward(
                     q.contiguous().view(-1, self.group_size, layer.head_dim),

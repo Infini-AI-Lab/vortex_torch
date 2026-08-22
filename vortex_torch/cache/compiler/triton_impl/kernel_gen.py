@@ -33,6 +33,7 @@ from typing import List
 import torch
 from ...context import Context
 from ....abs import FORMAT
+from ....abs.tensor import _next_pow2
 from ....utils import Schedule, INDENT, indent_block
 from .register import get_impl_func
 
@@ -153,6 +154,34 @@ def has_slotted(sub_graph) -> bool:
     return False
 
 
+def scale_local_id(sub_graph, global_scale_id: int) -> int:
+    """Local id of an INT4 scale tensor within ``sub_graph``.
+
+    Kernel arguments are named by LOCAL id while ``Int4Packed.scale_tensor_id`` is global, and the
+    two coincide often enough in small graphs to hide the mistake. Raising here rather than emitting
+    the global number is the point: the failure mode otherwise is reading a different tensor as the
+    scale, which produces finite, plausible, wrong numbers.
+    """
+    for local_id, t in enumerate(sub_graph.tensor_list):
+        if t.tensor_id == global_scale_id:
+            return local_id
+    raise RuntimeError(
+        f"cache.kernel_gen: INT4 scale tensor {global_scale_id} is not in this subgraph. It must be "
+        f"pulled into the subgraph's INPUT list (which is what names kernel args) -- adding it only "
+        f"to the tensor list gives NameError('tensor_N_ptr is not defined')."
+    )
+
+
+def int4_scale_ids(sub_graph) -> List[int]:
+    """Global ids of every INT4 scale this subgraph's inputs need, in load order."""
+    out: List[int] = []
+    for local_tensor_id in sub_graph.input_tensor_ids:
+        t = sub_graph.tensor_list[local_tensor_id]
+        if t.int4 is not None and t.int4.scale_tensor_id not in out:
+            out.append(t.int4.scale_tensor_id)
+    return out
+
+
 def _offset_lines(local_tensor_id: int, t, what: str) -> List[str]:
     """Emit the per-format leading-axis offset for one tensor. Shared by load and store.
 
@@ -239,7 +268,90 @@ def generate_initialization_str(sub_graph: Graph, ctx: Context) -> str:
     return "\n".join(lines) if lines else "# No initialization required"
 
 
-def _block_load_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
+def _int4_load_lines(local_tensor_id: int, t, sub_graph) -> List[str]:
+    """Load a packed-INT4 tensor as the fp32 block an unpacked one would have produced.
+
+    The tensor's SHAPE is logical (``head_dim``) while its storage holds ``head_dim // 2`` bytes, so
+    the unpack happens here and every downstream op is unchanged -- see :class:`Int4Packed` for the
+    two alternatives that were tried and rejected (teaching each op about half-width shapes, and
+    keeping a bf16 mirror that measured a 1.28x regression).
+
+    Channel ``d`` is in byte ``d // 2``: low nibble for even ``d``, high for odd. The two halves are
+    recombined with ``tl.join`` + ``reshape``, which yields natural channel order ``2d, 2d+1``.
+    Getting that order wrong is not a subtle bug -- a split-half permutation scores **0%**, because
+    ``q`` never passes through this cache and so stays in natural order.
+    """
+    half = t.shape[2] // 2
+    n_tok = t.shape[1]
+    q = t.int4
+    # LOCAL id. ``Int4Packed.scale_tensor_id`` is global, and kernel arguments are named by local id
+    # -- using the global number produced a plausible-looking wrong argument, i.e. it read some other
+    # tensor as the scale. ``scale_local_id`` raises if the scale is missing from the subgraph, which
+    # is the only way this can go wrong now.
+    scale_id = scale_local_id(sub_graph, q.scale_tensor_id)
+    lines = _offset_lines(local_tensor_id, t, "load")
+    # Physical offsets: the leading-axis offset from _offset_lines assumed the LOGICAL width, so
+    # rescale it to the packed one. Doing it here rather than in _offset_lines keeps that helper
+    # shared with the store path and with every non-INT4 tensor.
+    lines.append(
+        f"tensor_{local_tensor_id}_off = tensor_{local_tensor_id}_off // 2"
+    )
+    lines.append(f"tensor_{local_tensor_id}_half_ptr = tl.arange(0, {_next_pow2(half)})")
+    lines.append(
+        f"tensor_{local_tensor_id}_pk = tensor_{local_tensor_id}_ptr "
+        f"+ tensor_{local_tensor_id}_off "
+        f"+ tensor_{local_tensor_id}_dim1_ptr[:, None] * {half} "
+        f"+ tensor_{local_tensor_id}_half_ptr[None, :]"
+    )
+    mask_parts = [f"(tensor_{local_tensor_id}_half_ptr[None, :] < {half})"]
+    if t.padded_shape[1] != n_tok:
+        mask_parts.append(f"(tensor_{local_tensor_id}_dim1_ptr[:, None] < {n_tok})")
+    mask = " & ".join(mask_parts)
+    lines.append(
+        f"tensor_{local_tensor_id}_byte = tl.load(tensor_{local_tensor_id}_pk, "
+        f"mask={mask}, other=0).to(tl.int32)"
+    )
+    lines.append(
+        f"tensor_{local_tensor_id}_lo = ((tensor_{local_tensor_id}_byte & 0x0F) "
+        f"- {q.bias}).to(tl.float32)"
+    )
+    lines.append(
+        f"tensor_{local_tensor_id}_hi = (((tensor_{local_tensor_id}_byte >> 4) & 0x0F) "
+        f"- {q.bias}).to(tl.float32)"
+    )
+    # The scale is a separate PAGED fp32 field, addressed by the same block_id. K's varies along
+    # channels and is shared by the block's tokens; V's is the reverse. The asymmetry is measured,
+    # not stylistic (see int4_kv.py): one axis for both is the obvious implementation and is what
+    # costs the most.
+    s = f"tensor_{scale_id}_ptr"
+    if q.per_channel:
+        lines.append(
+            f"tensor_{local_tensor_id}_slo = tl.load({s} + block_id * {t.shape[2]} "
+            f"+ tensor_{local_tensor_id}_half_ptr * 2, "
+            f"mask=tensor_{local_tensor_id}_half_ptr < {half}, other=0.0)[None, :]"
+        )
+        lines.append(
+            f"tensor_{local_tensor_id}_shi = tl.load({s} + block_id * {t.shape[2]} "
+            f"+ tensor_{local_tensor_id}_half_ptr * 2 + 1, "
+            f"mask=tensor_{local_tensor_id}_half_ptr < {half}, other=0.0)[None, :]"
+        )
+    else:
+        lines.append(
+            f"tensor_{local_tensor_id}_slo = tl.load({s} + block_id * {n_tok} "
+            f"+ tensor_{local_tensor_id}_dim1_ptr, "
+            f"mask=tensor_{local_tensor_id}_dim1_ptr < {n_tok}, other=0.0)[:, None]"
+        )
+        lines.append(f"tensor_{local_tensor_id}_shi = tensor_{local_tensor_id}_slo")
+    lines.append(
+        f"tensor_{local_tensor_id}_block = tl.join("
+        f"tensor_{local_tensor_id}_lo * tensor_{local_tensor_id}_slo, "
+        f"tensor_{local_tensor_id}_hi * tensor_{local_tensor_id}_shi"
+        f").reshape({t.padded_shape[1]}, {_next_pow2(half) * 2})"
+    )
+    return lines
+
+
+def _block_load_lines(local_tensor_id: int, t, ctx: Context, sub_graph=None) -> List[str]:
     """Emit lines that load one (D0, D1) block into ``tensor_<id>_block`` (fp32).
 
     FP8 inputs are bitcast from the uint8-viewed pointer into the matching
@@ -249,6 +361,9 @@ def _block_load_lines(local_tensor_id: int, t, ctx: Context) -> List[str]:
     of either inner axis read as zero. Memory strides stay anchored to
     the real ``shape``.
     """
+    if t.int4 is not None:
+        return _int4_load_lines(local_tensor_id, t, sub_graph)
+
     lines = _offset_lines(local_tensor_id, t, "load")
 
     lines.append(
@@ -306,7 +421,7 @@ def generate_load_tensor_str(sub_graph: Graph, ctx: Context) -> str:
     blocks: List[str] = []
     for local_tensor_id in sub_graph.input_tensor_ids:
         t = sub_graph.tensor_list[local_tensor_id]
-        blocks.append("\n".join(_block_load_lines(local_tensor_id, t, ctx)))
+        blocks.append("\n".join(_block_load_lines(local_tensor_id, t, ctx, sub_graph)))
     return "\n\n".join(blocks) if blocks else "# No tensor loading required"
 
 

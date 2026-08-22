@@ -27,7 +27,7 @@ from sglang.srt.utils import (
     is_cuda
 )
 
-from vortex_torch.abs import as_vtensor, FORMAT
+from vortex_torch.abs import as_vtensor, FORMAT, Int4Packed
 from vortex_torch.cache import (
     Context,
     set_kv_buffer_fp8_e4m3_launcher,
@@ -35,6 +35,7 @@ from vortex_torch.cache import (
     set_kv_buffer_launcher,
 )
 from vortex_torch.cache.compiler.compile import compile as compile_cache
+from vortex_torch.cache.triton_kernels.int4_kv import INT4_BIAS
 from vortex_torch.flow import vFlow
 from vortex_torch.utils import is_int4_kv
 from .config import cfg as _vortex_cfg
@@ -135,6 +136,13 @@ class VortexCachePool(KVCache):
         # the flag here instead leaves a window where the pool and the flow disagree, which shows up
         # as a 2x mis-stride rather than as an error. See ``utils.is_int4_kv``.
         self.kv_int4 = is_int4_kv(sparse_attention.get_cache_meta_info())
+        # Read here, not from ``self.layers_skip``: that is assigned AFTER _create_buffers, which is
+        # where the INT4 buffers are sized, so reading it there gets UNSET and the pool-shaped buffer
+        # is skipped for a config that needs it.
+        self.layers_skip_for_int4 = list(
+            getattr(model_runner.server_args, "vortex_layers_skip", None) or [])
+        self.disable_radix_for_int4 = bool(
+            getattr(model_runner.server_args, "disable_radix_cache", False))
         #: Which forward mode the current step is, for the fused-write choice. Prefill-safe default:
         #: the fused path is only sound when a launch writes at most one token per block, so guessing
         #: decode would corrupt the first prefill. See :meth:`int4_set_decode`.
@@ -143,6 +151,11 @@ class VortexCachePool(KVCache):
         self._int4_scratch_k: Optional[torch.Tensor] = None
         self._int4_scratch_v: Optional[torch.Tensor] = None
         self._int4_scratch_tbl: Optional[torch.Tensor] = None
+        #: Pool-shaped buffers for full-context reads; see :meth:`int4_unpack_pool`.
+        self._int4_pool_k: Optional[torch.Tensor] = None
+        self._int4_pool_v: Optional[torch.Tensor] = None
+        self._int4_pool_ids: Optional[torch.Tensor] = None
+        self._int4_pool_tbl: Optional[torch.Tensor] = None
         self.host_kv_caches: List["HostKVCache"] = []
         # Per-step snapshot of the prefill block ids (see snapshot_prefix).
         self._prefix_src: Optional[torch.Tensor] = None
@@ -213,11 +226,33 @@ class VortexCachePool(KVCache):
         with torch.no_grad():
             loc_dummy = torch.empty((0,), dtype=torch.int64, device=self.device)
             cache_dummy = {}
+            names = list(self.cache_meta_info)
+            # INT4 tags K/V with the LOGICAL width and an Int4Packed marker, so every op in the flow
+            # continues to see head_dim channels and the unpack happens at the codegen load site.
+            # Without this, tracing hits `Max: expected output.shape[2] == x.shape[2], got 128 vs 64`
+            # -- the flow's ops are written against the logical width, and rightly so.
+            int4_of = {}
+            if self.kv_int4:
+                for kv, per_channel, scale_name in (("k", True, K_SCALE), ("v", False, V_SCALE)):
+                    int4_of[kv] = Int4Packed(names.index(scale_name), per_channel, INT4_BIAS)
             for i, (name, (shape, cache_dtype)) in enumerate(self.cache_meta_info.items()):
+                logical = (shape[0], shape[1] * 2) if name in int4_of else shape
                 vt = as_vtensor(
-                    torch.zeros((0, shape[0], shape[1]), dtype=cache_dtype, device=self.device),
+                    torch.zeros((0, logical[0], logical[1]),
+                                dtype=cache_dtype, device=self.device),
                     FORMAT.PAGED,
                     tensor_id=i,
+                )
+                vt.int4 = int4_of.get(name)
+                cache_dummy[name] = vt
+                register(vt, f"cache['{name}']")
+            for name, shape in self.request_cache_meta_info.items():
+                # Request-domain fields join the same dict, distinguished only by their FORMAT --
+                # which is exactly the property that lets one fused kernel read both domains.
+                vt = as_vtensor(
+                    torch.zeros((0, shape[0], shape[1]), dtype=self.dtype, device=self.device),
+                    FORMAT.SLOTTED,
+                    tensor_id=len(self.ctx.tensor_list),
                 )
                 cache_dummy[name] = vt
                 register(vt, f"cache['{name}']")
@@ -296,6 +331,39 @@ class VortexCachePool(KVCache):
                         self.request_cache_meta_info, dtype=self.dtype, device=self.device,
                     )
                 )
+        # Pool-shaped dequant buffers for FULL-CONTEXT reads (a dense layer in ``layers_skip``, or a
+        # prefill prefix hit) -- see :meth:`int4_unpack_pool`. One row per BLOCK, so the size tracks
+        # the pool, and under INT4 the pool is ~3x larger by construction: this is the single largest
+        # cost of the feature and it partly offsets the compression. It is allocated HERE, at pool
+        # construction, rather than from the planner, for two reasons: reserving it during cuda-graph
+        # setup OOM'd after mem_fraction_static had already claimed HBM, and it must exist before any
+        # captured step touches it.
+        #
+        # Only allocated when something can actually perform a full-context read. Sparse-only INT4
+        # (no skipped layers, radix cache off) never needs it, and paying 4x the packed pool bytes for
+        # a path that is never taken is the same mistake as the per-block bf16 mirror.
+        self._int4_pool_k = None
+        n_blocks_pool = num_blocks
+        needs_full = bool(self.layers_skip_for_int4) or not self.disable_radix_for_int4
+        if needs_full:
+            with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
+                self._int4_pool_k = torch.empty(
+                    (n_blocks_pool, self.block_size, self.head_dim),
+                    dtype=self.dtype, device=self.device)
+                self._int4_pool_v = torch.empty_like(self._int4_pool_k)
+            self._int4_pool_ids = torch.arange(
+                n_blocks_pool, dtype=torch.int32, device=self.device)
+            self._int4_pool_tbl = torch.empty(
+                (n_blocks_pool,), dtype=torch.int32, device=self.device)
+            logger.info(
+                "vortex INT4 KV: %.2f GB pool-shaped dequant buffer for full-context reads "
+                "(%d blocks). This is the feature's largest overhead; it is only needed because a "
+                "dense layer or a prefill prefix hit reads every block. Lower mem_fraction_static "
+                "if the engine OOMs during cuda-graph setup.",
+                2 * n_blocks_pool * self.block_size * self.head_dim
+                * torch._utils._element_size(self.dtype) / GB, n_blocks_pool,
+            )
+
         stage_gb = sum(t.element_size() * t.numel()
                        for layer in self.request_cache for t in layer.values()) / GB
         map_gb = sum(a.nbytes() for a in self.int4_arenas) / GB
@@ -372,7 +440,8 @@ class VortexCachePool(KVCache):
             * torch._utils._element_size(self.dtype) / GB, n,
         )
 
-    def int4_unpack_selection(self, layer_id: int, table: torch.Tensor, n_entries: int):
+    def int4_unpack_selection(self, layer_id: int, table: torch.Tensor, n_entries: int,
+                              indptr=None, n_rows: int = 0):
         """Dequantize the SELECTED blocks into the shared scratch; return ``(k, v, table)``.
 
         The returned table is the identity, so the attention wrapper reads scratch row ``i`` for
@@ -389,13 +458,54 @@ class VortexCachePool(KVCache):
         arena = self.int4_arenas[layer_id - self.start_layer]
         stage = self.request_cache[layer_id - self.start_layer]
         n = int(n_entries)
+        cap = 0 if self._int4_scratch_k is None else self._int4_scratch_k.shape[0]
+        if n > cap:
+            # Loudly, and naming the knob. The scratch is clamped to a share of free HBM, so this is
+            # a capacity limit rather than a bug -- but reading past it is an illegal memory access
+            # inside the attention kernel, i.e. a crash that names the wrong subsystem.
+            raise RuntimeError(
+                f"INT4 dequant scratch holds {cap} block-table entries but this step needs {n} "
+                f"(layer {layer_id}). Full-context reads (a layer in --vortex-layers-skip, or a "
+                f"prefill prefix hit) are bounded by the step's cached blocks, and the scratch is "
+                f"clamped to a share of free HBM. Lower --mem-fraction-static to leave more room, or "
+                f"shorten the context."
+            )
         gather_unpack(
             cache["k"], cache["v"], cache[K_SCALE], cache[V_SCALE],
             table[:n], self._int4_scratch_tbl[:n],
             stage[STAGE_K], stage[STAGE_V], arena.slot_of,
             self._int4_scratch_k[:n], self._int4_scratch_v[:n],
+            indptr=indptr, n_rows=n_rows,
         )
         return self._int4_scratch_k[:n], self._int4_scratch_v[:n], self._int4_scratch_tbl[:n]
+
+    def int4_unpack_pool(self, layer_id: int):
+        """Dequantize the WHOLE pool, block ``b`` into row ``b``. For full-context reads.
+
+        The compacting :meth:`int4_unpack_selection` is the wrong shape here. A dense layer (one in
+        ``layers_skip``) or a prefill prefix hit reads every cached block, so compaction would need a
+        scratch row per TABLE ENTRY -- ``rows x max_num_blocks_per_request`` = 2.6M entries, which is
+        20 GiB and which the guard in ``int4_unpack_selection`` correctly refuses. Keeping the pool's
+        own addressing needs one row per BLOCK instead: 12288 blocks is 0.19 GB, and the table needs
+        no rewrite at all, because block ids already index the scratch.
+
+        The cost is proportional to the POOL rather than the selection (measured 2.6 ms/layer at
+        12288 blocks), which is why the sparse path does not use this. For a full-context read there
+        is nothing cheaper -- the layer genuinely needs all of it.
+        """
+        cache = self.cache[layer_id - self.start_layer]
+        arena = self.int4_arenas[layer_id - self.start_layer]
+        stage = self.request_cache[layer_id - self.start_layer]
+        n = cache["k"].shape[0]
+        if self._int4_pool_k is None:
+            raise RuntimeError("int4_reserve_scratch was not called before a full-context read")
+        gather_unpack(
+            cache["k"], cache["v"], cache[K_SCALE], cache[V_SCALE],
+            self._int4_pool_ids, self._int4_pool_tbl,
+            stage[STAGE_K], stage[STAGE_V], arena.slot_of,
+            self._int4_pool_k, self._int4_pool_v,
+        )
+        return self._int4_pool_k, self._int4_pool_v
 
     def int4_counters(self) -> Dict[str, int]:
         """Summed arena counters across layers. Diagnostics only -- syncs.

@@ -86,6 +86,60 @@ class FORMAT(Enum):
     SLOTTED = 4
 
 
+class Int4Packed:
+    """Marks a tensor whose STORAGE is packed INT4 while its SHAPE stays logical.
+
+    This is the piece that keeps quantization out of every op. A packed K field holds
+    ``head_dim // 2`` bytes per token, but every op that consumes it -- ``Max(dim=1)`` building an
+    envelope, a GeMM against centroids -- is written against ``head_dim`` channels. Two ways to
+    reconcile that were tried:
+
+    1. **Let the shape be the physical one** and teach each op that a packed input is half-width.
+       This is what the first boot hit: ``Max: expected output.shape[2] == x.shape[2], got 128 vs
+       64``. Fixing it op-by-op means every existing and future cache op has to know about INT4.
+    2. **Keep a per-block bf16 mirror** so ops read an unpacked copy. Measured **21632 B/block
+       against bf16's own 16896 -- a 1.28x REGRESSION**, i.e. it gives back more than quantization
+       saves. This is the single most important thing not to redo.
+
+    So the shape stays LOGICAL (``head_dim``) and the *load site* unpacks: the codegen emits nibble
+    extraction and a scale multiply, producing exactly the fp32 block an unpacked tensor would have
+    produced. Ops see no difference, and there is no mirror -- the unpack lives in registers inside
+    the kernel that was going to read the tensor anyway.
+
+    Attributes
+    ----------
+    scale_tensor_id : int
+        Graph id of the fp32 scale field. Carried on the tensor rather than looked up by name,
+        because codegen names arguments by LOCAL id: resolving a global id at the wrong moment gave
+        a plausible-looking wrong argument number.
+    per_channel : bool
+        ``True`` for K (scale varies along channels, shared by the block's tokens), ``False`` for V
+        (per token). The axes genuinely differ between K and V -- see ``int4_kv.py``; using one axis
+        for both is the obvious implementation and costs the most.
+    bias : int
+        Stored-nibble bias, so the on-disk value is unsigned.
+    """
+
+    __slots__ = ("scale_tensor_id", "per_channel", "bias")
+
+    def __init__(self, scale_tensor_id: int, per_channel: bool, bias: int = 7) -> None:
+        self.scale_tensor_id = int(scale_tensor_id)
+        self.per_channel = bool(per_channel)
+        self.bias = int(bias)
+
+    def __repr__(self) -> str:
+        axis = "per-channel" if self.per_channel else "per-token"
+        return f"Int4Packed(scale=tensor_{self.scale_tensor_id}, {axis}, bias={self.bias})"
+
+    def __eq__(self, other) -> bool:
+        return (isinstance(other, Int4Packed)
+                and (self.scale_tensor_id, self.per_channel, self.bias)
+                == (other.scale_tensor_id, other.per_channel, other.bias))
+
+    def __reduce__(self):
+        return (Int4Packed, (self.scale_tensor_id, self.per_channel, self.bias))
+
+
 def _next_pow2(n: int) -> int:
     """Round ``n`` up to the next power of two.
 
@@ -131,7 +185,7 @@ class vTensor:
     separately and use the ``vTensor`` only for graph bookkeeping.
     """
 
-    __slots__ = ("shape", "padded_shape", "dtype", "device", "_format", "tensor_id")
+    __slots__ = ("shape", "padded_shape", "dtype", "device", "_format", "tensor_id", "int4")
 
     shape: tuple
     padded_shape: tuple
@@ -139,6 +193,8 @@ class vTensor:
     device: Optional[Union[torch.device, str]]
     _format: FORMAT
     tensor_id: int
+    #: ``None``, or ``Int4Packed`` when this tensor's storage is packed INT4.
+    int4: Optional["Int4Packed"]
 
     def __init__(
         self,
@@ -148,6 +204,7 @@ class vTensor:
         _format: FORMAT = FORMAT.BATCHED,
         tensor_id: int = -1,
         padded_shape: Optional[Sequence[int]] = None,
+        int4: Optional["Int4Packed"] = None,
     ) -> None:
         if not isinstance(tensor_id, int):
             raise TypeError(f"tensor_id must be int, got {type(tensor_id).__name__}")
@@ -169,6 +226,7 @@ class vTensor:
         self.device = device
         self._format = _format
         self.tensor_id = tensor_id
+        self.int4 = int4
 
     # -------- shape helpers --------
     def dim(self) -> int:
@@ -191,6 +249,20 @@ class vTensor:
             return self.shape
         return self.shape[dim]
 
+    @property
+    def logical_dtype(self) -> torch.dtype:
+        """The dtype ops should dispatch on: what a load of this tensor YIELDS.
+
+        Identical to ``dtype`` except for packed INT4, where the storage is ``uint8`` but the
+        codegen's load site emits a dequantized fp32 block -- so an op asking "can I reduce this
+        dtype?" must be answered about the decoded value, not the container. Otherwise every dtype
+        gate in the op layer would need an INT4 branch, which is exactly the coupling
+        :class:`Int4Packed` exists to avoid.
+        """
+        if self.int4 is not None:
+            return torch.float32
+        return self.dtype
+
     def needs_padding(self) -> bool:
         """True iff ``padded_shape != shape`` — i.e. at least one inner
         dim is not already a power of two and codegen must emit
@@ -201,24 +273,26 @@ class vTensor:
     # -------- repr --------
     def __repr__(self) -> str:
         pad = "" if self.padded_shape == self.shape else f", padded={self.padded_shape}"
+        q = "" if self.int4 is None else f", int4={self.int4}"
         return (
             f"vTensor(shape={self.shape}{pad}, dtype={self.dtype}, "
             f"device={self.device}, _format={self._format}, "
-            f"tensor_id={self.tensor_id})"
+            f"tensor_id={self.tensor_id}{q})"
         )
 
     # -------- pickle / copy --------
     def __reduce__(self):
         return (
             _rebuild_vtensor,
-            (self.shape, self.dtype, self.device, self._format, self.tensor_id, self.padded_shape),
+            (self.shape, self.dtype, self.device, self._format, self.tensor_id,
+             self.padded_shape, self.int4),
         )
 
 
-def _rebuild_vtensor(shape, dtype, device, _format, tensor_id, padded_shape=None):
+def _rebuild_vtensor(shape, dtype, device, _format, tensor_id, padded_shape=None, int4=None):
     return vTensor(
         shape=shape, dtype=dtype, device=device, _format=_format,
-        tensor_id=tensor_id, padded_shape=padded_shape,
+        tensor_id=tensor_id, padded_shape=padded_shape, int4=int4,
     )
 
 

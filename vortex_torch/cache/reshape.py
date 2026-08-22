@@ -53,11 +53,19 @@ class Reshape(vOp):
     # ------------------------------ helpers ------------------------------ #
     def _resolve_quantization(self, x: vTensor) -> QuantizationType:
         prefix = self._prefix()
-        if x.dtype == torch.bfloat16:
+        # ``logical_dtype``, not ``dtype``: a packed-INT4 tensor is stored as uint8 but its load site
+        # yields a dequantized fp32 block, so the question "can this be reduced?" is about the
+        # DECODED value. Dispatching on the container instead gave
+        # `unsupported dtype torch.uint8 for reduction` on a tensor the codegen unpacks for free.
+        if x.int4 is not None:
+            # The unpack already produced fp32, so the load needs no further decode -- BF16 is the
+            # "no bitcast on load" case, which is what applies here.
             return QuantizationType.BF16
-        if x.dtype == torch.float8_e5m2:
+        if x.logical_dtype == torch.bfloat16:
+            return QuantizationType.BF16
+        if x.logical_dtype == torch.float8_e5m2:
             return QuantizationType.FP8_E5M2
-        if x.dtype == torch.float8_e4m3fn:
+        if x.logical_dtype == torch.float8_e4m3fn:
             return QuantizationType.FP8_E4M3
         raise ValueError(f"{prefix}unsupported dtype {x.dtype} for reshape")
 

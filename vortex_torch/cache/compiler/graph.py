@@ -195,6 +195,22 @@ def _as_tensor_id_list(x) -> List[int]:
     return [x]
 
 
+def _add_int4_scales(input_set: Set[int], tensor_list: List[vTensor]) -> None:
+    """Pull the fp32 scale of every packed-INT4 input into the INPUT set.
+
+    The INPUT list is what names kernel arguments, so a scale that is only in the tensor list gives
+    ``NameError('tensor_N_ptr is not defined')`` at codegen. The scale is not an operand of any op --
+    it is storage metadata of the tensor being unpacked -- so nothing else would ever add it.
+
+    Applied to both the full graph and each subgraph: a subgraph that reads a packed tensor needs its
+    scale regardless of which subgraph the tensor came from.
+    """
+    for tid in list(input_set):
+        q = tensor_list[tid].int4
+        if q is not None:
+            input_set.add(q.scale_tensor_id)
+
+
 def _build_local_graph(
     global_tensor_list: List[vTensor],
     global_op_list: List[vOp],
@@ -217,6 +233,12 @@ def _build_local_graph(
             selected_global_tensor_ids.add(tid)
         for tid in global_op_to_output_tensor_ids[global_op_id]:
             selected_global_tensor_ids.add(tid)
+    # An INT4 scale is in the INPUT list but is not an operand of any op -- it is storage metadata of
+    # the tensor being unpacked -- so this set, built from operands, would not contain it and the
+    # global->local map would KeyError on it. Add every declared input, which is a no-op for the
+    # ordinary case where inputs are already operands.
+    selected_global_tensor_ids.update(global_input_tensor_ids)
+    selected_global_tensor_ids.update(global_output_tensor_ids)
 
     sorted_global_tensor_ids: List[int] = sorted(selected_global_tensor_ids)
 
@@ -412,6 +434,7 @@ def _build_all_graphs(
             if producer is None or producer not in reachable_ops:
                 full_input_set.add(tid)
 
+    _add_int4_scales(full_input_set, tensor_list)
     full_graph = _build_local_graph(
         global_tensor_list=tensor_list,
         global_op_list=op_list,
@@ -490,6 +513,7 @@ def _build_all_graphs(
                         output_set.add(out_tid)
                         break
 
+        _add_int4_scales(input_set, tensor_list)
         subgraphs.append(_build_local_graph(
             global_tensor_list=tensor_list,
             global_op_list=op_list,
