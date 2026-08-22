@@ -36,9 +36,15 @@ from vortex_torch.cache import (
 )
 from vortex_torch.cache.compiler.compile import compile as compile_cache
 from vortex_torch.flow import vFlow
+from vortex_torch.utils import is_int4_kv
 from .config import cfg as _vortex_cfg
 from .cache_policy import WAYS
 from .host_kv import HostKVCache, tick_all
+from .int4_arena import Int4Arena, arena_slots
+from .int4_store import (
+    K_SCALE, STAGE_K, STAGE_V, V_SCALE,
+    compression_ratio as int4_compression_ratio, gather_unpack,
+)
 logger = logging.getLogger(__name__)
 GB = 1024 * 1024 * 1024
 
@@ -124,6 +130,19 @@ class VortexCachePool(KVCache):
         self.host_kv_gb = float(getattr(self.vortex_cfg, "host_kv_gb", 0.0) or 0.0)
         self.host_kv = self.host_kv_gb > 0.0
         self.host_kv_policy = getattr(self.vortex_cfg, "host_kv_policy", "lru") or "lru"
+        # Read from the flow's DECLARED META, not from the config flag. The flow already applied the
+        # flag when it built the meta, and the meta is what every consumer strides through -- taking
+        # the flag here instead leaves a window where the pool and the flow disagree, which shows up
+        # as a 2x mis-stride rather than as an error. See ``utils.is_int4_kv``.
+        self.kv_int4 = is_int4_kv(sparse_attention.get_cache_meta_info())
+        #: Which forward mode the current step is, for the fused-write choice. Prefill-safe default:
+        #: the fused path is only sound when a launch writes at most one token per block, so guessing
+        #: decode would corrupt the first prefill. See :meth:`int4_set_decode`.
+        self._int4_is_decode = False
+        #: Shared dequant scratch; reserved by :meth:`int4_reserve_scratch` before capture.
+        self._int4_scratch_k: Optional[torch.Tensor] = None
+        self._int4_scratch_v: Optional[torch.Tensor] = None
+        self._int4_scratch_tbl: Optional[torch.Tensor] = None
         self.host_kv_caches: List["HostKVCache"] = []
         # Per-step snapshot of the prefill block ids (see snapshot_prefix).
         self._prefix_src: Optional[torch.Tensor] = None
@@ -169,9 +188,17 @@ class VortexCachePool(KVCache):
         
         self.mem_usage = cache_size / GB
         assert self.store_dtype in [torch.bfloat16, torch.uint8], f"Unsupported store dtype {self.store_dtype} for KV cache"
-        if self.dtype not in _SET_KV_LAUNCHERS:
-            raise ValueError(f"Unsupported dtype {self.dtype} for KV cache")
-        self.set_kv_buffer_func = _SET_KV_LAUNCHERS[self.dtype]
+        # Under INT4 the write path is the staging arena, not a set_kv launcher: K/V arrive in bf16
+        # and are held that way until the block completes, so there is no dtype to cast to on write.
+        # ``self.dtype`` still names the MODEL's KV dtype (bf16), which is correct for every other
+        # consumer, and looking up a launcher for it here would install one that writes bf16 straight
+        # into the packed buffer at twice the stride.
+        if not self.kv_int4:
+            if self.dtype not in _SET_KV_LAUNCHERS:
+                raise ValueError(f"Unsupported dtype {self.dtype} for KV cache")
+            self.set_kv_buffer_func = _SET_KV_LAUNCHERS[self.dtype]
+        else:
+            self.set_kv_buffer_func = None
         
     def _compile(self, model_runner) -> None:
         """Trace the sparse-attention cache flow on zero-sized dummies and compile it."""
@@ -206,6 +233,7 @@ class VortexCachePool(KVCache):
 
         self.cache_meta_info = self.sparse_attention.get_cache_meta_info()
         num_blocks = self.num_pages * self.num_blocks_per_page
+        self._create_request_domain(num_blocks)
 
         if self.host_kv:
             self._create_host_kv_buffers(num_blocks, model_runner)
@@ -230,6 +258,157 @@ class VortexCachePool(KVCache):
 
                     for _ in range(self.layer_num)
                 ]
+
+    def _create_request_domain(self, num_blocks: int) -> None:
+        """Allocate the request-bound domain: one arena + one payload dict per layer.
+
+        Per LAYER, not per pool, for the same reason the page-domain cache is: each layer writes its
+        own K/V, so a shared arena would have layer 1's staging overwrite layer 0's while layer 0's
+        block is still incomplete. That sharing is invisible in a single-layer test.
+
+        Allocated here, during pool construction, and never grown: a first-use allocation inside a
+        captured decode step becomes part of the graph. The staging payload is ``n_slots x r x c``
+        and so constant in context length -- the whole reason it is a separate domain.
+        """
+        self.request_cache_meta_info = self.sparse_attention.get_request_cache_meta_info()
+        self.int4_arenas: List["Int4Arena"] = []
+        self.request_cache: List[Dict[str, torch.Tensor]] = []
+        if not self.kv_int4:
+            # A flow may declare request-domain fields without INT4; allocating them is the same
+            # operation, it just needs no arena. Nothing does yet, so refuse rather than allocate
+            # buffers that no update op would ever write.
+            if self.request_cache_meta_info:
+                raise NotImplementedError(
+                    "this flow declares request-domain fields "
+                    f"({sorted(self.request_cache_meta_info)}) but nothing drives them: the only "
+                    "update op today is INT4's staging arena. Add a forward_request_cache path "
+                    "alongside the flow that needs it."
+                )
+            return
+
+        for _ in range(self.layer_num):
+            arena = Int4Arena(num_blocks, arena_slots(self.head_num),
+                              self.block_size, self.head_dim, device=self.device)
+            self.int4_arenas.append(arena)
+            with self.memory_saver_adapter.region(GPU_MEMORY_TYPE_KV_CACHE):
+                self.request_cache.append(
+                    arena.domain.allocate_payload(
+                        self.request_cache_meta_info, dtype=self.dtype, device=self.device,
+                    )
+                )
+        stage_gb = sum(t.element_size() * t.numel()
+                       for layer in self.request_cache for t in layer.values()) / GB
+        map_gb = sum(a.nbytes() for a in self.int4_arenas) / GB
+        logger.info(
+            "vortex INT4 KV: %.2f GB staging (%d slots/layer x %d layers, CONSTANT in context) "
+            "+ %.2f GB maps. Payload compresses %.2fx; end-to-end token_ratio %.3f.",
+            stage_gb, self.int4_arenas[0].n_slots, self.layer_num, map_gb,
+            int4_compression_ratio(self.block_size, self.head_dim),
+            self.sparse_attention.get_token_ratio(),
+        )
+
+    def int4_set_decode(self, is_decode: bool) -> None:
+        """Tell the pool which forward mode this step is, for the fused-write choice.
+
+        Called from the attention backend's metadata hooks, because ``set_kv_buffer`` is passed no
+        forward mode and the choice is not derivable from what it does see. Inferring it from shapes
+        was tried -- ``fused = n_tok <= num_kv_heads`` -- and silently disabled the fusion for every
+        realistic batch: a performance bug no test could catch, because both paths are correct.
+
+        Host-side, and that is safe: it is a Python bool read at launch time to pick a constexpr, so
+        it is baked into the captured graph rather than read during replay. Decode is the only
+        captured mode, so the captured value is always the right one. It must still be set in BOTH
+        the capture and the replay hook -- replay calls a *different* metadata hook, and a value set
+        only in capture leaves the eager path stale.
+        """
+        self._int4_is_decode = bool(is_decode)
+
+    def _stage_int4(self, cache_slot: int, loc, cache_k, cache_v) -> None:
+        """The INT4 write: stage bf16 into the request domain, quantize completed blocks.
+
+        Decode fuses the migration into the stage kernel (measured 2.04 -> 1.29 ms/step, almost all
+        launch overhead); prefill cannot, because it writes many tokens of one block in a single
+        launch and migration must see every token of the block it quantizes. See ``int4_arena``.
+        """
+        arena = self.int4_arenas[cache_slot]
+        stage = self.request_cache[cache_slot]
+        fused = self._int4_is_decode
+        arena.stage(
+            stage[STAGE_K], stage[STAGE_V],
+            cache_k.contiguous(), cache_v.contiguous(), loc,
+            self.cache[cache_slot], self.page_size,
+            fused=fused, k_scale_name=K_SCALE, v_scale_name=V_SCALE,
+        )
+        if not fused:
+            arena.migrate_complete(
+                stage[STAGE_K], stage[STAGE_V], self.cache[cache_slot],
+                k_scale_name=K_SCALE, v_scale_name=V_SCALE,
+            )
+
+    def int4_reserve_scratch(self, max_entries: int) -> None:
+        """Pre-reserve the dequant scratch and the remapped table. Never during capture.
+
+        Allocated from the planner, before capture, because a first-use allocation inside a captured
+        step is *captured into the graph* -- the allocation itself replays, which either fails or
+        hands out a different address than the one baked into the kernel arguments.
+
+        One buffer for the whole pool rather than one per layer: layers run strictly in sequence and
+        each consumes its unpacked selection within its own attention call, so reuse is safe and
+        per-layer copies would cost ``layer_num`` times the HBM for no benefit.
+        """
+        if not self.kv_int4:
+            return
+        n = int(max_entries)
+        if self._int4_scratch_k is not None and self._int4_scratch_k.shape[0] >= n:
+            return
+        self._int4_scratch_k = torch.empty(
+            (n, self.block_size, self.head_dim), dtype=self.dtype, device=self.device)
+        self._int4_scratch_v = torch.empty_like(self._int4_scratch_k)
+        self._int4_scratch_tbl = torch.empty((n,), dtype=torch.int32, device=self.device)
+        logger.info(
+            "vortex INT4 KV: %.3f GB dequant scratch for %d block-table entries (shared across "
+            "layers, which run in sequence)",
+            2 * n * self.block_size * self.head_dim
+            * torch._utils._element_size(self.dtype) / GB, n,
+        )
+
+    def int4_unpack_selection(self, layer_id: int, table: torch.Tensor, n_entries: int):
+        """Dequantize the SELECTED blocks into the shared scratch; return ``(k, v, table)``.
+
+        The returned table is the identity, so the attention wrapper reads scratch row ``i`` for
+        entry ``i`` and is unaware of the compaction.
+
+        Cost tracks the SELECTION, not the pool: unpacking the whole pool instead measured 2.6
+        ms/layer at 12288 blocks, i.e. ~94 ms per decode step over 36 layers. On pre-Blackwell parts
+        this pass is unavoidable -- flashinfer's native 4-bit paged decode is Blackwell-only -- and it
+        is affordable only because sparse attention selects topk x block rather than the context. The
+        read itself is at the hardware limit (1432 GB/s against a 1779 GB/s memset roofline); it
+        writes 4x more than it reads, so the only remaining lever is native INT4 attention.
+        """
+        cache = self.cache[layer_id - self.start_layer]
+        arena = self.int4_arenas[layer_id - self.start_layer]
+        stage = self.request_cache[layer_id - self.start_layer]
+        n = int(n_entries)
+        gather_unpack(
+            cache["k"], cache["v"], cache[K_SCALE], cache[V_SCALE],
+            table[:n], self._int4_scratch_tbl[:n],
+            stage[STAGE_K], stage[STAGE_V], arena.slot_of,
+            self._int4_scratch_k[:n], self._int4_scratch_v[:n],
+        )
+        return self._int4_scratch_k[:n], self._int4_scratch_v[:n], self._int4_scratch_tbl[:n]
+
+    def int4_counters(self) -> Dict[str, int]:
+        """Summed arena counters across layers. Diagnostics only -- syncs.
+
+        ``declined`` and ``spin_exhausted`` must be zero: both mean a token was DROPPED, which is
+        otherwise silent (see ``int4_arena``, where two wrong arena sizings gave 0% accuracy with
+        every other counter reading zero).
+        """
+        total: Dict[str, int] = {}
+        for arena in self.int4_arenas:
+            for k, v in arena.counters().items():
+                total[k] = total.get(k, 0) + v
+        return total
 
     def _create_host_kv_buffers(self, num_blocks: int, model_runner):
         """Split the cache: ``k``/``v`` into pinned host memory, the rest on GPU.
@@ -775,20 +954,23 @@ class VortexCachePool(KVCache):
             if v_scale is not None:
                 cache_v = cache_v.div(v_scale)
 
-        # Under host KV, ``cache[slot]["k"]`` is a *pinned host* tensor. The
-        # launcher writes through the pointer it is given, and a kernel can write
-        # pinned host memory as well as read it (verified bit-exact in both
-        # directions), so the write lands where the fetch kernel will look for it.
-        # No staging copy is needed and none must be added: writing to the GPU
-        # pool instead would leave the host copy stale, and the pool is evictable.
-        self.set_kv_buffer_func(
-            self.cache[cache_slot]["k"],
-            self.cache[cache_slot]["v"],
-            cache_k.contiguous(),
-            cache_v.contiguous(),
-            loc,
-            self.page_size
-        )
+        if self.kv_int4:
+            self._stage_int4(cache_slot, loc, cache_k, cache_v)
+        else:
+            # Under host KV, ``cache[slot]["k"]`` is a *pinned host* tensor. The
+            # launcher writes through the pointer it is given, and a kernel can write
+            # pinned host memory as well as read it (verified bit-exact in both
+            # directions), so the write lands where the fetch kernel will look for it.
+            # No staging copy is needed and none must be added: writing to the GPU
+            # pool instead would leave the host copy stale, and the pool is evictable.
+            self.set_kv_buffer_func(
+                self.cache[cache_slot]["k"],
+                self.cache[cache_slot]["v"],
+                cache_k.contiguous(),
+                cache_v.contiguous(),
+                loc,
+                self.page_size
+            )
         if layer_id in self.layers_skip:
             return
         # ``forward_cache`` reads the K/V just written to build this block's

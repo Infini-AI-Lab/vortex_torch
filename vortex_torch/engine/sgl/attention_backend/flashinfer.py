@@ -248,6 +248,18 @@ class VortexFlashInferBackend(VortexBackendBase):
 
 
     
+    def _int4_scratch_entries(self) -> int:
+        """Widest block table the INT4 dequant scratch must cover.
+
+        Sized from the cuda-graph CAPTURE CEILING, not from ``req_to_token_pool.size``. That
+        derivation was tried and gave **0% accuracy** -- sglang sets the req pool from the token
+        budget, so it reaches the thousands and the scratch becomes unaffordable, and undersizing it
+        the other way is silent. The ceiling is what capture actually allocates for, and the scratch
+        must be at least that or a replayed step reads past the end.
+        """
+        from ..int4_arena import CAPTURE_CEILING
+        return CAPTURE_CEILING * self.num_kv_heads * self.ctx.max_num_blocks_per_request
+
     def init_forward_metadata(self, forward_batch: ForwardBatch):
         
         assert not is_draft_extend(forward_batch.forward_mode)
@@ -276,6 +288,17 @@ class VortexFlashInferBackend(VortexBackendBase):
         pool = self.vortex_pool()
         if getattr(pool, "host_kv", False):
             pool.host_kv_tick(self.ctx.metadata.sparse_kv_indices)
+        # INT4 write mode. set_kv_buffer is passed no forward mode, and the fused path is only sound
+        # when a launch writes at most one token per block -- which decode guarantees and prefill
+        # does not. Inferring it from shapes silently disabled the fusion for every realistic batch.
+        if getattr(pool, "kv_int4", False):
+            pool.int4_set_decode(forward_batch.forward_mode.is_decode_or_idle())
+            # Reserve the dequant scratch HERE, outside any captured region. A first-use allocation
+            # inside a captured step is captured into the graph, so the allocation replays -- which
+            # either fails or hands out an address different from the one baked into the kernel args.
+            # Sized to the widest table either path can present: the sparse selection and the dense
+            # (layers_skip) read are both bounded by rows x max_num_blocks_per_request.
+            pool.int4_reserve_scratch(self._int4_scratch_entries())
 
         if forward_batch.forward_mode.is_decode_or_idle():
             
@@ -405,7 +428,15 @@ class VortexFlashInferBackend(VortexBackendBase):
         spec_info,
     ):  
         assert bs == num_tokens
-        
+
+        _pool = self.vortex_pool()
+        if getattr(_pool, "kv_int4", False):
+            _pool.int4_set_decode(forward_mode.is_decode_or_idle())
+            # Same reservation as in init_forward_metadata. Capture may reach this hook first (the
+            # graph pool is built before any real step), and reserving during capture is exactly what
+            # must not happen -- so it is done here, which runs before the captured region opens.
+            _pool.int4_reserve_scratch(self._int4_scratch_entries())
+
         if forward_mode.is_decode_or_idle():
             decode_wrappers = [
                 BatchDecodeWithPagedKVCacheWrapper(
@@ -495,6 +526,12 @@ class VortexFlashInferBackend(VortexBackendBase):
         pool = self.vortex_pool()
         if getattr(pool, "host_kv", False):
             pool.host_kv_tick(self.ctx.metadata.sparse_kv_indices)
+        # Also required HERE, for the same reason as the tick above: replay calls this hook INSTEAD
+        # of init_forward_metadata, so a mode set only there is stale on every replayed step. The
+        # assert above means this is always decode, but setting it explicitly keeps the eager path
+        # consistent with the captured one rather than relying on the last value written.
+        if getattr(pool, "kv_int4", False):
+            pool.int4_set_decode(True)
 
         self.plan_decode(
                 cached_seq_lens=seq_lens.to(torch.int32),
@@ -582,21 +619,41 @@ class VortexFlashInferBackend(VortexBackendBase):
             # HIT, so it reads every cached block, not a sparse selection) and
             # remap the prefill indices to the staging buffer.
             _pool = token_to_kv_pool(forward_batch)
+            saved_prefix = None
             if getattr(_pool, "host_kv", False):
                 k_cache, v_cache = _pool.fetch_prefix(
                     layer.layer_id, self.kv_indices_prefill
                 )
+            elif getattr(_pool, "kv_int4", False):
+                # A prefix HIT reads every cached block of the prefix, not a sparse selection, so
+                # this unpacks the whole prefix. It runs once per prefill rather than per decode
+                # step, and the prefill path is not cuda-graph captured, so the extra pass is off
+                # the per-token path entirely.
+                n_entries = int(self.kv_indptr_prefill[
+                    self.ctx.metadata.batch_size * self.num_kv_heads].item())
+                k_cache, v_cache, remapped = _pool.int4_unpack_selection(
+                    layer.layer_id, self.kv_indices_prefill, n_entries,
+                )
+                # The wrapper was planned against ``kv_indices_prefill``, so the identity table has
+                # to land in that same buffer. Save and restore it: it is shared across layers, and
+                # overwriting it permanently would make layer 1 read layer 0's remapped ids.
+                saved_prefix = self.kv_indices_prefill[:n_entries].clone()
+                self.kv_indices_prefill[:n_entries].copy_(remapped)
             else:
                 k_cache, v_cache = _pool.get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
             v_cache = v_cache.view(-1, self.page_size, 1, self.head_dim)
-            o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
-                q_t,
-                (k_cache, v_cache),
-                causal=False,
-                sm_scale=layer.scaling,
-                logits_soft_cap=logits_soft_cap,
-                )
+            try:
+                o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
+                    q_t,
+                    (k_cache, v_cache),
+                    causal=False,
+                    sm_scale=layer.scaling,
+                    logits_soft_cap=logits_soft_cap,
+                    )
+            finally:
+                if saved_prefix is not None:
+                    self.kv_indices_prefill[:saved_prefix.numel()].copy_(saved_prefix)
             o2_t, s2_t = self.chunkwise_hn2nh_transpose(
                 o2,  s2,
                 self.qo_indptr[0],
@@ -697,6 +754,25 @@ class VortexFlashInferBackend(VortexBackendBase):
                 # place makes every later layer remap already-remapped ids.
                 saved_indices = wrapper._paged_kv_indices_buf
                 wrapper._paged_kv_indices_buf = remapped
+            elif getattr(pool, "kv_int4", False):
+                # INT4 KV: dequantize the SELECTED blocks into a bf16 scratch and point the wrapper
+                # at it. Structurally the same swap as host KV above, and for the same reason: it
+                # must run AFTER the indexer (which names the blocks) and BEFORE forward (which
+                # dereferences them), and the indexer's table must survive intact because it is
+                # shared across layers.
+                #
+                # Needed at all because flashinfer's native 4-bit paged decode is Blackwell-only; on
+                # sm_80 a uint8 cache falls into the generic decode template and fails to compile.
+                # So on pre-Blackwell the win is capacity, not decode speed.
+                bs = self.ctx.metadata.batch_size * self.num_kv_heads
+                n_entries = bs * self.ctx.max_num_blocks_per_request
+                cache_k, cache_v, remapped = pool.int4_unpack_selection(
+                    layer.layer_id, wrapper._paged_kv_indices_buf, n_entries,
+                )
+                cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
+                cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
+                saved_indices = wrapper._paged_kv_indices_buf
+                wrapper._paged_kv_indices_buf = remapped
 
             # Sparse attention compute
             try:
@@ -713,15 +789,39 @@ class VortexFlashInferBackend(VortexBackendBase):
                     wrapper._paged_kv_indices_buf = saved_indices
 
         else:
-            # Dense attention path
-            o = self.forward_metadata.decode_wrappers[0].forward(
-                q.contiguous().view(-1, self.group_size, layer.head_dim),
-                (cache_k, cache_v),
-                sm_scale=layer.scaling,
-                logits_soft_cap=layer.logit_cap,
-                k_scale=k_scale,
-                v_scale=v_scale,
-            )
+            # Dense attention path (a layer in ``layers_skip``).
+            dense_wrapper = self.forward_metadata.decode_wrappers[0]
+            saved_dense = None
+            pool = token_to_kv_pool(forward_batch)
+            if getattr(pool, "kv_int4", False):
+                # No selection to exploit here: a skipped layer reads the whole context, so the
+                # unpack is over every cached block. That is the cost measured at 2.6 ms/layer for a
+                # 12288-block pool, and unlike the sparse path there is no cheaper option -- the
+                # layer genuinely needs all of it. Acceptable because ``layers_skip`` is normally a
+                # handful of layers; making EVERY layer dense (which is how INT4's payload accuracy
+                # was isolated: 4K 100%, 16K 97%, 32K 99%) is a measurement configuration, not a
+                # serving one.
+                bs = self.ctx.metadata.batch_size * self.num_kv_heads
+                n_entries = bs * self.ctx.max_num_blocks_per_request
+                cache_k, cache_v, remapped = pool.int4_unpack_selection(
+                    layer.layer_id, dense_wrapper._paged_kv_indices_buf, n_entries,
+                )
+                cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
+                cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
+                saved_dense = dense_wrapper._paged_kv_indices_buf
+                dense_wrapper._paged_kv_indices_buf = remapped
+            try:
+                o = dense_wrapper.forward(
+                    q.contiguous().view(-1, self.group_size, layer.head_dim),
+                    (cache_k, cache_v),
+                    sm_scale=layer.scaling,
+                    logits_soft_cap=layer.logit_cap,
+                    k_scale=k_scale,
+                    v_scale=v_scale,
+                )
+            finally:
+                if saved_dense is not None:
+                    dense_wrapper._paged_kv_indices_buf = saved_dense
 
         # Restore to merged head dimension
         return o.view(-1, layer.tp_q_head_num * layer.head_dim)

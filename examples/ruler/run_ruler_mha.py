@@ -93,6 +93,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--report-cache-stats", action="store_true",
                    help="After the run, print per-layer host-KV cache hit rate "
                         "(1 - fetches/requests) plus fetch/request totals.")
+    p.add_argument("--kv-int4", action="store_true",
+                   help="Store K/V as packed INT4 (per-channel K scale, per-token V scale). "
+                        "A CAPACITY knob: measured payload compression 3.46x including the fp32 "
+                        "scales. On pre-Blackwell parts attention still runs in bf16 (flashinfer's "
+                        "native 4-bit decode is Blackwell-only), so the selected blocks are "
+                        "dequantized on the way in and this is not a decode speedup.")
     p.add_argument("--host-kv-gb", type=float, default=0.0,
                    help="host (pinned) KV cache size in GiB; 0 = keep KV on the GPU. "
                         "When set, K/V live in pinned host memory and only the "
@@ -182,6 +188,8 @@ def main() -> None:
             )
             if args.max_batch > 0:
                 engine_kwargs["max_running_requests"] = args.max_batch
+            if args.kv_int4:
+                engine_kwargs["vortex_kv_int4"] = True
             if args.host_kv_gb > 0:
                 engine_kwargs["vortex_host_kv_gb"] = args.host_kv_gb
                 engine_kwargs["vortex_host_kv_policy"] = args.host_kv_policy
