@@ -668,7 +668,6 @@ class VortexFlashInferBackend(VortexBackendBase):
             # HIT, so it reads every cached block, not a sparse selection) and
             # remap the prefill indices to the staging buffer.
             _pool = token_to_kv_pool(forward_batch)
-            saved_prefix = None
             if getattr(_pool, "host_kv", False):
                 k_cache, v_cache = _pool.fetch_prefix(
                     layer.layer_id, self.kv_indices_prefill
@@ -684,17 +683,17 @@ class VortexFlashInferBackend(VortexBackendBase):
                 k_cache, v_cache = _pool.get_kv_buffer(layer.layer_id)
             k_cache = k_cache.view(-1, self.page_size, 1, self.head_dim)
             v_cache = v_cache.view(-1, self.page_size, 1, self.head_dim)
-            try:
-                o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
-                    q_t,
-                    (k_cache, v_cache),
-                    causal=False,
-                    sm_scale=layer.scaling,
-                    logits_soft_cap=logits_soft_cap,
-                    )
-            finally:
-                if saved_prefix is not None:
-                    self.kv_indices_prefill[:saved_prefix.numel()].copy_(saved_prefix)
+            # No index-buffer swap for INT4 here: the pool-shaped unpack preserves block-id
+            # addressing, so the planned ``kv_indices_prefill`` stays valid as-is. That is precisely
+            # why it is the right shape for a full-context read -- the compacting variant would have
+            # to rewrite this shared-across-layers buffer and restore it.
+            o2, s2 = self.prefill_wrapper_paged.forward_return_lse(
+                q_t,
+                (k_cache, v_cache),
+                causal=False,
+                sm_scale=layer.scaling,
+                logits_soft_cap=logits_soft_cap,
+                )
             o2_t, s2_t = self.chunkwise_hn2nh_transpose(
                 o2,  s2,
                 self.qo_indptr[0],
@@ -846,7 +845,6 @@ class VortexFlashInferBackend(VortexBackendBase):
         else:
             # Dense attention path (a layer in ``layers_skip``).
             dense_wrapper = self.forward_metadata.decode_wrappers[0]
-            saved_dense = None
             pool = token_to_kv_pool(forward_batch)
             if getattr(pool, "kv_int4", False):
                 # A skipped layer reads the WHOLE context, so there is no selection to compact and
@@ -860,18 +858,14 @@ class VortexFlashInferBackend(VortexBackendBase):
                 cache_k, cache_v = pool.int4_unpack_pool(layer.layer_id)
                 cache_k = cache_k.view(-1, self.block_size, 1, self.head_dim)
                 cache_v = cache_v.view(-1, self.block_size, 1, self.head_dim)
-            try:
-                o = dense_wrapper.forward(
-                    q.contiguous().view(-1, self.group_size, layer.head_dim),
-                    (cache_k, cache_v),
-                    sm_scale=layer.scaling,
-                    logits_soft_cap=layer.logit_cap,
-                    k_scale=k_scale,
-                    v_scale=v_scale,
-                )
-            finally:
-                if saved_dense is not None:
-                    dense_wrapper._paged_kv_indices_buf = saved_dense
+            o = dense_wrapper.forward(
+                q.contiguous().view(-1, self.group_size, layer.head_dim),
+                (cache_k, cache_v),
+                sm_scale=layer.scaling,
+                logits_soft_cap=layer.logit_cap,
+                k_scale=k_scale,
+                v_scale=v_scale,
+            )
 
         # Restore to merged head dimension
         return o.view(-1, layer.tp_q_head_num * layer.head_dim)
