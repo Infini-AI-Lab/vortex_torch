@@ -62,6 +62,7 @@ import triton
 import triton.language as tl
 
 from ...cache.triton_kernels.int4_kv import INT4_BIAS, INT4_QMAX
+from .request_domain import RequestCacheDomain
 
 logger = logging.getLogger(__name__)
 
@@ -316,10 +317,21 @@ def _migrate_scan_kernel(
 class Int4Arena:
     """Per-layer staging arena for in-flight (partially written) INT4 blocks.
 
-    Owns only the three maps; the bf16 staging payload lives in the cache dict as an ordinary
+    A thin specialisation of :class:`~vortex_torch.engine.sgl.request_domain.RequestCacheDomain`:
+    the domain owns the slot allocation and the key->slot map (which the compiler also addresses
+    ``FORMAT.SLOTTED`` fields through), and this class adds only what is specific to *quantizing on
+    completion* -- the completion bitmask, the counters, and the two kernels. Sharing the map rather
+    than keeping a parallel copy is the point: two maps for one domain can silently disagree, and
+    the SLOTTED codegen reads whichever one it was handed.
+
+    The bf16 staging payload is NOT owned here; it lives in the cache dict as an ordinary
     request-domain field. That separation is deliberate -- an earlier version held ``arena.k`` /
     ``arena.v`` itself, and every consumer then had to know about the arena to find the newest
-    tokens. Payload from the cache dict, maps from here.
+    tokens, so the read path broke the moment staging became a pool field.
+
+    Policy is ``complete`` + ``drop``, and ``drop`` is not a default worth changing: evicting an
+    incomplete block means quantizing one that was only partly written, which is silent data loss,
+    whereas a drop is a counted loss of one token.
     """
 
     def __init__(self, num_blocks: int, n_slots: int, block_size: int, head_dim: int,
@@ -331,20 +343,31 @@ class Int4Arena:
             )
         if head_dim % 2:
             raise ValueError(f"INT4 needs an even head_dim, got {head_dim}")
-        self.n_slots = int(n_slots)
+        self.domain = RequestCacheDomain(
+            num_blocks, n_slots, retention="complete", overflow="drop", device=device,
+        )
+        self.n_slots = self.domain.n_slots
         self.block_size = int(block_size)
         self.head_dim = int(head_dim)
         self.full_mask = (1 << self.block_size) - 1
-        # Every buffer is allocated here, up front. A lazily-grown map would be allocated during
-        # the first captured step and the allocation itself would become part of the graph.
-        self.slot_of = torch.full((num_blocks,), -1, dtype=torch.int32, device=device)
-        self.owner_of = torch.full((self.n_slots,), -1, dtype=torch.int32, device=device)
+        # Every buffer is allocated up front, here and in the domain. A lazily-grown map would be
+        # allocated during the first captured step and the allocation becomes part of the graph.
         self.mask_of = torch.zeros((self.n_slots,), dtype=torch.int64, device=device)
         self.stats = torch.zeros((N_STATS,), dtype=torch.int32, device=device)
 
+    @property
+    def slot_of(self) -> torch.Tensor:
+        """The domain's key->slot map. Also what a SLOTTED field is addressed through, so a flow
+        reading the staged block in a compiled path passes exactly this tensor."""
+        return self.domain.slot_of
+
+    @property
+    def owner_of(self) -> torch.Tensor:
+        return self.domain.owner_of
+
     def nbytes(self) -> int:
-        return sum(t.element_size() * t.numel()
-                   for t in (self.slot_of, self.owner_of, self.mask_of, self.stats))
+        return (self.domain.nbytes_maps()
+                + sum(t.element_size() * t.numel() for t in (self.mask_of, self.stats)))
 
     def stage(self, stage_k, stage_v, new_k, new_v, loc, cache, page_size: int,
               *, fused: bool, k_scale_name: str, v_scale_name: str) -> None:
@@ -398,8 +421,15 @@ class Int4Arena:
 
     def occupancy(self) -> int:
         """Slots currently holding an in-flight block. Diagnostic only (syncs)."""
-        return int((self.owner_of >= 0).sum())
+        return self.domain.occupancy()
 
 
 __all__ = ["CAPTURE_CEILING", "MAX_SPIN", "N_STATS", "STAT_CLAIM", "STAT_DECLINED",
-           "STAT_MIGRATED", "STAT_SPUN", "STAT_SPIN_EXHAUSTED", "arena_slots", "Int4Arena"]
+           "STAT_MIGRATED", "STAT_SPUN", "STAT_SPIN_EXHAUSTED", "arena_slots", "Int4Arena",
+           "int4_request_domain"]
+
+
+def int4_request_domain(num_blocks: int, num_kv_heads: int, **kwargs) -> RequestCacheDomain:
+    """The domain INT4 staging wants, sized by the capture ceiling. See :func:`arena_slots`."""
+    return RequestCacheDomain(num_blocks, arena_slots(num_kv_heads),
+                              retention="complete", overflow="drop", **kwargs)
