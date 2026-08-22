@@ -229,6 +229,14 @@ def build_sparse_flow(runner) -> Optional[Any]:
         sa.vortex_module_name, user_file=sa.vortex_module_path
     )
     if isinstance(flow, vortex_flow.vFlowMLA):
+        if getattr(sa, "vortex_kv_int4", False):
+            raise ValueError(
+                "vortex_kv_int4 is not supported for MLA flows. The MLA cache holds a latent "
+                "(kv_lora_rank + qk_rope_head_dim), whose channels are not attention head "
+                "dimensions -- so neither the per-channel K scale nor the per-token V scale means "
+                "what it means for MHA/GQA, and the measured axis choice does not transfer. Use "
+                "an MHA/GQA flow, or measure the latent's outlier structure first."
+            )
         # MLA flow: latent geometry instead of a single head_dim.
         flow.initialize(
             block_size=runner.block_size,
@@ -245,6 +253,11 @@ def build_sparse_flow(runner) -> Optional[Any]:
             kv_cache_dtype=runner.kv_cache_dtype,
             q_data_type=runner.dtype,
             intermediate_dtype=sa.vortex_dtype,
+            # MHA/GQA only. MLA's cache is a latent (kv_lora_rank + rope), whose channels are not
+            # attention head dims, so neither the per-channel K axis nor the per-token V axis carries
+            # the meaning the measured scheme relies on. Refuse it there rather than pack a latent on
+            # the assumption that the axes transfer.
+            kv_int4=bool(getattr(sa, "vortex_kv_int4", False)),
         )
     return flow
 

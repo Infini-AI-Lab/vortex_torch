@@ -175,6 +175,9 @@ class vFlow(ABC):
         self.intermediate_dtype = None
         self.cache_meta_info = None
         self.token_ratio = None
+        #: ``{name: (r, c)}`` for the REQUEST-bound domain, or ``{}``. Populated by
+        #: :meth:`initialize` from :meth:`create_request_cache`.
+        self.request_cache_meta_info = {}
 
     # ------------------------------------------------------------------ #
     # abstract API to be implemented by concrete flows
@@ -337,9 +340,49 @@ class vFlow(ABC):
         """
         pass
 
+    def create_request_cache(
+        self,
+        block_size: int,
+        head_dim: int,
+    ) -> Dict[str, Tuple[int, int]]:
+        r"""
+        Declare inner shapes for the **request-bound** cache domain. Optional; default ``{}``.
+
+        A field declared here is allocated ``[n_slots, r, c]`` and addressed through a device-side
+        ``block_id -> slot`` map (``FORMAT.SLOTTED``), rather than ``[num_blocks, r, c]`` addressed
+        by block id. Use it for state that belongs to a **request in flight** rather than to a
+        stored page. The motivating case is INT4 KV's bf16 staging area: a block's quantization
+        scale is a reduction over the block, so a block still being appended to cannot be stored
+        quantized, and must be held in full precision until it completes.
+
+        The distinction is *lifetime*, not addressing -- keys are still block ids, because
+        ``set_kv_buffer`` is passed no request id and recovering one needs a host sync that cudagraph
+        capture forbids.
+
+        The reason to declare it here rather than in :meth:`create_cache` is memory: a request-domain
+        field is sized by CONCURRENCY, so its footprint is constant in context length, whereas the
+        same state as a page field costs bytes per block. Measured on INT4: a per-block bf16 mirror
+        came to 21632 B/block against bf16's own 16896 -- a 1.28x *regression*, i.e. it gave back
+        more than quantization saved.
+
+        For the same reason these fields are **excluded from** ``token_ratio``: that ratio is a
+        per-token budget, and charging a constant-size buffer per token reserves HBM that grows with
+        context for something that does not.
+
+        Returns
+        -------
+        Dict[str, Tuple[int, int]]
+            ``{name: (r, c)}``. ``"k"`` / ``"v"`` are reserved here as well.
+        """
+        return {}
+
     # ------------------------------------------------------------------ #
     # helper API used by the runtime to allocate / account cache
     # ------------------------------------------------------------------ #
+    def get_request_cache_meta_info(self) -> Dict[str, Tuple[int, int]]:
+        """``{name: (r, c)}`` for the request domain; ``{}`` when the flow declares none."""
+        return self.request_cache_meta_info
+
     def get_cache_meta_info(
         self
     ) -> Dict[str, Tuple[Tuple[int, int], torch.dtype]]:
@@ -362,6 +405,7 @@ class vFlow(ABC):
         kv_cache_dtype: Union[torch.dtype, str],
         q_data_type: Union[torch.dtype, str],
         intermediate_dtype: Union[torch.dtype, str] = torch.bfloat16,
+        kv_int4: bool = False,
         ):
         r"""
         Optional initialization method called by the runtime after cache
@@ -388,6 +432,13 @@ class vFlow(ABC):
         intermediate_dtype : torch.dtype or str
             Data type for intermediate tensors. Defaults to ``torch.bfloat16``.
             Same string convention as ``kv_cache_dtype``.
+        kv_int4 : bool
+            Store K/V as packed INT4 instead of ``kv_cache_dtype``. Applied here, at the
+            meta-declaration level, rather than by each flow: the transform is entirely on the
+            declared shapes and dtypes (K/V become ``(block_size, head_dim // 2)`` uint8, two fp32
+            scale fields appear, and a bf16 staging area is added to the request domain), so **any**
+            flow gets INT4 without being edited. A flow that wants to score the indexer from
+            pre-quant K can override :meth:`create_request_cache` to keep what it needs.
         """
 
         self.block_size = block_size
@@ -395,11 +446,12 @@ class vFlow(ABC):
         self.kv_cache_dtype = resolve_dtype(kv_cache_dtype)
         self.q_data_type = resolve_dtype(q_data_type)
         self.intermediate_dtype = resolve_dtype(intermediate_dtype)
+        self.kv_int4 = bool(kv_int4)
         self.token_ratio = 0.0
         raw_cache_meta_info = self.create_cache(block_size, head_dim)
         assert "k" not in raw_cache_meta_info, "create_cache must not declare 'k' key"
         assert "v" not in raw_cache_meta_info, "create_cache must not declare 'v' key"
-        
+
         raw_cache_meta_info["k"] = (block_size, head_dim)
         raw_cache_meta_info["v"] = (block_size, head_dim)
 
@@ -418,6 +470,45 @@ class vFlow(ABC):
                 aux_bytes += nbytes
             self.cache_meta_info[key] = ((r, c), dtype)
 
+        int4_request_meta = {}
+        if self.kv_int4:
+            # Overwrite k/v with the packed form and add the scales. Deliberately AFTER the loop
+            # above, so ``total_bytes`` / ``aux_bytes`` are recomputed below rather than accumulated
+            # from a mix of the two layouts -- a ratio built from bf16 K/V plus INT4 scales would
+            # over-reserve, silently and by roughly the compression factor.
+            from ..engine.sgl.int4_store import int4_cache_meta, int4_request_cache_meta
+            self.cache_meta_info.update(int4_cache_meta(block_size, head_dim))
+            int4_request_meta = int4_request_cache_meta(block_size, head_dim)
+            total_bytes = sum(r * c * torch._utils._element_size(dt)
+                              for (r, c), dt in self.cache_meta_info.values())
+            aux_bytes = sum(r * c * torch._utils._element_size(dt)
+                            for k, ((r, c), dt) in self.cache_meta_info.items()
+                            if k not in ("k", "v"))
+
+        # Request-domain fields are declared but NOT folded into the ratios below: they are sized by
+        # concurrency, so charging them per token would reserve HBM growing with context for a
+        # buffer that is constant. The runtime allocates them separately, from this dict.
+        self.request_cache_meta_info = dict(self.create_request_cache(block_size, head_dim))
+        # INT4's staging area is added on the same terms as a flow-declared field. The flow's own
+        # declarations win a name collision by being applied second below, but the assert following
+        # would already have caught a real clash.
+        for name, shape in int4_request_meta.items():
+            self.request_cache_meta_info.setdefault(name, shape)
+        for reserved in ("k", "v"):
+            assert reserved not in self.request_cache_meta_info, (
+                f"create_request_cache must not declare {reserved!r}"
+            )
+        clash = set(self.request_cache_meta_info) & set(self.cache_meta_info)
+        assert not clash, (
+            f"create_request_cache and create_cache both declare {sorted(clash)}; the two domains "
+            f"share one cache dict, so a duplicate name would make the field's ADDRESSING depend on "
+            f"which declaration the runtime happened to read last"
+        )
+
+        # ``base_bytes`` stays anchored to ``kv_cache_dtype`` -- the *nominal* per-token KV -- and is
+        # NOT recomputed for INT4. That is what makes ``token_ratio`` fall below 1 under INT4, which
+        # is how the pool learns it can hold more tokens. Anchoring it to the packed size instead
+        # would report a ratio of ~1 and give back the entire capacity win.
         base_bytes = block_size * head_dim * torch._utils._element_size(self.kv_cache_dtype)
         self.token_ratio = total_bytes / base_bytes
         #: Same ratio counting only the fields that stay in HBM when KV is hosted

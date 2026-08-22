@@ -74,6 +74,24 @@ class VortexConfig:
     #: caching (re-copies every selected block every step) and exists as the control
     #: for measuring what the cache is worth.
     host_kv_policy: str = "lru"
+    #: Store K/V as packed INT4 (two 4-bit values per byte along ``head_dim``), with a per-CHANNEL
+    #: scale for K and a per-TOKEN scale for V. ``False`` (default) keeps the ``dtype`` above.
+    #:
+    #: This is a **capacity** knob, not a speed one, and on pre-Blackwell parts it costs a little
+    #: throughput. flashinfer's native 4-bit paged-KV decode is Blackwell-only, so on A100 attention
+    #: still runs in bf16 and the selected blocks are dequantized on the way in. That is affordable
+    #: only because sparse attention dequantizes the SELECTION (topk x block) rather than the whole
+    #: context. Measured payload compression is **3.46x** including the fp32 scales, not the nominal
+    #: 4x. See :mod:`vortex_torch.engine.sgl.int4_store`.
+    #:
+    #: Orthogonal to ``host_kv_gb``: the same packed format serves GPU-only, host-KV and the
+    #: GPU-cache-over-host tier, which differ only in where the tensors live.
+    #:
+    #: Accuracy, measured on RULER: **dense INT4 costs 0-3 points** (4K 100%, 16K 97%, 32K 99%),
+    #: while under sparsity the gap is 8-15. The difference is the indexer's SELECTION being
+    #: perturbed by quantized scoring, not payload error -- so a flow that scores from pre-quant K
+    #: should recover most of it.
+    kv_int4: bool = False
 
     @classmethod
     def from_flat(cls, flat: Dict[str, Any]) -> "VortexConfig":

@@ -111,6 +111,26 @@ def resolve_dtype(value, default: torch.dtype = torch.bfloat16) -> torch.dtype:
     raise TypeError(f"cannot resolve dtype from {type(value).__name__}")
 
 
+def is_int4_kv(cache_meta_info) -> bool:
+    """Is this cache's K/V stored as packed INT4?
+
+    Tested on the DECLARED META, not on a config flag, because the meta is what every consumer
+    actually addresses: a backend that reads the flag while the pool was built from a different meta
+    (or vice versa) mis-strides by 2x, which reads as plausible-looking wrong data rather than as an
+    error. ``uint8`` alone is not sufficient -- fp8 caches are also stored as uint8 -- so the test is
+    uint8 K/V whose channel count is HALVED relative to a full-width field, which is exactly the
+    packing signature.
+    """
+    kv = cache_meta_info.get("k")
+    if kv is None:
+        return False
+    (r, c), dtype = kv
+    if dtype != torch.uint8:
+        return False
+    # The scale fields are the unambiguous marker; they exist only for INT4.
+    return "k_int4_scale" in cache_meta_info
+
+
 def is_hopper_or_newer():
     """
     Check if the current CUDA device is Hopper architecture or newer.
